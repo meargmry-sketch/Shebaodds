@@ -4,10 +4,7 @@
   "builds": [
     {
       "src": "frontend/**",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "frontend"
-      }
+      "use": "@vercel/static"
     }
   ],
   "routes": [
@@ -19,9 +16,5 @@
       "src": "/(.*)",
       "dest": "/frontend/$1"
     }
-  ],
-  "env": {
-    "VITE_API_URL": "https://shebaodds-backend.onrender.com/api",
-    "VITE_WS_URL": "wss://shebaodds-backend.onrender.com"
-  }
+  ]
 }
