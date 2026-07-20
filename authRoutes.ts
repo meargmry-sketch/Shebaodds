@@ -1,6 +1,7 @@
 // ============================================
 // SHEBAODDS - AUTHENTICATION ROUTES
 // Complete Auth System with 2FA, Biometrics, Social Login
+// INCLUDES: Casino Integration (Favorites, Stats)
 // ============================================
 
 import express, { Request, Response, NextFunction, Router } from 'express';
@@ -287,6 +288,7 @@ router.post('/register', registerValidation, async (req: any, res: any) => {
       referredByUser = await User.findOne({ referralCode: referralCode.toUpperCase() });
     }
 
+    // Create new user with casino fields initialized
     const user = new User({
       username: username.toLowerCase(),
       email: email.toLowerCase(),
@@ -297,6 +299,12 @@ router.post('/register', registerValidation, async (req: any, res: any) => {
       referredBy: referredByUser?._id,
       wallet: {
         balance: parseInt(process.env.WELCOME_BONUS_AMOUNT || '') || 100
+      },
+      casino: {
+        favorites: [],      // Array of game IDs (e.g., ['dice', 'aviator'])
+        totalBets: 0,
+        totalWon: 0,
+        totalLost: 0
       }
     });
 
@@ -402,7 +410,7 @@ router.post('/login', loginValidation, async (req: any, res: any) => {
     const isPasswordValid = await user.comparePassword(password);
     if (!isPasswordValid) {
       user.loginAttempts = (user.loginAttempts || 0) + 1;
-      
+
       if (user.loginAttempts >= 5) {
         user.lockedUntil = new Date(Date.now() + 30 * 60 * 1000);
         await user.save();
@@ -411,7 +419,7 @@ router.post('/login', loginValidation, async (req: any, res: any) => {
           message: 'Too many failed attempts. Account locked for 30 minutes.'
         });
       }
-      
+
       await user.save();
       return res.status(401).json({ success: false, message: 'Invalid email or password' });
     }
@@ -441,7 +449,7 @@ router.post('/login', loginValidation, async (req: any, res: any) => {
     user.lastLogin = new Date();
     user.lastActive = new Date();
     user.lastLoginIP = req.ip;
-    
+
     if (deviceId) {
       const existingDevice = user.devices.find(d => d.deviceId === deviceId);
       if (existingDevice) {
@@ -531,7 +539,7 @@ router.post('/refresh-token', async (req: any, res: any) => {
 router.post('/logout', authenticate, async (req: any, res: any) => {
   try {
     const { sessionId } = req.body;
-    
+
     if (sessionId) {
       await User.findByIdAndUpdate(req.user._id, {
         $pull: { sessions: { sessionId } }
@@ -815,7 +823,7 @@ router.get('/verify-email/:token', async (req: any, res: any) => {
     user.emailVerified = true;
     user.emailVerificationToken = undefined;
     user.emailVerificationExpires = undefined;
-    
+
     // Give bonus for email verification
     const verificationBonus = 50;
     user.wallet.balance += verificationBonus;
@@ -832,7 +840,7 @@ router.get('/verify-email/:token', async (req: any, res: any) => {
 router.post('/resend-verification', authenticate, async (req: any, res: any) => {
   try {
     const user = req.user;
-    
+
     if (user.emailVerified) {
       return res.status(400).json({ success: false, message: 'Email already verified' });
     }
@@ -857,6 +865,58 @@ router.post('/resend-verification', authenticate, async (req: any, res: any) => 
 
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Failed to send verification email' });
+  }
+});
+
+// ==================== NEW: CASINO FAVORITES ====================
+// GET /casino/favorites - Retrieve user's favorite casino games
+router.get('/casino/favorites', authenticate, async (req: any, res: any) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    // Assuming casino.favorites is an array of game IDs
+    const favorites = user.casino?.favorites || [];
+    return res.json({ success: true, favorites });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// PUT /casino/favorites - Update user's favorite games (replace array)
+router.put('/casino/favorites', authenticate, async (req: any, res: any) => {
+  try {
+    const { favorites } = req.body;
+    if (!Array.isArray(favorites)) {
+      return res.status(400).json({ success: false, message: 'favorites must be an array of game IDs' });
+    }
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    // Ensure casino object exists
+    if (!user.casino) user.casino = { favorites: [], totalBets: 0, totalWon: 0, totalLost: 0 };
+    user.casino.favorites = favorites;
+    await user.save();
+    return res.json({ success: true, favorites: user.casino.favorites });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ==================== NEW: CASINO STATISTICS ====================
+// GET /casino/stats - Retrieve user's casino play stats
+router.get('/casino/stats', authenticate, async (req: any, res: any) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    const stats = user.casino || { totalBets: 0, totalWon: 0, totalLost: 0 };
+    return res.json({ success: true, stats });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
   }
 });
 
