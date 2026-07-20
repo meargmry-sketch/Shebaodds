@@ -42,7 +42,7 @@ import java.util.*
 data class SecurityLogEntry(
     val id: String,
     val timestamp: String,
-    val type: String, // "AUTH", "PAYMENT", "SYS"
+    val type: String, // "AUTH", "PAYMENT", "SYS", "CASINO"
     val description: String,
     val success: Boolean
 )
@@ -61,7 +61,9 @@ fun UserProfileDialog(
     val bioLoginEnabled by viewModel.biometricLoginEnabled.collectAsState()
     val allTransactions by viewModel.allTransactions.collectAsState()
     val allBets by viewModel.allBets.collectAsState()
-    
+    // 🎰 NEW: Fetch casino games from ViewModel
+    val allCasinoGames by viewModel.allCasinoGames.collectAsState()
+
     // Manage profile security preferences locally / via ViewModel
     var bioProfileLockEnabled by remember { mutableStateOf(true) }
 
@@ -71,7 +73,9 @@ fun UserProfileDialog(
         mutableStateListOf(
             SecurityLogEntry("1", sdf.format(Date(System.currentTimeMillis() - 450000)), "AUTH", "Biometric verification layer initialized safely", true),
             SecurityLogEntry("2", sdf.format(Date(System.currentTimeMillis() - 320000)), "SYS", "Sec-Keystore key-pair rotation verification - COMPLETE", true),
-            SecurityLogEntry("3", sdf.format(Date(System.currentTimeMillis() - 150000)), "PAYMENT", "Payment gateway secure token generated for TeleBirr", true)
+            SecurityLogEntry("3", sdf.format(Date(System.currentTimeMillis() - 150000)), "PAYMENT", "Payment gateway secure token generated for TeleBirr", true),
+            // 🎰 NEW: Casino security log
+            SecurityLogEntry("4", sdf.format(Date(System.currentTimeMillis() - 60000)), "CASINO", "Casino Quick Bet TouchID authorized for Aviator", true)
         )
     }
 
@@ -275,6 +279,27 @@ fun UserProfileDialog(
                         BettingInsightsCard(
                             allBets = allBets,
                             onSeedHistory = { viewModel.seedDemoHistory() }
+                        )
+                    }
+
+                    // 🎰 NEW: Casino Game Favorites & Stats Section
+                    item {
+                        Text(
+                            text = "🎰 CASINO GAME FAVORITES & STATS",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Black,
+                            color = TextWhite,
+                            letterSpacing = 1.sp
+                        )
+                    }
+
+                    item {
+                        CasinoFavoritesCard(
+                            casinoGames = allCasinoGames,
+                            onToggleFavorite = { gameId, isFavorite ->
+                                viewModel.toggleCasinoFavorite(gameId, isFavorite)
+                                addSecurityLog("CASINO", "Favorite status changed for game $gameId: ${if (isFavorite) "Added" else "Removed"}", true)
+                            }
                         )
                     }
 
@@ -731,9 +756,9 @@ fun UserProfileDialog(
                                         )
                                     }
                                 }
-                                
+
                                 Spacer(modifier = Modifier.height(12.dp))
-                                
+
                                 // Contact Customer Support inquiries triggers
                                 var showContactSuccess by remember { mutableStateOf(false) }
                                 if (showContactSuccess) {
@@ -804,6 +829,74 @@ fun UserProfileDialog(
         }
     }
 }
+
+// ==========================================================
+// 🎰 NEW: Casino Favorites & Stats Card
+// ==========================================================
+@Composable
+fun CasinoFavoritesCard(
+    casinoGames: List<com.example.data.model.CasinoGameEntity>,
+    onToggleFavorite: (String, Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("casino_favorites_card"),
+        colors = CardDefaults.cardColors(containerColor = SlateCardBG),
+        border = BorderStroke(1.dp, BorderColor)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "Your favorite casino games and stats",
+                fontSize = 9.5.sp,
+                color = TextMuted,
+                lineHeight = 14.sp
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            val favorites = casinoGames.filter { it.isFavorite }
+            if (favorites.isEmpty()) {
+                Text(
+                    text = "No favorite casino games selected yet. Tap the star icon on any casino game card to add it.",
+                    fontSize = 9.sp,
+                    color = TextMuted
+                )
+            } else {
+                favorites.take(10).forEach { game ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(text = game.icon, fontSize = 16.sp)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(text = game.name, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextWhite)
+                            Text(text = "Played: ${game.timesPlayed} | Wagered: ${game.totalWagered.toInt()} ETB", fontSize = 9.sp, color = TextMuted)
+                        }
+                        IconButton(
+                            onClick = { onToggleFavorite(game.id, false) },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Star,
+                                contentDescription = "Remove from favorites",
+                                tint = AmberAccent,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ==========================================================
+// EXISTING COMPOSABLES (Kept unchanged, but their imports updated)
+// ==========================================================
 
 @Composable
 fun ResponsibleLimitsCard(
@@ -939,7 +1032,7 @@ fun LimitRow(
         if (currentLimit != null) {
             val progress = if (currentLimit > 0) (spent / currentLimit).coerceIn(0.0, 1.0).toFloat() else 0f
             val percent = (progress * 100).toInt()
-            
+
             Column(modifier = Modifier.fillMaxWidth()) {
                 LinearProgressIndicator(
                     progress = progress,
@@ -1177,7 +1270,7 @@ fun TransactionBetHistoryCard(
                     color = TextWhite,
                     letterSpacing = 0.5.sp
                 )
-                
+
                 // Segmented buttons
                 Row(
                     modifier = Modifier
@@ -1264,7 +1357,7 @@ fun TransactionBetHistoryCard(
                             } else {
                                 if (tx.status == "APPROVED") Color(0xFF60A5FA) else if (tx.status == "PENDING") AmberAccent else LightRed
                             }
-                            
+
                             Box(
                                 modifier = Modifier
                                     .size(31.dp)
@@ -1311,7 +1404,7 @@ fun TransactionBetHistoryCard(
                                     color = if (isDeposit && tx.status == "APPROVED") NeonGreen else if (!isDeposit && tx.status == "APPROVED") TextWhite else TextMuted
                                 )
                                 Spacer(modifier = Modifier.height(3.dp))
-                                
+
                                 val statusBg = when (tx.status) {
                                     "APPROVED" -> NeonGreen.copy(0.12f)
                                     "PENDING" -> AmberAccent.copy(0.12f)
@@ -1479,14 +1572,12 @@ fun BettingInsightsCard(
     val canvasLightRed = LightRed
     val canvasAmberAccent = AmberAccent
 
-    // 3 tabs: 0: ROI Curve (Performance Trend over time), 1: Win/Loss Ratio (Donut metric), 2: Arenas (Sport preferences list)
     var selectedTab by remember { mutableStateOf(0) }
-    
-    // Sort settled bets by date
+
     val settledBets = remember(allBets) {
         allBets.filter { it.status != "PENDING" }.sortedBy { it.timestamp }
     }
-    
+
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -1495,7 +1586,6 @@ fun BettingInsightsCard(
         border = BorderStroke(1.dp, BorderColor)
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
-            // Header row with tabs
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1508,8 +1598,7 @@ fun BettingInsightsCard(
                     color = TextWhite,
                     letterSpacing = 0.5.sp
                 )
-                
-                // Segments Tab Row
+
                 Row(
                     modifier = Modifier
                         .background(SlateSurfaceL2, RoundedCornerShape(8.dp))
@@ -1536,11 +1625,10 @@ fun BettingInsightsCard(
                     }
                 }
             }
-            
+
             Spacer(modifier = Modifier.height(14.dp))
-            
+
             if (allBets.isEmpty()) {
-                // Beautiful empty/onboarding state inside user dashboard!
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1601,18 +1689,15 @@ fun BettingInsightsCard(
                     }
                 }
             } else {
-                // Draw visualizations according to selectedTab!
                 when (selectedTab) {
                     0 -> {
-                        // 1. Performance Trend ROI Curve (Line chart on Canvas)
                         val totalStaked = allBets.sumOf { it.stake }
                         val settledWon = allBets.filter { it.status == "WON" || it.status == "CASHOUT" }
                         val totalReturns = settledWon.sumOf { it.potentialReturn }
                         val netProfit = totalReturns - totalStaked
                         val netRoi = if (totalStaked > 0) (netProfit / totalStaked) * 100 else 0.0
                         val metricColor = if (netProfit >= 0) canvasNeonGreen else canvasLightRed
-                        
-                        // ROI Metric header overview
+
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -1646,10 +1731,9 @@ fun BettingInsightsCard(
                                 )
                             }
                         }
-                        
+
                         Spacer(modifier = Modifier.height(14.dp))
-                        
-                        // Line graph showing cumulative profit progression
+
                         val trendPoints = remember(settledBets) {
                             val points = mutableListOf<Float>()
                             points.add(0f)
@@ -1665,11 +1749,11 @@ fun BettingInsightsCard(
                             }
                             points
                         }
-                        
+
                         val minVal = trendPoints.minOrNull() ?: 0f
                         val maxVal = trendPoints.maxOrNull() ?: 1000f
                         val valueRange = (maxVal - minVal).coerceAtLeast(10f)
-                        
+
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1681,8 +1765,7 @@ fun BettingInsightsCard(
                             Canvas(modifier = Modifier.fillMaxSize()) {
                                 val w = size.width
                                 val h = size.height
-                                
-                                // Draw baseline (0.0 ETB line)
+
                                 val zeroY = h - ((0f - minVal) / valueRange) * h
                                 if (zeroY in 0f..h) {
                                     drawLine(
@@ -1693,13 +1776,13 @@ fun BettingInsightsCard(
                                         pathEffect = null
                                     )
                                 }
-                                
+
                                 val points = trendPoints.mapIndexed { idx, value ->
                                     val x = idx * (w / (trendPoints.size - 1).coerceAtLeast(1))
                                     val y = h - ((value - minVal) / valueRange) * h
                                     Offset(x, y)
                                 }
-                                
+
                                 val linePath = Path().apply {
                                     if (points.isNotEmpty()) {
                                         moveTo(points.first().x, points.first().y)
@@ -1714,8 +1797,7 @@ fun BettingInsightsCard(
                                         }
                                     }
                                 }
-                                
-                                // Fill under area with elegant gradient
+
                                 val fillPath = Path().apply {
                                     addPath(linePath)
                                     if (points.isNotEmpty()) {
@@ -1724,7 +1806,7 @@ fun BettingInsightsCard(
                                         close()
                                     }
                                 }
-                                
+
                                 drawPath(
                                     path = fillPath,
                                     brush = Brush.verticalGradient(
@@ -1733,15 +1815,13 @@ fun BettingInsightsCard(
                                         endY = h
                                     )
                                 )
-                                
-                                // Draw trend line
+
                                 drawPath(
                                     path = linePath,
                                     color = metricColor,
                                     style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
                                 )
-                                
-                                // Draw pulse circles at endpoints
+
                                 if (points.isNotEmpty()) {
                                     drawCircle(
                                         color = metricColor,
@@ -1756,9 +1836,9 @@ fun BettingInsightsCard(
                                 }
                             }
                         }
-                        
+
                         Spacer(modifier = Modifier.height(6.dp))
-                        
+
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
@@ -1768,40 +1848,35 @@ fun BettingInsightsCard(
                             Text(text = "Current", fontSize = 7.5.sp, color = TextMuted)
                         }
                     }
-                    
+
                     1 -> {
-                        // 2. Win/Loss Ratio Ring metric + Statistics breakdown
                         val settledCount = settledBets.size
                         val wonCount = settledBets.count { it.status == "WON" || it.status == "CASHOUT" }
                         val lostCount = settledBets.count { it.status == "LOST" }
                         val pendingCount = allBets.count { it.status == "PENDING" }
                         val winRate = if (settledCount > 0) (wonCount.toFloat() / settledCount) * 100f else 0f
-                        
+
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
-                            // Donut meter on Canvas
                             Box(
-                                modifier = Modifier
-                                    .size(70.dp),
+                                modifier = Modifier.size(70.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Canvas(modifier = Modifier.fillMaxSize()) {
                                     val sizeStroke = 7.dp.toPx()
                                     val center = Offset(size.width / 2f, size.height / 2f)
                                     val radius = (size.width - sizeStroke) / 2f
-                                    
-                                    // Base gray track
+
                                     drawCircle(
                                         color = canvasBorderColor,
                                         radius = radius,
                                         center = center,
                                         style = Stroke(width = sizeStroke)
                                     )
-                                    
-                                    // Win Arc
+
                                     val winSweep = if (settledCount > 0) (wonCount.toFloat() / settledCount) * 360f else 0f
                                     if (winSweep > 0f) {
                                         drawArc(
@@ -1830,13 +1905,12 @@ fun BettingInsightsCard(
                                     )
                                 }
                             }
-                            
-                            // Metrics textual overview columns
+
                             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween
-                                    
+
                                 ) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Box(modifier = Modifier.size(5.dp).background(NeonGreen, CircleShape))
@@ -1867,9 +1941,9 @@ fun BettingInsightsCard(
                                     }
                                     Text(text = "$pendingCount open", fontSize = 8.5.sp, fontWeight = FontWeight.Bold, color = TextWhite)
                                 }
-                                
+
                                 Divider(color = BorderColor.copy(0.2f))
-                                
+
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween
@@ -1880,16 +1954,15 @@ fun BettingInsightsCard(
                             }
                         }
                     }
-                    
+
                     2 -> {
-                        // 3. Arenas (Sport Preference list)
                         val sports = listOf("Football", "Basketball", "Tennis", "Esports")
                         val sportsCounts = sports.map { s ->
                             Pair(s, allBets.count { it.sport.equals(s, ignoreCase = true) })
                         }.sortedByDescending { it.second }
-                        
+
                         val totalVol = allBets.size.toFloat().coerceAtLeast(1f)
-                        
+
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             sportsCounts.forEach { (sport, count) ->
                                 val pct = (count / totalVol) * 100f
@@ -1928,8 +2001,7 @@ fun BettingInsightsCard(
                                             color = PrimarySapphire
                                         )
                                     }
-                                    
-                                    // Progress track
+
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -1957,4 +2029,3 @@ fun BettingInsightsCard(
         }
     }
 }
-
