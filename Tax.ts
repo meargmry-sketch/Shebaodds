@@ -1,6 +1,7 @@
 // ============================================
 // SHEBAODDS - TAX MODEL
 // Complete Tax Transaction Model for Statutory Compliance
+// SUPPORTS: Sportsbook & Casino Games
 // ============================================
 
 import mongoose, { Schema, Document } from 'mongoose';
@@ -8,7 +9,8 @@ import mongoose, { Schema, Document } from 'mongoose';
 export interface ITaxTransaction extends Document {
   userId: mongoose.Types.ObjectId;
   betId: mongoose.Types.ObjectId;
-  matchId?: mongoose.Types.ObjectId;
+  matchId?: mongoose.Types.ObjectId;          // Sports match ID (optional)
+  casinoGameId?: string;                       // 🎰 Casino game ID (e.g., 'aviator')
   grossWinning: number;
   taxAmount: number;
   netWinning: number;
@@ -29,6 +31,7 @@ const taxTransactionSchema = new Schema<ITaxTransaction>({
   userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   betId: { type: Schema.Types.ObjectId, ref: 'Bet', required: true, index: true },
   matchId: { type: Schema.Types.ObjectId, ref: 'Match', index: true },
+  casinoGameId: { type: String, index: true },          // 🎰 New field for casino games
   grossWinning: { type: Number, required: true },
   taxAmount: { type: Number, required: true },
   netWinning: { type: Number, required: true },
@@ -111,7 +114,7 @@ export const TaxTransaction = mongoose.models.TaxTransaction || mongoose.model<I
 export const TaxSummary = mongoose.models.TaxSummary || mongoose.model<ITaxSummary>('TaxSummary', taxSummarySchema);
 export const UserTaxProfile = mongoose.models.UserTaxProfile || mongoose.model<IUserTaxProfile>('UserTaxProfile', userTaxProfileSchema);
 
-// Export service methods so they are backward-compatible with any existing route imports
+// Export service methods (they will be updated separately to handle casino winnings)
 export { generateMonthlyTaxReport, submitTaxReport } from './taxService';
 
 export default TaxTransaction;
