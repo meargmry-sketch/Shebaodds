@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.asStateFlow
 
 object AdminSocketHubInstance {
 
+    // --- Existing Data Classes ---
     data class BroadcastBet(
         val id: String,
         val user: String,
@@ -34,6 +35,20 @@ object AdminSocketHubInstance {
         val timestamp: Long = System.currentTimeMillis()
     )
 
+    // --- NEW: Casino Broadcast Data Class ---
+    data class BroadcastCasinoPlay(
+        val id: String,
+        val user: String,
+        val gameId: String,       // e.g., 'aviator', 'dice', 'slot'
+        val gameName: String,     // e.g., 'Aviator'
+        val stake: String,
+        val profit: String,       // Positive for wins, negative for losses
+        val outcome: String,      // 'win' or 'lose'
+        val multiplier: String? = null, // Optional: for Crash/Aviator games
+        val timestamp: Long = System.currentTimeMillis()
+    )
+
+    // --- Existing StateFlows ---
     private val _newBetBroadcasts = MutableStateFlow<List<BroadcastBet>>(emptyList())
     val newBetBroadcasts: StateFlow<List<BroadcastBet>> = _newBetBroadcasts.asStateFlow()
 
@@ -43,6 +58,11 @@ object AdminSocketHubInstance {
     private val _financialMetrics = MutableStateFlow(FinancialMetric("1257850.00", "523600.00", "186250.00"))
     val financialMetrics: StateFlow<FinancialMetric> = _financialMetrics.asStateFlow()
 
+    // --- NEW: Casino Game Broadcast StateFlow ---
+    private val _casinoGameBroadcasts = MutableStateFlow<List<BroadcastCasinoPlay>>(emptyList())
+    val casinoGameBroadcasts: StateFlow<List<BroadcastCasinoPlay>> = _casinoGameBroadcasts.asStateFlow()
+
+    // --- Existing Broadcast Functions ---
     fun broadcastNewBet(bet: BroadcastBet) {
         val current = _newBetBroadcasts.value.toMutableList()
         current.add(0, bet)
@@ -68,9 +88,21 @@ object AdminSocketHubInstance {
         Log.d("AdminSocketHubInstance", "⚡ BROADCAST [FINANCIAL_METRICS] -> Stats updated: Balance=${metric.totalBalance}, Deposits=${metric.totalDeposits}, Withdrawals=${metric.totalWithdrawals}")
     }
 
+    // --- NEW: Casino Play Broadcast Function ---
+    fun broadcastCasinoPlay(gamePlay: BroadcastCasinoPlay) {
+        val current = _casinoGameBroadcasts.value.toMutableList()
+        current.add(0, gamePlay)
+        if (current.size > 50) {
+            current.removeAt(current.size - 1)
+        }
+        _casinoGameBroadcasts.value = current
+        Log.d("AdminSocketHubInstance", "⚡ BROADCAST [CASINO_PLAY] -> Client channel: ID=${gamePlay.id}, User=${gamePlay.user}, Game=${gamePlay.gameName}, Stake=${gamePlay.stake} ETB, Profit=${gamePlay.profit}, Outcome=${gamePlay.outcome}")
+    }
+
     fun clearBroadcasts() {
         _newBetBroadcasts.value = emptyList()
         _transactionBroadcasts.value = emptyList()
+        _casinoGameBroadcasts.value = emptyList() // Clear casino list too
         _financialMetrics.value = FinancialMetric("1257850.00", "523600.00", "186250.00")
     }
 }
