@@ -7,11 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.data.database.AppDatabase
-import com.example.data.model.Bet
-import com.example.data.model.SportMatch
-import com.example.data.model.TransactionRecord
-import com.example.data.model.UserWallet
-import com.example.data.model.leagueName
+import com.example.data.model.*
 import com.example.data.repository.BetRepository
 import com.example.data.repository.PlaceBetResult
 import com.example.data.repository.RequestWithdrawResult
@@ -51,6 +47,15 @@ class BetViewModel(application: Application, private val repository: BetReposito
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val allMatches: StateFlow<List<SportMatch>> = repository.allMatches
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // ==========================================================
+    // 🎰 NEW: CASINO GAME FLOWS
+    // ==========================================================
+    val allCasinoGames: StateFlow<List<CasinoGameEntity>> = repository.allCasinoGames
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val favoriteCasinoGames: StateFlow<List<CasinoGameEntity>> = repository.favoriteCasinoGames
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Simulated API status StateFlows
@@ -261,7 +266,7 @@ class BetViewModel(application: Application, private val repository: BetReposito
     }
 
     // Biometric Quick Bet Feature State
-    private val _biometricQuickBetEnabled = MutableStateFlow(true) // Default to true or false, let's default to true for immediate out of the box testing of the feature, or we can toggle it in UI
+    private val _biometricQuickBetEnabled = MutableStateFlow(true)
     val biometricQuickBetEnabled: StateFlow<Boolean> = _biometricQuickBetEnabled.asStateFlow()
 
     fun setBiometricQuickBetEnabled(enabled: Boolean) {
@@ -498,7 +503,7 @@ class BetViewModel(application: Application, private val repository: BetReposito
             text = messageText,
             timestamp = System.currentTimeMillis()
         )
-        
+
         _supportMessages.value = _supportMessages.value + userMsg
 
         viewModelScope.launch {
@@ -642,6 +647,60 @@ class BetViewModel(application: Application, private val repository: BetReposito
         _activeSlipSelectedItems.value = emptyList()
     }
 
+    // ==========================================================
+    // 🎰 NEW: PLACE CASINO BET
+    // ==========================================================
+    fun placeCasinoBet(
+        gameId: String,
+        gameName: String,
+        stake: Double,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        val limitError = checkBetLimits(stake)
+        if (limitError != null) {
+            onError(limitError)
+            return
+        }
+        viewModelScope.launch {
+            // Generate a random multiplier between 1.0x and 10.0x for simulation
+            // In a real app, this would come from the server
+            val randomMultiplier = 1.0 + Random.nextDouble(9.0)
+            val randomOutcome = if (Random.nextDouble() < 0.45) "win" else "lose"
+
+            val result = repository.placeCasinoBet(
+                gameId = gameId,
+                gameName = gameName,
+                stake = stake,
+                multiplier = randomMultiplier,
+                result = randomOutcome
+            )
+
+            if (result is PlaceBetResult.Success) {
+                recordBetPlacementAndCheckFrequency()
+                // Trigger an alert to show the result
+                val profitText = if (randomOutcome == "win") {
+                    "+${String.format("%.2f", stake * randomMultiplier - stake)} ETB"
+                } else {
+                    "-${String.format("%.2f", stake)} ETB"
+                }
+                logConsole("🎰 [CASINO] ${if (randomOutcome == "win") "WON" else "LOST"} on $gameName! $profitText")
+                onSuccess()
+            } else if (result is PlaceBetResult.Failure) {
+                onError(result.message)
+            }
+        }
+    }
+
+    // ==========================================================
+    // 🎰 NEW: TOGGLE CASINO FAVORITE
+    // ==========================================================
+    fun toggleCasinoFavorite(gameId: String, isFavorite: Boolean) {
+        viewModelScope.launch {
+            repository.toggleCasinoFavorite(gameId, isFavorite)
+        }
+    }
+
     fun placeMultiBet(
         stake: Double,
         onSuccess: () -> Unit,
@@ -690,7 +749,7 @@ class BetViewModel(application: Application, private val repository: BetReposito
     init {
         // Load stored responsible gaming limits
         val sp = application.getSharedPreferences("shebaodds_prefs", Context.MODE_PRIVATE)
-        
+
         // Load stored language
         val savedLang = sp.getString("selected_language", "en") ?: "en"
         _selectedLanguage.value = savedLang
@@ -747,7 +806,7 @@ class BetViewModel(application: Application, private val repository: BetReposito
                                         newScore = "${match.scoreA}-${match.scoreB}"
                                     )
                                 }
-                                
+
                                 // Detect Match Start Alerts (isLive changes from false to true or status from "UPCOMING" to "LIVE")
                                 if ((match.isLive && !prev.isLive) || (match.status == "LIVE" && prev.status == "UPCOMING")) {
                                     triggerMatchStartNotification(match)
@@ -765,7 +824,7 @@ class BetViewModel(application: Application, private val repository: BetReposito
             repository.initializeDbIfEmpty()
             // Start our real-time odds and matcher simulator
             startRealtimeOddsSimulator()
-            
+
             // Auto-connect to local WebSocket server to stream real-time match and odds updates
             delay(1000)
             startLiveFeedClient("ws://127.0.0.1:9090", "shebaodds_api_demo")
@@ -798,7 +857,7 @@ class BetViewModel(application: Application, private val repository: BetReposito
                 // Calculate display metrics matching Node.js structure
                 val currentBalanceChange = if (walletState != null) walletState.balance - 523600.00 else 0.0
                 val displayBalance = 1257850.00 + currentBalanceChange
-                
+
                 val dynamicDeposits = transactions.filter { it.type == "DEPOSIT" && it.status == "APPROVED" }.sumOf { it.amount }
                 val displayDeposits = 523600.00 + dynamicDeposits
 
@@ -892,7 +951,7 @@ class BetViewModel(application: Application, private val repository: BetReposito
             val db = repository.getDb()
             val rightNow = System.currentTimeMillis()
             val dayMs = 24L * 3600L * 1000L
-            
+
             val initialDemoBets = listOf(
                 Bet(matchId = 1, selection = "1", odds = 2.05, stake = 1200.0, potentialReturn = 2460.0, status = "WON", timestamp = rightNow - 14 * dayMs, sport = "Football", teamA = "Arsenal", teamB = "Man United"),
                 Bet(matchId = 2, selection = "2", odds = 1.95, stake = 800.0, potentialReturn = 1560.0, status = "WON", timestamp = rightNow - 13 * dayMs, sport = "Basketball", teamA = "Lakers", teamB = "Warriors"),
@@ -907,12 +966,12 @@ class BetViewModel(application: Application, private val repository: BetReposito
                 Bet(matchId = 11, selection = "1", odds = 2.15, stake = 1100.0, potentialReturn = 2365.0, status = "WON", timestamp = rightNow - 1 * dayMs, sport = "Tennis", teamA = "Sabalenka", teamB = "Swiatek"),
                 Bet(matchId = 12, selection = "1", odds = 1.35, stake = 2400.0, potentialReturn = 3240.0, status = "PENDING", timestamp = rightNow - 4 * 3600 * 1000, sport = "Football", teamA = "Man City", teamB = "Tottenham")
             )
-            
+
             // Insert into Database
             for (bet in initialDemoBets) {
                 db.betDao().insertBet(bet)
             }
-            
+
             // Register a security audit log showing history was seeded
             val securityLogSdf = java.text.SimpleDateFormat("HH:mm:ss.S", java.util.Locale.getDefault())
             val logMsg = "Legacy database synchronization triggered: Seeded 12 matches spanning 14-day history for statistical charts"
@@ -1059,7 +1118,7 @@ class BetViewModel(application: Application, private val repository: BetReposito
                             put("start_time", match.dateTimeString)
                             put("status", if (match.isLive) "Live" else "Not Started")
                             put("market_type", "1X2")
-                            
+
                             val optionsArr = org.json.JSONArray().apply {
                                 put(org.json.JSONObject().apply { put("selection", "1"); put("odds", match.odds1) })
                                 if (match.oddsX > 1.0) {
@@ -1079,7 +1138,7 @@ class BetViewModel(application: Application, private val repository: BetReposito
                             put("start_time", match.dateTimeString)
                             put("status", if (match.isLive) "Live" else "Not Started")
                             put("market_type", "Over/Under")
-                            
+
                             val optionsArr = org.json.JSONArray().apply {
                                 put(org.json.JSONObject().apply { put("selection", "Over 2.5"); put("odds", match.oddsOver) })
                                 put(org.json.JSONObject().apply { put("selection", "Under 2.5"); put("odds", match.oddsUnder) })
@@ -1097,7 +1156,7 @@ class BetViewModel(application: Application, private val repository: BetReposito
                                 put("start_time", match.dateTimeString)
                                 put("status", if (match.isLive) "Live" else "Not Started")
                                 put("market_type", "BTTS")
-                                
+
                                 val optionsArr = org.json.JSONArray().apply {
                                     put(org.json.JSONObject().apply { put("selection", "BTTS Yes"); put("odds", match.oddsBttsYes) })
                                     put(org.json.JSONObject().apply { put("selection", "BTTS No"); put("odds", match.oddsBttsNo) })
@@ -1107,7 +1166,7 @@ class BetViewModel(application: Application, private val repository: BetReposito
                             jsonArr.put(rowBtts)
                         }
                     }
-                    
+
                     jsonBody = jsonArr.toString(2)
                     cachedActiveSheetsJson = jsonBody
                     lastActiveSheetsCacheTime = rightNow
@@ -1203,10 +1262,10 @@ class BetViewModel(application: Application, private val repository: BetReposito
             _isAnalyzing.value = true
             _analyzedMatchId.value = match.id
             _currentPrediction.value = null
-            
+
             // Artificial analytics delay to show high-fidelity analytical loader
             delay(1500)
-            
+
             val result = GeminiSportsPredictor.predictMatch(
                 teamA = match.teamA,
                 teamB = match.teamB,
@@ -1229,14 +1288,14 @@ class BetViewModel(application: Application, private val repository: BetReposito
             try {
                 logBroker("📥 [WEBHOOK ROUTER] Received POST /api/v1/webhooks/sports-stream/match")
                 delay(200)
-                
+
                 // Parse JSON payload
                 val fixtureId = extractIntFromJson(jsonPayload, "fixture_id")
                 val status = extractStringFromJson(jsonPayload, "status")
                 val homeScore = extractIntFromJson(jsonPayload, "home_score")
                 val awayScore = extractIntFromJson(jsonPayload, "away_score")
                 val elapsedTime = extractIntFromJson(jsonPayload, "elapsed_time")
-                
+
                 if (fixtureId == null || status == null || homeScore == null || awayScore == null || elapsedTime == null) {
                     logBroker("❌ [WEBHOOK ERROR] Invalid payload fields or types.")
                     onResponse("""
@@ -1247,15 +1306,15 @@ class BetViewModel(application: Application, private val repository: BetReposito
                     """.trimIndent())
                     return@launch
                 }
-                
+
                 logBroker("⚙️ [WEBHOOK PROCESSOR] Ingesting telemetry update: fixture_id=$fixtureId, status=$status, home_score=$homeScore, away_score=$awayScore, elapsed_time=$elapsedTime")
                 delay(300)
-                
+
                 val matchedId = when (fixtureId) {
                     849201 -> 101 // Map our first main football match (Ethiopia Bunna vs St. George)
                     else -> (fixtureId % 7) + 101
                 }
-                
+
                 val currentMatch = repository.getDb().matchDao().getMatchById(matchedId)
                 if (currentMatch != null) {
                     val updated = currentMatch.copy(
@@ -1266,19 +1325,19 @@ class BetViewModel(application: Application, private val repository: BetReposito
                     )
                     repository.updateMatch(updated)
                     logBroker("⚽ [WEBHOOK SUCCESS] Match #${matchedId} (${updated.teamA} vs ${updated.teamB}) state updated in DB: ${updated.scoreA}-${updated.scoreB} at ${updated.timeString}")
-                    
+
                     triggerMatchScoreUpdateNotification(updated, "${currentMatch.scoreA}-${currentMatch.scoreB}", "${updated.scoreA}-${updated.scoreB}")
                 } else {
                     logBroker("⚠️ [WEBHOOK WARNING] Unknown fixture_id $fixtureId (no matching local match mapped).")
                 }
-                
+
                 onResponse("""
                     {
                       "success": true,
                       "message": "Match telemetry data stream accepted and processed successfully."
                     }
                 """.trimIndent())
-                
+
             } catch (e: Exception) {
                 logBroker("❌ [WEBHOOK EXCEPTION] Failed to process webhook payload: ${e.message}")
                 onResponse("""
@@ -1377,7 +1436,6 @@ class BetViewModel(application: Application, private val repository: BetReposito
         }
     }
 
-
     private val _telebirrConsoleLogs = MutableStateFlow<List<String>>(listOf("[SYSTEM] Telebirr Sandbox Engine active."))
     val telebirrConsoleLogs: StateFlow<List<String>> = _telebirrConsoleLogs.asStateFlow()
 
@@ -1415,9 +1473,9 @@ class BetViewModel(application: Application, private val repository: BetReposito
         viewModelScope.launch {
             logBroker("📡 [CLIENT START] Requesting WebSocket feed client initialization for URL: $feedUrl...")
             _liveFeedStatus.value = "Connecting"
-            
+
             liveOddsFeedService?.disconnect()
-            
+
             liveOddsFeedService = com.example.util.LiveOddsFeedService(
                 feedUrl = feedUrl,
                 apiKey = apiKey,
@@ -1438,7 +1496,7 @@ class BetViewModel(application: Application, private val repository: BetReposito
                     }
                 }
             )
-            
+
             liveOddsFeedService?.connect()
         }
     }
@@ -1454,26 +1512,26 @@ class BetViewModel(application: Application, private val repository: BetReposito
         viewModelScope.launch {
             logBroker("📡 [INCOMING FEED] Bytes received from WebSocket broker feed channel...")
             delay(310)
-            
+
             val raw = com.example.util.FeedBroker.parseRawPayload(jsonPayload)
             if (raw == null) {
                 logBroker("❌ [PARSING ERROR] Failed to parse raw broker feed payload json! Invalid structure.")
                 return@launch
             }
-            
+
             logBroker("✅ [PARSING SUCCESS] Parsed event: ${raw.eventId} | Sport: ${raw.sport} | Type: ${raw.status}")
             delay(430)
-            
+
             logBroker("🌀 [NORMALIZING] Invoking normalizer transform maps on ${raw.markets.size} active betting markets...")
             val normalizedList = com.example.util.FeedBroker.normalize(raw)
             delay(520)
-            
+
             logBroker("📝 [NORMALIZATION COMPLETE] Generated ${normalizedList.size} flat SQL/PG-Ready records:")
             normalizedList.forEach { norm ->
                 logBroker("   👉 Match: #${norm.matchId} | Market: ${norm.marketType} | Line: ${norm.selectionName} @ ${norm.oddsValue} | Susp: ${norm.isSuspended}")
             }
             delay(400)
-            
+
             logBroker("💼 [DATABASE APPLY] Processing normalized transactions sequentially into Room SQL DB...")
             normalizedList.forEach { norm ->
                 repository.processLiveDbUpdate(norm)
@@ -1486,7 +1544,7 @@ class BetViewModel(application: Application, private val repository: BetReposito
         viewModelScope.launch {
             logConsole("📥 [WEBHOOK CALLBACK] Received payment callback invoke from Telebirr APIs...")
             delay(400)
-            
+
             val tradeNo = "TRADE_" + (100000000..999999999).random().toString()
             val totalAmountStr = if (simulateTamper) {
                 logConsole("⚠️ [SANDBOX MODE] Tampering payload baseAmount: $baseAmount -> ${(baseAmount * 2.5)}")
@@ -1494,7 +1552,7 @@ class BetViewModel(application: Application, private val repository: BetReposito
             } else {
                 String.format("%.2f", baseAmount)
             }
-            
+
             val transactionStatusCheck = if (simulateTamper) {
                 "SUCCESS_SPOOFED_UNAUTHORIZED"
             } else {
@@ -1522,7 +1580,7 @@ class BetViewModel(application: Application, private val repository: BetReposito
                 logConsole("🔑 [2/4 SIGNING] Generated authentic signature using private RSA keys...")
                 com.example.util.TelebirrUtil.signPayload(signString, com.example.BuildConfig.MERCHANT_PRIVATE_KEY)
             }
-            
+
             logConsole("✨ Incoming verification Signature: ${incomingSignature.take(kotlin.math.min(incomingSignature.length, 30))}...")
             delay(600)
 
@@ -1546,12 +1604,12 @@ class BetViewModel(application: Application, private val repository: BetReposito
             }
 
             logConsole("✅ [4/4 VERIFIED] Cryptographic signature is authentic! Status: $transactionStatusCheck")
-            
+
             // 3. Process business wallet logic
             // Check in local transactions for this pending order
             val allTx = repository.allTransactions.firstOrNull() ?: emptyList()
             val targetTx = allTx.find { it.id == outTradeNo }
-            
+
             if (targetTx == null) {
                 logConsole("❌ [IDEMPOTENCY MATCH FAILED] No matching pending transaction found for reference: $outTradeNo")
                 return@launch
@@ -1578,11 +1636,11 @@ class BetViewModel(application: Application, private val repository: BetReposito
                 delay(6000) // update every 6 seconds
                 val currentMatches = repository.allMatches.firstOrNull() ?: continue
                 val liveMatches = currentMatches.filter { it.isLive && it.status == "LIVE" }
-                
+
                 if (liveMatches.isNotEmpty()) {
                     // Choose 1 random live match to update
                     val targetMatch = liveMatches.random()
-                    
+
                     // 1. Tick game time string
                     val updatedTime = when {
                         targetMatch.timeString.contains("Set") -> {
@@ -1682,7 +1740,7 @@ class BetViewModel(application: Application, private val repository: BetReposito
                         odds2 = actualOdds2,
                         isLocked = setLocked
                     )
-                    
+
                     repository.updateMatch(updatedMatch)
 
                     // EVALUATE ACTIVE CUSTOM PRICE ALERTS
@@ -1741,7 +1799,7 @@ class BetViewModel(application: Application, private val repository: BetReposito
                 val context = getApplication<Application>()
                 val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
                 val channelId = "odds_fluctuation_alerts"
-                
+
                 val title = "Score Update: ${match.teamA} vs ${match.teamB}"
                 val body = "The score updated to $newScore (was $oldScore). Live time: ${match.timeString}."
 
@@ -1765,7 +1823,7 @@ class BetViewModel(application: Application, private val repository: BetReposito
                 val context = getApplication<Application>()
                 val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
                 val channelId = "odds_fluctuation_alerts"
-                
+
                 val title = "Match Started: ${match.teamA} vs ${match.teamB}"
                 val body = "Your selected / tracked match has kicked off! Track livescores and fluctuate odds now."
 
@@ -1870,7 +1928,7 @@ class BetViewModel(application: Application, private val repository: BetReposito
                 }
 
                 val riskStatus = if (isApprovedByRisk) "APPROVED" else "REJECTED (High Exposure Risk)"
-                
+
                 var dbStatus = "PENDING"
                 var amqpAction = "ACK"
                 val latency = (20..110).random()
@@ -1977,11 +2035,11 @@ class BetViewModel(application: Application, private val repository: BetReposito
 
             val timestamp = System.currentTimeMillis() / 1000
             val payload = "user_id=$userId&game=$gameSlug&ip=$userIp&timestamp=$timestamp"
-            
+
             val logs = mutableListOf<String>()
             logs.add("🕒 [Handshake Initiated] Timestamp: $timestamp")
             logs.add("📦 [Crypto Payload] Raw plain parameters string:\n  \"$payload\"")
-            
+
             val secret = _casinoSecretKey.value
             val signature = try {
                 val keySpec = javax.crypto.spec.SecretKeySpec(secret.toByteArray(Charsets.UTF_8), "HmacSHA256")
@@ -1992,7 +2050,7 @@ class BetViewModel(application: Application, private val repository: BetReposito
             } catch (e: Exception) {
                 "error_generating_hmac"
             }
-            
+
             logs.add("🔑 [HMAC-SHA256 Sign] Signature hex output:\n  \"$signature\"")
 
             val requestUrl = "https://api.casino-aggregator.com/v1/games/launch"
@@ -2014,10 +2072,10 @@ class BetViewModel(application: Application, private val repository: BetReposito
             if (_casinoAggregatorOffline.value) {
                 logs.add("❌ [AXIOS ERROR] connect ECONNREFUSED 104.22.4.98:443 - Connection timed out after 5000ms.")
                 logs.add("⚠️ [FALLBACK CONTROLLER] CasinoAggregatorBridge connection failed, launching fallback game loop.")
-                
+
                 val fallbackUrl = "/games/fallback/$gameSlug"
                 logs.add("🎮 [FALLBACK LAUNCH] Successfully loaded internal virtual client engine. Launch URL: $fallbackUrl")
-                
+
                 _casinoHandshakeResult.value = CasinoHandshakeResult(
                     timestamp = timestamp,
                     payload = payload,
@@ -2036,7 +2094,7 @@ class BetViewModel(application: Application, private val repository: BetReposito
             } else {
                 val mockUuid = java.util.UUID.randomUUID().toString()
                 val finalUrl = "https://iframe.casino-aggregator.com/launch/$mockUuid?player=$userId&game=$gameSlug&sig=$signature"
-                
+
                 logs.add("✅ [HANDSHAKE OK] Remote casino verified signature parameters and authorized player access.")
                 logs.add("🌐 [IFRAME READY] Embed launch URL generated: $finalUrl")
 
@@ -2119,12 +2177,12 @@ class BetViewModel(application: Application, private val repository: BetReposito
             logs.add("🕒 [AntiFraud Core] Connection requested from node-pg.Pool client...")
             delay(300)
             logs.add("✅ [pg.Pool] Connection established. Executing duplicate hardware query...")
-            
+
             val sqlQuery = """
                 SELECT id, role, is_flagged FROM users 
                 WHERE id != $userId AND device_hardware_hash = '$deviceFingerprint' AND created_at > NOW() - INTERVAL '30 days'
             """.trimIndent()
-            
+
             logs.add("🔍 [POSTGRES RAW SQL]:\n$sqlQuery")
             delay(400)
 
@@ -2132,49 +2190,49 @@ class BetViewModel(application: Application, private val repository: BetReposito
             val otherDevices = _deviceMappings.value.filter { 
                 it.userId != userId && it.deviceFingerprint == deviceFingerprint && it.createdAtDaysAgo <= 30 
             }
-            
+
             logs.add("📊 [SQL Output] Query matched ${otherDevices.size} pre-registered account profiles utilizing the identical hardware hash.")
 
             val clean: Boolean
             val reason: String?
-            
+
             if (otherDevices.size >= 3) {
                 clean = false
                 reason = "Security Rejection: Hardware environment signature matched multiple registered profiles. Account flagged for review."
-                
+
                 logs.add("🚨 [SYNDICATE PATTERN DETECTED] Multi-accounting violation threshold triggered (Count: ${otherDevices.size} >= 3 other accounts).")
                 logs.add("🔒 [DB UPDATE] Flagging violator account in relational table: UPDATE users SET is_flagged = TRUE WHERE id = $userId")
-                
+
                 // Flag the user in our local DB simulation
                 val updatedList = _deviceMappings.value.map {
                     if (it.userId == userId) it.copy(isFlagged = true) else it
                 }.toMutableList()
-                
+
                 // If the checking user wasn't registered yet, we add them flagged
                 if (updatedList.none { it.userId == userId }) {
                     updatedList.add(DeviceUserMapping(userId, username, deviceFingerprint, ipAddress, 0, isFlagged = true))
                 }
                 _deviceMappings.value = updatedList
-                
+
                 logBroker("🚨 [ANTI-FRAUD ALERT] Flagged User #$userId ($username) for multi-accounting syndicate abuse on fingerprint $deviceFingerprint!")
             } else {
                 clean = true
                 reason = null
                 logs.add("🟢 [INTEGRITY OK] Hardware configuration is under the safety threshold (< 3 duplicate accounts).")
                 logs.add("💼 [REGISTRATION] Inserting registration mapping to DB...")
-                
+
                 val updatedList = _deviceMappings.value.map {
                     if (it.userId == userId) it.copy(deviceFingerprint = deviceFingerprint, ipAddress = ipAddress, isFlagged = false) else it
                 }.toMutableList()
-                
+
                 if (updatedList.none { it.userId == userId }) {
                     updatedList.add(DeviceUserMapping(userId, username, deviceFingerprint, ipAddress, 0, isFlagged = false))
                 }
                 _deviceMappings.value = updatedList
-                
+
                 logBroker("✅ [ANTI-FRAUD OK] User #$userId device signature registered successfully. Clean state verified.")
             }
-            
+
             logs.add("🔌 [pg.Pool] Releasing active database client back to the connection pool.")
 
             _fraudAuditResult.value = AntiFraudAuditResult(
