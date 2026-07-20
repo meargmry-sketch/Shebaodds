@@ -1,6 +1,7 @@
 // ============================================
 // SHEBAODDS - LANGUAGE SWITCHER COMPONENT
 // English / Amharic (አማርኛ) Support
+// INCLUDES: 51+ CASINO GAMES TRANSLATIONS
 // ============================================
 
 import React, { useContext, createContext, useState, useEffect } from 'react';
@@ -141,7 +142,25 @@ const defaultAmharicTranslations = {
   "btn_save": "አስቀምጥ",
   "btn_edit": "አርትዕ",
   "btn_delete": "ሰርዝ",
-  "btn_close": "ዝጋ"
+  "btn_close": "ዝጋ",
+  
+  // ==========================================================
+  // 🎰 NEW: 51+ CASINO GAME TRANSLATIONS
+  // ==========================================================
+  "crash_label": "💥 ክራሽ ጨዋታዎች",
+  "classic_label": "🃏 ክላሲክ ጨዋታዎች",
+  "table_label": "🪑 የገበታ ጨዋታዎች",
+  "slots_label": "🎰 ስሎት ጨዋታዎች",
+  "sports_label": "🏅 ስፖርት ጨዋታዎች",
+  "special_label": "✨ ልዩ ጨዋታዎች",
+  "favorites_label": "⭐ ተወዳጅ",
+  "casino_games": "ካዚኖ ጨዋታዎች",
+  "casino_play": "ተጫወት",
+  "casino_multiplier": "ተባዛት",
+  "casino_bet": "ካዚኖ ውርርድ",
+  "casino_win": "አሸናፊ",
+  "casino_lose": "ተሸናፊ",
+  "casino_round": "ዙር"
 };
 
 // Translation data
@@ -184,16 +203,16 @@ export function LanguageProvider({ children }) {
   const [language, setLanguage] = useState(() => {
     return localStorage.getItem('shebaodds_language') || 'en';
   });
-  
+
   const [translationsLoaded, setTranslationsLoaded] = useState(false);
-  
+
   useEffect(() => {
     loadAmharicTranslations().then(() => setTranslationsLoaded(true));
   }, []);
-  
+
   const t = (key, params = {}) => {
     let text;
-    
+
     if (language === 'am' && translations.am[key]) {
       text = translations.am[key];
     } else if (translations.en[key]) {
@@ -201,22 +220,22 @@ export function LanguageProvider({ children }) {
     } else {
       text = key;
     }
-    
+
     // Replace parameters
     Object.keys(params).forEach(param => {
       text = text.replace(`{${param}}`, params[param]);
     });
-    
+
     return text;
   };
-  
+
   const changeLanguage = (newLanguage) => {
     setLanguage(newLanguage);
     localStorage.setItem('shebaodds_language', newLanguage);
     document.documentElement.lang = newLanguage;
     document.documentElement.dir = 'ltr'; // Amharic is left-to-right (LTR)
   };
-  
+
   if (!translationsLoaded) {
     return (
       <div style={{
@@ -235,7 +254,7 @@ export function LanguageProvider({ children }) {
       </div>
     );
   }
-  
+
   return (
     <LanguageContext.Provider value={{ language, t, changeLanguage }}>
       {children}
@@ -247,14 +266,14 @@ export function LanguageProvider({ children }) {
 export function LanguageSwitcher() {
   const { language, changeLanguage } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
-  
+
   const languages = [
     { code: 'en', name: 'English', flag: '🇬🇧', nameAm: 'እንግሊዝኛ' },
     { code: 'am', name: 'አማርኛ', flag: '🇪🇹', nameAm: 'አማርኛ' }
   ];
-  
+
   const currentLang = languages.find(l => l.code === language);
-  
+
   return (
     <div className="language-switcher" style={{ position: 'relative', display: 'inline-block' }}>
       <button 
@@ -279,7 +298,7 @@ export function LanguageSwitcher() {
         <span>{currentLang?.name}</span>
         <span className="arrow" style={{ fontSize: '0.75rem', marginLeft: '2px' }}>{isOpen ? '▲' : '▼'}</span>
       </button>
-      
+
       {isOpen && (
         <>
           <div 
@@ -379,14 +398,14 @@ export function formatNumber(number, language = 'en') {
 export function formatDate(date, language = 'en', format = 'full') {
   const d = new Date(date);
   if (isNaN(d.getTime())) return '';
-  
+
   if (language === 'am') {
     const amharicMonths = [
       'ጥር', 'የካቲት', 'መጋቢት', 'ሚያዚያ', 'ግንቦት', 'ሰኔ',
       'ሐምሌ', 'ነሐሴ', 'መስከረም', 'ጥቅምት', 'ህዳር', 'ታህሳስ'
     ];
     const amharicDays = ['እሑድ', 'ሰኞ', 'ማክሰኞ', 'ረቡዕ', 'ሐሙስ', 'ዓርብ', 'ቅዳሜ'];
-    
+
     if (format === 'date') {
       return `${amharicMonths[d.getMonth()]} ${d.getDate()} ቀን ${d.getFullYear()} ዓ.ም.`;
     } else if (format === 'time') {
@@ -403,7 +422,7 @@ export function formatDate(date, language = 'en', format = 'full') {
       return `${amharicDays[d.getDay()]}፣ ${amharicMonths[d.getMonth()]} ${d.getDate()} ቀን ${d.getFullYear()}፣ ${hours12}:${minutes.toString().padStart(2, '0')} ${ampm}`;
     }
   }
-  
+
   if (format === 'date') {
     return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
   } else if (format === 'time') {
