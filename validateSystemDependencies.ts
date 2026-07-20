@@ -1,28 +1,34 @@
 import mongoose from 'mongoose';
 
 export async function validateSystemDependencies(): Promise<void> {
+  // Extended list of required environment variables (now includes GEMINI_API_KEY for AI predictions)
   const requiredKeys = [
-    'MONGODB_URI', 'TAX_RATE', 'TELE_BIRR_API_KEY', 
-    'CHAPA_API_KEY', 'REDIS_HOST', 'SPORTS_DATA_API_KEY'
+    'MONGODB_URI',
+    'TAX_RATE',
+    'TELE_BIRR_API_KEY',
+    'CHAPA_API_KEY',
+    'REDIS_HOST',
+    'SPORTS_DATA_API_KEY',
+    'GEMINI_API_KEY' // 🎰 Added for AI-powered game predictions (used in Casino & Sports)
   ];
 
   // 1. Assert configuration variables exist
   for (const key of requiredKeys) {
     if (!process.env[key]) {
       console.error(`❌ [CRITICAL BOOT ERROR] Missing environment variable assignment: ${key}`);
-      process.exit(1); 
+      process.exit(1);
     }
   }
 
-  // 2. Enforce MongoDB Replica Set Validation
+  // 2. Enforce MongoDB Replica Set Validation (critical for atomic casino transactions)
   try {
     await mongoose.connect(process.env.MONGODB_URI!);
-    const isReplicaSet = mongoose.connection.db?.databaseName; 
-    
+    const isReplicaSet = mongoose.connection.db?.databaseName;
+
     // Quick test to ensure transactions won't fail at runtime
     const session = await mongoose.startSession();
     session.endSession();
-    
+
     console.log('🚀 [BOOT SYSTEM] MongoDB connection successfully initiated with transactional headroom.');
   } catch (err) {
     console.error('❌ [CRITICAL BOOT ERROR] MongoDB cluster connection refused or lacks Replica Set structure.');
