@@ -38,11 +38,11 @@ object EthiopianDateHelper {
         var ethiopianYear = gregorianYear - 8
         val isEthiopianLeap = (ethiopianYear % 4 == 3)
         val startDayInGregorian = if (isEthiopianLeap) 12 else 11
-        
+
         val cal = Calendar.getInstance()
         cal.set(gregorianYear, gregorianMonth - 1, gregorianDay)
         val timeInMillis = cal.timeInMillis
-        
+
         val startCal = Calendar.getInstance()
         var startYear = gregorianYear
         if (gregorianMonth < 9 || (gregorianMonth == 9 && gregorianDay < startDayInGregorian)) {
@@ -50,23 +50,23 @@ object EthiopianDateHelper {
         } else {
             ethiopianYear = gregorianYear - 7
         }
-        
+
         val startIsLeap = ((startYear - 8) % 4 == 3)
         val startDay = if (startIsLeap) 12 else 11
         startCal.set(startYear, 8, startDay, 12, 0, 0)
-        
+
         val diffDays = ((timeInMillis - startCal.timeInMillis) / (24 * 60 * 60 * 1000)).toInt()
-        
+
         var ethMonth = (diffDays / 30) + 1
         var ethDay = (diffDays % 30) + 1
-        
+
         if (ethMonth > 13) {
             ethMonth = 13
             ethDay = diffDays - 360 + 1
         }
-        
+
         val monthIdx = (ethMonth - 1).coerceIn(0, 12)
-        
+
         return EthiopianDate(
             year = ethiopianYear,
             month = ethMonth,
@@ -82,7 +82,7 @@ object EthiopianDateHelper {
         val ethHour = (hour24 - 6 + 12) % 12
         val ethHourDisplay = if (ethHour == 0) 12 else ethHour
         val isDay = hour24 in 6..17
-        
+
         val amhPart = if (isDay) "ቀን" else "ማታ"
         return String.format("%02d:%02d (%s)", ethHourDisplay, minute, amhPart)
     }
@@ -91,7 +91,7 @@ object EthiopianDateHelper {
         val ethHour = (hour24 - 6 + 12) % 12
         val ethHourDisplay = if (ethHour == 0) 12 else ethHour
         val isDay = hour24 in 6..17
-        
+
         val period = when (lang) {
             "am" -> if (isDay) "ቀን" else "ማታ"
             "ti" -> if (isDay) "መዓልቲ" else "ምሸት"
