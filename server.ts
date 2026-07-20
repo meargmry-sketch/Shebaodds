@@ -1,104 +1,87 @@
-import express from 'express';
-import cors from 'cors';
-import helmet from 'helmet';
-import compression from 'compression';
+import mongoose from 'mongoose';
 import * as dotenv from 'dotenv';
-import { bootstrapAppEngine } from './serverBootstrap';
-import gatewayRouter from './expressApiGateway';
-import authRouter from './authRoutes';
-import walletRouter from './walletRoutes';
-import bettingRouter from './bettingRoutes';
-import matchesRouter from './matchesRoutes';
-import adminRouter from './adminRoutes';
-import biometricRouter from './biometricRoutes';
+import { UserProfileModel, UserRole } from '../expressApiGateway';
+import { JackpotPool } from '../jackpotSchema';
+import { CasinoGame, CASINO_GAMES_DATA } from '../Match'; // new casino model
 
-// Load environment variables
 dotenv.config();
 
-const app = express();
-const port = process.env.PORT || 5000;
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/shebaodds';
 
-// Security & Optimization Middleware Matrix
-app.use(helmet());
-app.use(cors({
-  origin: process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',') : '*'
-}));
-app.use(compression());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+async function seedDatabase() {
+  console.log('🔄 [SEED] Commencing ShebaOdds database seeding sequence...');
 
-// Live HTTP request logging stream
-app.use((req, res, next) => {
-  console.log(`[HTTP] ${req.method} ${req.url} - IP: ${req.ip} - User-Agent: ${req.headers['user-agent']}`);
-  next();
-});
-
-// Root API Healthcheck & System Metadata
-app.get('/', (req, res) => {
-  res.json({
-    name: 'ShebaOdds Enterprise Platform Service',
-    version: '2.0.0',
-    status: 'Operational',
-    uptime: process.uptime(),
-    timestamp: new Date().toISOString()
-  });
-});
-
-// Serve Amharic translations dynamically to React frontend
-app.get('/locales/am.json', (req, res) => {
   try {
-    const fs = require('fs');
-    const path = require('path');
-    const localesPath = path.join(__dirname, 'locales', 'am.json');
-    if (fs.existsSync(localesPath)) {
-      const data = fs.readFileSync(localesPath, 'utf8');
-      return res.json(JSON.parse(data));
-    }
-    // Fallback if file doesn't exist
-    return res.status(404).json({ success: false, message: 'Translations not found' });
-  } catch (error: any) {
-    return res.status(500).json({ success: false, message: error.message });
-  }
-});
+    await mongoose.connect(MONGODB_URI);
+    console.log('✅ [SEED] Database connected successfully.');
 
-// Register Unified Gateway Router under standard API versioning endpoint
-const apiVersion = process.env.API_VERSION || 'v2';
-app.use(`/api/${apiVersion}`, gatewayRouter);
-app.use(`/api/${apiVersion}/auth`, authRouter);
-app.use(`/api/${apiVersion}/wallet`, walletRouter);
-app.use(`/api/${apiVersion}/bets`, bettingRouter);
-app.use(`/api/${apiVersion}/matches`, matchesRouter);
-app.use(`/api/${apiVersion}/admin`, adminRouter);
-app.use(`/api/${apiVersion}/biometric`, biometricRouter);
+    // 1. Clear existing datasets
+    console.log('🔄 [SEED] Cleansing existing tables & indexes...');
+    await UserProfileModel.deleteMany({});
+    await JackpotPool.deleteMany({});
+    await CasinoGame.deleteMany({});
 
-// Global Unhandled Error Handling Pipeline
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error('💥 [GLOBAL UNHANDLED EXCEPTION]:', err);
-  res.status(500).json({
-    success: false,
-    error: 'Internal Server Error',
-    message: err.message || 'An unexpected error occurred inside the gateway routing pipeline.'
-  });
-});
+    // 2. Seed User Profiles (Players & Admins)
+    console.log('🔄 [SEED] Seeding enterprise user records...');
+    const userProfiles = [
+      {
+        userId: 'USR-849201',
+        email: 'player@shebaodds.com',
+        role: UserRole.PLAYER,
+        preferredLanguage: 'am',
+        isFlagged: false,
+        nationalIdNumber: 'ET-99410A'
+      },
+      {
+        userId: 'USR-201940',
+        email: 'agent@shebaodds.com',
+        role: UserRole.AGENT,
+        preferredLanguage: 'en',
+        isFlagged: false
+      },
+      {
+        userId: 'USR-109403',
+        email: 'admin@shebaodds.com',
+        role: UserRole.MASTER_ADMIN,
+        preferredLanguage: 'am',
+        isFlagged: false
+      }
+    ];
+    await UserProfileModel.insertMany(userProfiles);
+    console.log('✅ [SEED] Registered 3 core user profiles (Player, Agent, SuperAdmin).');
 
-/**
- * Initializes all database pools, validates environments, and starts the HTTP listener
- */
-async function startServer() {
-  try {
-    // Run core engine bootstrap validation (MongoDB replica set check, etc.)
-    await bootstrapAppEngine();
+    // 3. Seed Default 12-Match Grand Jackpot
+    console.log('🔄 [SEED] Seeding active 12-match Grand Weekend Jackpot Pool...');
+    const activeJackpot = {
+      title: 'Grand Weekend 12 Jackpot Event',
+      matchIds: [
+        1001, 1002, 1003, 1004, 1005, 1006,
+        1007, 1008, 1009, 1010, 1011, 1012
+      ],
+      grandPrize: 100000.00,
+      entryFee: 50.00,
+      status: 'Open',
+      results: []
+    };
+    await JackpotPool.create(activeJackpot);
+    console.log('✅ [SEED] Registered Grand Weekend 12 Jackpot Pool with 100,000 ETB target.');
 
-    app.listen(port, () => {
-      console.log(`======================================================================`);
-      console.log(`⚡ [SERVER SUCCESS] ShebaOdds Enterprise API Gateway started on port ${port}`);
-      console.log(`🔗 API Gateway Endpoints available under /api/${apiVersion}`);
-      console.log(`======================================================================`);
-    });
+    // 4. Seed 51+ Casino Games
+    console.log('🔄 [SEED] Seeding 51+ casino games...');
+    await CasinoGame.insertMany(CASINO_GAMES_DATA);
+    console.log(`✅ [SEED] Seeded ${CASINO_GAMES_DATA.length} casino games successfully.`);
+
+    console.log('======================================================================');
+    console.log('🎉 [SEED SUCCESS] ShebaOdds Enterprise Database seeded successfully.');
+    console.log('======================================================================');
+
   } catch (err: any) {
-    console.error('💥 [SERVER FATAL STARTUP FAILURE]:', err.message || err);
+    console.error('💥 [SEED ERROR] Failed to seed database:', err.message || err);
     process.exit(1);
+  } finally {
+    await mongoose.disconnect();
+    console.log('🔌 [SEED] Database connection pool closed safely.');
   }
 }
 
-startServer();
+seedDatabase();
