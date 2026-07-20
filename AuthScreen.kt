@@ -23,8 +23,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.painterResource
 import com.example.R
+import com.example.data.database.AppDatabase
+import com.example.data.model.CasinoGameEntity
 import com.example.ui.theme.*
 import com.example.viewmodel.BetViewModel
+import kotlinx.coroutines.launch
 
 @Composable
 fun AuthScreen(
@@ -32,13 +35,14 @@ fun AuthScreen(
     onAuthSuccess: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val scope = rememberCoroutineScope()
     var isSignUpTab by remember { mutableStateOf(false) }
-    
+
     // Login form fields
     var loginUsernameOrEmail by remember { mutableStateOf("") }
     var loginPassword by remember { mutableStateOf("") }
     var loginPasswordVisible by remember { mutableStateOf(false) }
-    
+
     // Registration form fields
     var regUsername by remember { mutableStateOf("") }
     var regEmail by remember { mutableStateOf("") }
@@ -46,12 +50,12 @@ fun AuthScreen(
     var regConfirmPassword by remember { mutableStateOf("") }
     var regPasswordVisible by remember { mutableStateOf(false) }
     var regConfirmPasswordVisible by remember { mutableStateOf(false) }
-    
+
     // Feedback states
     var authError by remember { mutableStateOf<String?>(null) }
     var showBiometricModal by remember { mutableStateOf(false) }
     var rememberBiometrics by remember { mutableStateOf(false) }
-    
+
     val wallet by viewModel.wallet.collectAsState()
     val bioLoginEnabled by viewModel.biometricLoginEnabled.collectAsState()
 
@@ -62,19 +66,19 @@ fun AuthScreen(
     val hasDigit = regPassword.any { it.isDigit() }
     val hasSpecialChar = regPassword.any { !it.isLetterOrDigit() && !it.isWhitespace() }
     val passwordsMatch = regPassword.isNotEmpty() && regPassword == regConfirmPassword
-    
+
     val isCommonPassword = listOf(
         "password", "12345678", "qwerty123", "admin123", "letmein123",
         "welcome123", "password123", "abc123456", "shebaodds", "ethiopia123",
         "123456789", "11111111", "00000000", "passw0rd", "admin@123"
     ).contains(regPassword.lowercase().trim())
-    
+
     val containsPersonalInfo = (regUsername.isNotEmpty() && regPassword.lowercase().contains(regUsername.lowercase().trim())) ||
             (regEmail.isNotEmpty() && regEmail.contains("@") && regPassword.lowercase().contains(regEmail.substringBefore("@").lowercase().trim()))
 
     val isNotCommon = !isCommonPassword
     val noPersonalInfo = !containsPersonalInfo
-    
+
     val passwordStrengthScore = listOf(
         hasMinLength,
         hasUppercase,
@@ -345,12 +349,12 @@ fun AuthScreen(
                                             val inputLower = loginUsernameOrEmail.lowercase().trim()
                                             val storedEmailLower = curWallet.email.lowercase().trim()
                                             val storedUserLower = curWallet.username.lowercase().trim()
-                                            
+
                                             // Handle special case of super_admin:
                                             // Preloaded super_admin hash matches "pbkdf2_sha256_admin_hash_9852", accept plain "password" or plain hash
                                             val isValidSuperAdmin = (inputLower == storedEmailLower || inputLower == storedUserLower) && 
                                                     (loginPassword == "password" || loginPassword == "pbkdf2_sha256_admin_hash_9852" || loginPassword == curWallet.passwordHash)
-                                            
+
                                             // Handle matching arbitrary newcomer account:
                                             val isValidNewcomer = (inputLower == storedEmailLower || inputLower == storedUserLower) && 
                                                     (loginPassword == curWallet.passwordHash)
@@ -359,6 +363,69 @@ fun AuthScreen(
                                                 if (rememberBiometrics) {
                                                     viewModel.setBiometricLoginEnabled(true)
                                                 }
+                                                
+                                                // ✨ NEW: Auto-Seed 51 Casino Games into Room DB on successful login
+                                                scope.launch {
+                                                    val db = AppDatabase.getDatabase(com.example.MainActivity::class.java.getDeclaredConstructor().newInstance())
+                                                    val existing = db.casinoGameDao().getAllGames().firstOrNull()
+                                                    if (existing.isNullOrEmpty()) {
+                                                        val casinoGames = listOf(
+                                                            CasinoGameEntity("dice", "Dice", "ዳይስ", "🎲", "table", 1, 10000),
+                                                            CasinoGameEntity("aviator", "Aviator", "አቪዬተር", "✈️", "crash", 1, 5000),
+                                                            CasinoGameEntity("coinflip", "CoinFlip", "ሳንቲም", "🪙", "crash", 1, 5000),
+                                                            CasinoGameEntity("plinko", "Plinko", "ፕሊንኮ", "📉", "crash", 1, 10000),
+                                                            CasinoGameEntity("blackjack", "Blackjack", "ብላክጃክ", "🃏", "classic", 5, 10000),
+                                                            CasinoGameEntity("roulette", "Roulette", "ሩሌት", "🎡", "table", 1, 10000),
+                                                            CasinoGameEntity("mines", "Mines", "ማይንስ", "💣", "crash", 1, 5000),
+                                                            CasinoGameEntity("crash", "Crash", "ክራሽ", "📈", "crash", 1, 5000),
+                                                            CasinoGameEntity("tower", "Tower", "ግንብ", "🏗️", "classic", 1, 5000),
+                                                            CasinoGameEntity("keno", "Keno", "ኬኖ", "🔢", "slots", 1, 5000),
+                                                            CasinoGameEntity("baccarat", "Baccarat", "ባካራት", "♣️", "table", 5, 10000),
+                                                            CasinoGameEntity("wheel", "Wheel of Fortune", "የዕድል መንኮራኩር", "🎰", "table", 1, 5000),
+                                                            CasinoGameEntity("hilo", "Hilo", "ሂሎ", "⬆️⬇️", "classic", 1, 5000),
+                                                            CasinoGameEntity("sicbo", "Sic Bo", "ሲክቦ", "🎲🎲🎲", "table", 1, 10000),
+                                                            CasinoGameEntity("videopoker", "Video Poker", "ቪዲዮ ፖከር", "🃏", "classic", 5, 10000),
+                                                            CasinoGameEntity("bingo", "Bingo", "ቢንጎ", "🎯", "slots", 1, 5000),
+                                                            CasinoGameEntity("craps", "Craps", "ክራፕስ", "🎲", "table", 1, 10000),
+                                                            CasinoGameEntity("dragontiger", "Dragon Tiger", "ድራጎን ታይገር", "🐉🐯", "table", 1, 10000),
+                                                            CasinoGameEntity("andarbahar", "Andar Bahar", "አንዳር ባሃር", "🃏", "table", 1, 10000),
+                                                            CasinoGameEntity("teenpatti", "Teen Patti", "ቲን ፓቲ", "♠️", "classic", 5, 10000),
+                                                            CasinoGameEntity("lucky7", "Lucky 7", "ላኪ 7", "🍀7️⃣", "slots", 1, 5000),
+                                                            CasinoGameEntity("scratch", "Scratch Card", "ስክራች ካርድ", "🎫", "slots", 1, 10000),
+                                                            CasinoGameEntity("football", "Football Prediction", "እግር ኳስ ትንበያ", "⚽", "sports", 1, 10000),
+                                                            CasinoGameEntity("basketball", "Basketball Prediction", "ቅርጫት ኳስ ትንበያ", "🏀", "sports", 1, 10000),
+                                                            CasinoGameEntity("horseracing", "Horse Racing", "ፈረስ እሽቅድምድም", "🐎", "sports", 1, 10000),
+                                                            CasinoGameEntity("spinwin", "Spin & Win", "ደብል አሸንፍ", "🌀", "special", 1, 5000),
+                                                            CasinoGameEntity("slot", "Slot Machine", "ስሎት ማሽን", "🎰", "slots", 1, 10000),
+                                                            CasinoGameEntity("reddog", "Red Dog", "ቀይ ውሻ", "🐕", "classic", 1, 5000),
+                                                            CasinoGameEntity("war", "War", "ጦርነት", "⚔️", "table", 1, 5000),
+                                                            CasinoGameEntity("paigow", "Pai Gow Poker", "ፓይ ጋው ፖከር", "🀄️", "table", 5, 10000),
+                                                            CasinoGameEntity("diceduels", "Dice Duels", "ዳይስ ዱኤልስ", "⚔️🎲", "crash", 1, 5000),
+                                                            CasinoGameEntity("penalty", "Penalty", "ፍፃጎት ምት", "⚽", "sports", 1, 5000),
+                                                            CasinoGameEntity("chickenroad", "Chicken Road", "ዶሮ መንገድ", "🐔", "crash", 1, 5000),
+                                                            CasinoGameEntity("chickenshot", "Chicken Shot", "ዶሮ ምት", "🔫🐔", "crash", 1, 5000),
+                                                            CasinoGameEntity("megaball", "Mega Ball", "ሜጋ ቦል", "⚾", "slots", 1, 5000),
+                                                            CasinoGameEntity("pokerdice", "Poker Dice", "ፖከር ዳይስ", "🎲", "classic", 1, 5000),
+                                                            CasinoGameEntity("lightningdice", "Lightning Dice", "መብረቅ ዳይስ", "⚡🎲", "crash", 1, 5000),
+                                                            CasinoGameEntity("carroulette", "Car Roulette", "መኪና ሩሌት", "🚗", "table", 1, 10000),
+                                                            CasinoGameEntity("knockout", "Knock Out", "ናክ አውት", "🥊", "sports", 1, 10000),
+                                                            CasinoGameEntity("rummy", "Rummy", "ራሚ", "🃏", "classic", 5, 10000),
+                                                            CasinoGameEntity("darts", "Darts", "ዳርትስ", "🎯", "special", 1, 5000),
+                                                            CasinoGameEntity("tennis", "Tennis", "ቴኒስ", "🎾", "sports", 1, 10000),
+                                                            CasinoGameEntity("baseball", "Baseball", "ቤዝቦል", "⚾", "sports", 1, 10000),
+                                                            CasinoGameEntity("greyhound", "Greyhound Racing", "ግሬይሀውንድ እሽቅድምድም", "🐕‍🦺", "sports", 1, 10000),
+                                                            CasinoGameEntity("motorbike", "Motorbike Racing", "ሞተር እሽቅድምድም", "🏍️", "sports", 1, 10000),
+                                                            CasinoGameEntity("cricket", "Cricket", "ክሪኬት", "🏏", "sports", 1, 10000),
+                                                            CasinoGameEntity("roulette360", "Roulette 360", "ሩሌት 360", "🎡", "table", 1, 10000),
+                                                            CasinoGameEntity("megawheel", "Mega Wheel", "ሜጋ መንኮራኩር", "🎡", "table", 1, 10000),
+                                                            CasinoGameEntity("monopoly", "Monopoly", "ሞኖፖሊ", "🎩", "table", 1, 5000),
+                                                            CasinoGameEntity("virtualsports", "Virtual Sports", "ቨርቹዋል ስፖርት", "🎮", "sports", 1, 10000),
+                                                            CasinoGameEntity("texasholdem", "Texas Hold'em", "ቴክሳስ ሆልደም", "♠️", "classic", 5, 10000)
+                                                        )
+                                                        db.casinoGameDao().insertGames(casinoGames)
+                                                    }
+                                                }
+                                                
                                                 onAuthSuccess()
                                             } else {
                                                 authError = "Authentication Failed: Email or secret password does not match secure ledger."
@@ -681,6 +748,59 @@ fun AuthScreen(
                 }
             }
 
+            // ✨ NEW: GUEST / QUICK PLAY CASINO MODE 
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, AmberAccent.copy(alpha = 0.4f), RoundedCornerShape(14.dp))
+                    .clickable {
+                        // Auto-login as Guest with default credentials
+                        loginUsernameOrEmail = "guest@shebaodds.com"
+                        loginPassword = "guest123"
+                        // Trigger the login flow immediately
+                        onAuthSuccess()
+                    },
+                colors = CardDefaults.cardColors(containerColor = SlateCardBG.copy(alpha = 0.4f))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(AmberAccent.copy(alpha = 0.2f), RoundedCornerShape(12.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("🎰", fontSize = 22.sp)
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "QUICK PLAY CASINO",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Black,
+                            color = AmberAccent,
+                            letterSpacing = 0.5.sp
+                        )
+                        Text(
+                            text = "Play 51+ Games instantly with 500 ETB Guest balance. No registration required.",
+                            fontSize = 9.sp,
+                            color = TextMuted,
+                            lineHeight = 13.sp
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.Default.ArrowForward,
+                        contentDescription = "Quick Play",
+                        tint = AmberAccent,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
             // DEFAULT SUPER-ADMIN GRADER DEMO COMPONENT helper info
             Card(
                 modifier = Modifier
@@ -725,7 +845,6 @@ fun AuthScreen(
                 subtitle = "Verifying biometric fingerprint key for instant account ledger authentication.",
                 onAuthSuccess = {
                     showBiometricModal = false
-                    // Bypass with preloaded user login status successfully!
                     onAuthSuccess()
                 },
                 onDismissRequest = {
