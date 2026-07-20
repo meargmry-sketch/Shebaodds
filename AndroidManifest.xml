@@ -2,6 +2,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- ✅ Internet permission (required for WebView & API calls) -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- ✅ Biometric (already present) -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
 
     <application
@@ -12,17 +16,21 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.MyApplication">
+        android:theme="@style/Theme.MyApplication"
+        android:hardwareAccelerated="true"          <!-- ✅ Enables smooth WebView rendering -->
+        android:usesCleartextTraffic="true">       <!-- ✅ Allows HTTP for local testing (remove in production) -->
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
             android:theme="@style/Theme.MyApplication"
             android:windowSoftInputMode="adjustResize|stateHidden"
-            android:fitsSystemWindows="false">
+            android:fitsSystemWindows="false"
+            android:hardwareAccelerated="true">    <!-- ✅ Per-activity acceleration -->
+
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
