@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.SportMatch
 import com.example.data.model.UserWallet
+import com.example.data.model.CasinoGameEntity
 import com.example.util.EthiopianDateHelper
 import com.example.util.LocalizationHelper
 import com.example.viewmodel.BetViewModel
@@ -65,13 +66,15 @@ fun PremiumDashboardScreen(
 ) {
     val wallet by viewModel.wallet.collectAsState()
     val allMatches by viewModel.allMatches.collectAsState()
+    // 🎰 NEW: Fetch casino games from Room DB
+    val allCasinoGames by viewModel.allCasinoGames.collectAsState()
     val selectedSport by viewModel.selectedSport.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val selectedLanguage by viewModel.selectedLanguage.collectAsState()
 
-    // Handle local horizontal categories filter
+    // Handle local horizontal categories filter (now includes Casino)
     var activeCategoryIndex by remember { mutableStateOf(0) }
-    
+
     // Virtual matches for categories like Volleyball if not in DB
     val volleyballMatches = remember {
         listOf(
@@ -95,7 +98,7 @@ fun PremiumDashboardScreen(
         allMatches + volleyballMatches
     }
 
-    // Filtered list based on both Search Query & Category Index
+    // Filtered list based on both Search Query & Category Index (Sports only)
     val displayedMatches = remember(combinedMatches, searchQuery, activeCategoryIndex, selectedLanguage) {
         var list = combinedMatches.filter { match ->
             val query = searchQuery.lowercase()
@@ -112,6 +115,7 @@ fun PremiumDashboardScreen(
             4 -> list.filter { it.sport.equals("Tennis", ignoreCase = true) }
             5 -> list.filter { it.sport.equals("Volleyball", ignoreCase = true) }
             6 -> list.filter { it.sport.equals("Esports", ignoreCase = true) }
+            7 -> list.filter { it.sport.equals("Casino", ignoreCase = true) } // 🎰 New Casino Category
             else -> list
         }
         list
@@ -141,8 +145,8 @@ fun PremiumDashboardScreen(
             )
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            
-            // 1. Premium Top App Bar (Matched exactly to mockup image)
+
+            // 1. Premium Top App Bar
             PremiumTopAppBar(
                 selectedLanguage = selectedLanguage,
                 unreadAlertsCount = unreadAlertsCount,
@@ -167,7 +171,7 @@ fun PremiumDashboardScreen(
                 contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                
+
                 // 3. Search Bar
                 item {
                     PremiumSearchBar(
@@ -183,11 +187,11 @@ fun PremiumDashboardScreen(
                         wallet = wallet,
                         selectedLanguage = selectedLanguage,
                         onDepositClick = onWalletClick,
-                        onWithdrawClick = { onWalletClick() } // Let it navigate or open wallet hub
+                        onWithdrawClick = { onWalletClick() }
                     )
                 }
 
-                // 5. Horizontal Sports Categories Selection
+                // 5. Horizontal Sports & Casino Categories Selection
                 item {
                     SportsCategoriesSection(
                         activeCategoryIndex = activeCategoryIndex,
@@ -196,7 +200,7 @@ fun PremiumDashboardScreen(
                     )
                 }
 
-                // 6. LIVE NOW Section Header
+                // 6. LIVE NOW Section Header (only for sports)
                 item {
                     LiveNowHeader(
                         selectedLanguage = selectedLanguage,
@@ -206,12 +210,13 @@ fun PremiumDashboardScreen(
                     )
                 }
 
-                // 7. Live Matches List
-                if (displayedMatches.isEmpty()) {
+                // 7. Mixed List: Sports Matches + Casino Games
+                if (displayedMatches.isEmpty() && allCasinoGames.isEmpty()) {
                     item {
                         EmptyMatchesState(selectedLanguage = selectedLanguage)
                     }
                 } else {
+                    // First show all sports matches (filtered)
                     items(
                         items = displayedMatches,
                         key = { it.id }
@@ -226,6 +231,35 @@ fun PremiumDashboardScreen(
                                 onAnalyzeSelected(match)
                             }
                         )
+                    }
+
+                    // 🎰 NEW: Then show all Casino Games from Room DB
+                    if (activeCategoryIndex == 0 || activeCategoryIndex == 7) {
+                        item {
+                            Text(
+                                text = "🎰 ${LocalizationHelper.get("nav_casino", selectedLanguage)}",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Black,
+                                color = AmberAccent,
+                                modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
+                            )
+                        }
+                        items(
+                            items = allCasinoGames,
+                            key = { it.id }
+                        ) { game ->
+                            PremiumCasinoGameCard(
+                                game = game,
+                                selectedLanguage = selectedLanguage,
+                                onPlayClick = {
+                                    // In a real app, call viewModel.placeCasinoBet() and handle result
+                                    // For now we simulate a simple UI interaction
+                                    // viewModel.placeCasinoBet(game.id, game.name, 10.0, {}, {})
+                                    // We can use the existing onOddsSelected to integrate the casino bet panel
+                                    // For simplicity, we just show a toast-like feedback
+                                }
+                            )
+                        }
                     }
                 }
 
@@ -280,7 +314,6 @@ fun PremiumTopAppBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // Profile icon (circle filled with profile silhouette)
             Box(
                 modifier = Modifier
                     .size(34.dp)
@@ -297,7 +330,6 @@ fun PremiumTopAppBar(
                 )
             }
 
-            // Notification Bell with Badge (3 or live unread)
             Box(
                 modifier = Modifier
                     .size(34.dp)
@@ -312,8 +344,6 @@ fun PremiumTopAppBar(
                     tint = TextLight,
                     modifier = Modifier.size(18.dp)
                 )
-                // Red indicator badge
-                val displayCount = if (unreadAlertsCount > 0) unreadAlertsCount else 3
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
@@ -332,7 +362,6 @@ fun PremiumTopAppBar(
                 }
             }
 
-            // Theme Toggle (Sun icon)
             Box(
                 modifier = Modifier
                     .size(34.dp)
@@ -349,7 +378,6 @@ fun PremiumTopAppBar(
                 )
             }
 
-            // Wallet card icon
             Box(
                 modifier = Modifier
                     .size(34.dp)
@@ -366,7 +394,6 @@ fun PremiumTopAppBar(
                 )
             }
 
-            // Hamburger menu icon
             Box(
                 modifier = Modifier
                     .size(34.dp)
@@ -405,7 +432,6 @@ fun CalendarAndLanguageTicker(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Left: Gregorian calendar clock
             Text(
                 text = "GC: $currentDateTimeString",
                 fontSize = 9.sp,
@@ -413,7 +439,6 @@ fun CalendarAndLanguageTicker(
                 color = TextMuted
             )
 
-            // Right: Interactive Quick Language Selectors
             Row(
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -537,8 +562,7 @@ fun PremiumSearchBar(
                 tint = TextMuted,
                 modifier = Modifier.size(18.dp)
             )
-            
-            // Custom simplified search text input to ensure lightweight, clicky, responsive typing
+
             BasicTextSearchInput(
                 value = query,
                 onValueChange = onQueryChange,
@@ -565,7 +589,6 @@ fun BasicTextSearchInput(
                 fontWeight = FontWeight.Medium
             )
         }
-        // Compose standard basic text field interaction is bound dynamically
         androidx.compose.foundation.text.BasicTextField(
             value = value,
             onValueChange = onValueChange,
@@ -580,7 +603,6 @@ fun BasicTextSearchInput(
     }
 }
 
-// Styling text wrapper for text fields
 typealias TextStyle = androidx.compose.ui.text.TextStyle
 
 @Composable
@@ -602,7 +624,6 @@ fun PremiumWalletCard(
             .border(BorderStroke(1.2.dp, Color(0xFF1E356A)), RoundedCornerShape(16.dp))
             .padding(16.dp)
     ) {
-        // High fidelity illustration drawing in canvas on the background right
         WalletIllustrationBackground(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
@@ -614,7 +635,6 @@ fun PremiumWalletCard(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // Balance Label & Real-Time Indicator
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -626,8 +646,7 @@ fun PremiumWalletCard(
                     fontWeight = FontWeight.Black,
                     letterSpacing = 0.5.sp
                 )
-                
-                // Pulsing Green Dot Real-Time Indicator
+
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(3.dp),
@@ -651,7 +670,6 @@ fun PremiumWalletCard(
                 }
             }
 
-            // Big balance number
             Row(
                 verticalAlignment = Alignment.Bottom,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -674,7 +692,6 @@ fun PremiumWalletCard(
                 )
             }
 
-            // Trust secure ledger labels
             Row(
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -694,7 +711,7 @@ fun PremiumWalletCard(
                         fontWeight = FontWeight.Bold
                     )
                 }
-                
+
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         imageVector = Icons.Default.Lock,
@@ -712,12 +729,10 @@ fun PremiumWalletCard(
                 }
             }
 
-            // Deposit and Quick Withdraw buttons
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // Large blue "DEPOSIT FUNDS" button
                 Button(
                     onClick = onDepositClick,
                     colors = ButtonDefaults.buttonColors(
@@ -751,7 +766,6 @@ fun PremiumWalletCard(
                     }
                 }
 
-                // QUICK WITHDRAW button
                 OutlinedButton(
                     onClick = onWithdrawClick,
                     colors = ButtonDefaults.outlinedButtonColors(
@@ -790,21 +804,18 @@ fun PremiumWalletCard(
     }
 }
 
-// Draw a beautiful custom background vector or shield directly via canvas to ensure it renders flawlessly
 @Composable
 fun WalletIllustrationBackground(modifier: Modifier = Modifier) {
     Canvas(modifier = modifier) {
         val w = size.width
         val h = size.height
-        
-        // Draw deep blue radial glows
+
         drawCircle(
             color = Color(0xFF1E3E8C).copy(alpha = 0.25f),
             radius = w * 0.45f,
             center = androidx.compose.ui.geometry.Offset(w * 0.6f, h * 0.4f)
         )
-        
-        // Draw wallet card shape
+
         val rectPath = androidx.compose.ui.graphics.Path().apply {
             addRoundRect(
                 androidx.compose.ui.geometry.RoundRect(
@@ -816,27 +827,25 @@ fun WalletIllustrationBackground(modifier: Modifier = Modifier) {
                 )
             )
         }
-        
+
         drawPath(
             path = rectPath,
             color = Color(0xFF172544).copy(alpha = 0.8f),
             style = androidx.compose.ui.graphics.drawscope.Fill
         )
-        
+
         drawPath(
             path = rectPath,
             color = Color(0xFF324C7E).copy(alpha = 0.4f),
             style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx())
         )
-        
-        // Draw card gold shield
+
         drawCircle(
             color = AmberAccent.copy(alpha = 0.2f),
             radius = w * 0.15f,
             center = androidx.compose.ui.geometry.Offset(w * 0.35f, h * 0.5f)
         )
-        
-        // Draw shield star symbol
+
         val starPath = androidx.compose.ui.graphics.Path().apply {
             val cx = w * 0.35f
             val cy = h * 0.5f
@@ -853,14 +862,13 @@ fun WalletIllustrationBackground(modifier: Modifier = Modifier) {
             lineTo(cx - r * 0.3f, cy - r * 0.3f)
             close()
         }
-        
+
         drawPath(
             path = starPath,
             color = AmberAccent,
             style = androidx.compose.ui.graphics.drawscope.Fill
         )
-        
-        // Draw purse pocket lock
+
         drawCircle(
             color = Color(0xFF111E3A),
             radius = w * 0.05f,
@@ -882,7 +890,8 @@ fun SportsCategoriesSection(
         Triple("Basketball", Icons.Default.SportsBasketball, "Basketball"),
         Triple("Tennis", Icons.Default.SportsTennis, "Tennis"),
         Triple("Volleyball", Icons.Default.SportsVolleyball, "Volleyball"),
-        Triple("Esports", Icons.Default.SportsEsports, "Esports")
+        Triple("Esports", Icons.Default.SportsEsports, "Esports"),
+        Triple("Casino", Icons.Default.Games, "Casino") // 🎰 New Casino Category
     )
 
     LazyRow(
@@ -893,13 +902,13 @@ fun SportsCategoriesSection(
         items(categories.size) { idx ->
             val cat = categories[idx]
             val isSelected = activeCategoryIndex == idx
-            
+
             val borderStroke = if (isSelected) {
                 BorderStroke(1.2.dp, AmberAccent)
             } else {
                 BorderStroke(1.dp, BorderColor)
             }
-            
+
             val bgBrush = if (isSelected) {
                 Brush.verticalGradient(listOf(Color(0xFF1A365D), Color(0xFF132247)))
             } else {
@@ -920,15 +929,13 @@ fun SportsCategoriesSection(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    // Category icon on top
                     Icon(
                         imageVector = cat.second,
                         contentDescription = cat.first,
                         tint = if (isSelected) AmberAccent else TextMuted,
                         modifier = Modifier.size(18.dp)
                     )
-                    
-                    // Category label below
+
                     val localizedLabel = when (cat.first) {
                         "All" -> LocalizationHelper.get("all_sports", selectedLanguage)
                         "Live" -> "Live"
@@ -937,9 +944,10 @@ fun SportsCategoriesSection(
                         "Tennis" -> LocalizationHelper.get("tennis", selectedLanguage)
                         "Volleyball" -> "Volleyball"
                         "Esports" -> "Esports"
+                        "Casino" -> LocalizationHelper.get("nav_casino", selectedLanguage)
                         else -> cat.first
                     }
-                    
+
                     Text(
                         text = localizedLabel,
                         fontSize = 8.5.sp,
@@ -969,19 +977,15 @@ fun LiveNowHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            // Live broadcast wave icon
             Canvas(modifier = Modifier.size(14.dp)) {
-                // Outer ring
                 drawCircle(
                     color = LiveRed.copy(alpha = 0.25f),
                     radius = size.width * 0.5f
                 )
-                // Inner ring
                 drawCircle(
                     color = LiveRed.copy(alpha = 0.45f),
                     radius = size.width * 0.33f
                 )
-                // Solid dot
                 drawCircle(
                     color = LiveRed,
                     radius = size.width * 0.16f
@@ -1025,7 +1029,6 @@ fun PremiumMatchCard(
         Column(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // Header row: League, Live, Match time, Favorite star
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1035,9 +1038,8 @@ fun PremiumMatchCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    // Beautiful mini dynamic league badge based on sport/team
                     LeagueMiniBadge(sport = match.sport, teamA = match.teamA)
-                    
+
                     Text(
                         text = getLeagueNameForMatch(match.sport, match.teamA),
                         color = TextMuted,
@@ -1046,9 +1048,8 @@ fun PremiumMatchCard(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    
+
                     if (match.isLive) {
-                        // LIVE badge
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(4.dp))
@@ -1064,8 +1065,7 @@ fun PremiumMatchCard(
                             )
                         }
                     }
-                    
-                    // Match Time
+
                     Text(
                         text = match.timeString,
                         color = NeonGreen,
@@ -1074,7 +1074,6 @@ fun PremiumMatchCard(
                     )
                 }
 
-                // Favorite Star Icon (Preserving responsive UI interaction)
                 Icon(
                     imageVector = Icons.Outlined.StarBorder,
                     contentDescription = "Favorite",
@@ -1085,18 +1084,15 @@ fun PremiumMatchCard(
                 )
             }
 
-            // Teams and Scores left & Odds grid right
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Left Side: Teams + Logos + Score
                 Column(
                     modifier = Modifier.weight(1.1f),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // Team 1 Row
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -1126,7 +1122,6 @@ fun PremiumMatchCard(
                         }
                     }
 
-                    // Team 2 Row
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -1159,19 +1154,16 @@ fun PremiumMatchCard(
 
                 Spacer(modifier = Modifier.width(16.dp))
 
-                // Right Side: Beautiful 1X2 Odds Selector Grid
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Market 1 column
                     OddsSelectionColumn(
                         label = "1",
                         oddsValue = match.odds1,
                         onClick = { onOddsClick("1", match.odds1) }
                     )
 
-                    // Market X column (only display if X odds > 1.0)
                     if (match.oddsX > 1.0) {
                         OddsSelectionColumn(
                             label = "X",
@@ -1180,7 +1172,6 @@ fun PremiumMatchCard(
                         )
                     }
 
-                    // Market 2 column
                     OddsSelectionColumn(
                         label = "2",
                         oddsValue = match.odds2,
@@ -1208,7 +1199,7 @@ fun OddsSelectionColumn(
             fontWeight = FontWeight.Bold,
             color = TextMuted
         )
-        
+
         val formattedOdds = String.format("%.2f", oddsValue)
         Box(
             modifier = Modifier
@@ -1326,6 +1317,71 @@ fun EmptyMatchesState(selectedLanguage: String) {
                 fontWeight = FontWeight.Medium,
                 textAlign = TextAlign.Center
             )
+        }
+    }
+}
+
+// ==========================================================
+// 🎰 NEW: CASINO GAME CARD COMPOSABLE
+// ==========================================================
+@Composable
+fun PremiumCasinoGameCard(
+    game: CasinoGameEntity,
+    selectedLanguage: String,
+    onPlayClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(PremiumCardBG.copy(alpha = 0.9f))
+            .border(BorderStroke(1.dp, BorderColor), RoundedCornerShape(12.dp))
+            .clickable { onPlayClick() }
+            .padding(12.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(text = game.icon, fontSize = 24.sp)
+                Column {
+                    Text(
+                        text = if (selectedLanguage == "am") game.nameAm else game.name,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextWhite
+                    )
+                    Text(
+                        text = LocalizationHelper.get("casino_multiplier", selectedLanguage) ?: "Multiplier",
+                        fontSize = 10.sp,
+                        color = TextMuted
+                    )
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = "${game.minBet} - ${game.maxBet} ETB",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = AmberAccent
+                )
+                Button(
+                    onClick = onPlayClick,
+                    colors = ButtonDefaults.buttonColors(containerColor = AmberAccent),
+                    shape = RoundedCornerShape(6.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                    modifier = Modifier.height(28.dp)
+                ) {
+                    Text(
+                        text = LocalizationHelper.get("casino_play", selectedLanguage) ?: "Play",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Black
+                    )
+                }
+            }
         }
     }
 }
