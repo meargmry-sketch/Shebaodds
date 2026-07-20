@@ -66,7 +66,7 @@ export async function sendNotification(options: SendNotificationOptions) {
 router.get('/balance', authenticate, async (req: any, res: Response) => {
   try {
     const user = req.user;
-    
+
     // Safety check ensuring wallet is fully initialized
     const wallet = user.wallet || {
       balance: 0,
@@ -102,7 +102,7 @@ router.get('/transactions', authenticate, async (req: any, res: Response) => {
   try {
     const { limit = '50', page = '1', type, status, from, to } = req.query as any;
     const query: any = { userId: req.user._id };
-    
+
     if (type) query.type = type;
     if (status) query.status = status;
     if (from || to) {
@@ -114,7 +114,7 @@ router.get('/transactions', authenticate, async (req: any, res: Response) => {
     const limitNum = parseInt(limit, 10) || 50;
     const pageNum = parseInt(page, 10) || 1;
     const skip = (pageNum - 1) * limitNum;
-    
+
     const [transactions, total] = await Promise.all([
       Transaction.find(query)
         .sort({ createdAt: -1 })
@@ -171,7 +171,7 @@ router.post('/deposit', authenticate, checkResponsibleGambling, async (req: any,
     // Check daily deposit limit
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
-    
+
     const todayDeposits = await Transaction.aggregate([
       { 
         $match: { 
@@ -183,10 +183,10 @@ router.post('/deposit', authenticate, checkResponsibleGambling, async (req: any,
       },
       { $group: { _id: null, total: { $sum: '$amount' } } }
     ]);
-    
+
     const depositedToday = todayDeposits[0]?.total || 0;
     const dailyLimit = typeof user.getDepositLimit === 'function' ? user.getDepositLimit() : (user.responsibleGambling?.depositLimit || 50000);
-    
+
     if (depositedToday + depositAmount > dailyLimit) {
       return res.status(400).json({ 
         success: false, 
@@ -196,7 +196,7 @@ router.post('/deposit', authenticate, checkResponsibleGambling, async (req: any,
 
     // Create transaction record
     const paymentReference = `DEP_${Date.now()}_${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
-    
+
     const transaction = new Transaction({
       userId: user._id,
       type: TRANSACTION_TYPES.DEPOSIT,
@@ -237,11 +237,11 @@ router.post('/deposit', authenticate, checkResponsibleGambling, async (req: any,
     if (paymentResult.instant) {
       user.wallet.balance = (user.wallet.balance || 0) + depositAmount;
       user.wallet.totalDeposited = (user.wallet.totalDeposited || 0) + depositAmount;
-      
+
       transaction.status = TRANSACTION_STATUS.COMPLETED;
       transaction.completedAt = new Date();
       transaction.paymentGatewayReference = paymentResult.gatewayReference;
-      
+
       await Promise.all([user.save(), transaction.save()]);
 
       // Send UI Notification
@@ -265,11 +265,11 @@ router.post('/deposit', authenticate, checkResponsibleGambling, async (req: any,
         const bonusPercentage = parseInt(process.env.DEPOSIT_BONUS_PERCENTAGE || '50', 10) || 50;
         const maxBonus = parseInt(process.env.DEPOSIT_BONUS_MAX || '500', 10) || 500;
         const bonusAmount = Math.min((depositAmount * bonusPercentage) / 100, maxBonus);
-        
+
         if (bonusAmount > 0) {
           user.wallet.bonusBalance = (user.wallet.bonusBalance || 0) + bonusAmount;
           await user.save();
-          
+
           await sendNotification({
             userId: user._id,
             title: 'First Deposit Bonus! 🎁',
@@ -340,7 +340,7 @@ router.post('/withdraw', authenticate, checkResponsibleGambling, async (req: any
     // Check daily withdrawal limit
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
-    
+
     const todayWithdrawals = await Transaction.aggregate([
       { 
         $match: { 
@@ -352,10 +352,10 @@ router.post('/withdraw', authenticate, checkResponsibleGambling, async (req: any
       },
       { $group: { _id: null, total: { $sum: '$amount' } } }
     ]);
-    
+
     const withdrawnToday = todayWithdrawals[0]?.total || 0;
     const dailyLimit = parseInt(process.env.WITHDRAWAL_DAILY_LIMIT || '100000', 10) || 100000;
-    
+
     if (withdrawnToday + withdrawAmount > dailyLimit) {
       return res.status(400).json({ 
         success: false, 
@@ -367,7 +367,7 @@ router.post('/withdraw', authenticate, checkResponsibleGambling, async (req: any
     const weekStart = new Date();
     weekStart.setDate(weekStart.getDate() - weekStart.getDay());
     weekStart.setHours(0, 0, 0, 0);
-    
+
     const weeklyWithdrawals = await Transaction.aggregate([
       { 
         $match: { 
@@ -379,10 +379,10 @@ router.post('/withdraw', authenticate, checkResponsibleGambling, async (req: any
       },
       { $group: { _id: null, total: { $sum: '$amount' } } }
     ]);
-    
+
     const withdrawnWeekly = weeklyWithdrawals[0]?.total || 0;
     const weeklyLimit = parseInt(process.env.WITHDRAWAL_WEEKLY_LIMIT || '500000', 10) || 500000;
-    
+
     if (withdrawnWeekly + withdrawAmount > weeklyLimit) {
       return res.status(400).json({ 
         success: false, 
@@ -440,11 +440,11 @@ router.post('/withdraw', authenticate, checkResponsibleGambling, async (req: any
       if (result.success) {
         user.wallet.lockedBalance = (user.wallet.lockedBalance || 0) - withdrawAmount;
         user.wallet.totalWithdrawn = (user.wallet.totalWithdrawn || 0) + withdrawAmount;
-        
+
         transaction.status = TRANSACTION_STATUS.COMPLETED;
         transaction.completedAt = new Date();
         transaction.paymentGatewayReference = result.gatewayReference;
-        
+
         await Promise.all([user.save(), transaction.save()]);
 
         await sendNotification({
@@ -484,14 +484,14 @@ router.post('/withdraw', authenticate, checkResponsibleGambling, async (req: any
 router.get('/summary', authenticate, async (req: any, res: Response) => {
   try {
     const user = req.user;
-    
+
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
-    
+
     const weekStart = new Date();
     weekStart.setDate(weekStart.getDate() - weekStart.getDay());
     weekStart.setHours(0, 0, 0, 0);
-    
+
     const monthStart = new Date();
     monthStart.setDate(1);
     monthStart.setHours(0, 0, 0, 0);
