@@ -111,7 +111,7 @@ def get_random_casino_message():
     game = random.choice(CASINO_GAMES)
     win_amount = random.randint(10, 5000)
     multiplier = round(random.uniform(1.1, 10.0), 2)
-    
+
     message_types = [
         f"🎰 <b>Big Win Alert!</b>\nUser just won <b>{win_amount} ETB</b> on {game['icon']} {game['name']}!",
         f"🔥 {game['icon']} <b>{game['name']}</b> is LIVE!\nMultiplier: <b>{multiplier}x</b>\nCategory: {game['category']}\nPlay now!",
@@ -120,7 +120,7 @@ def get_random_casino_message():
         f"🌟 New player just hit a <b>{win_amount} ETB</b> jackpot on {game['icon']} {game['name']}!",
         f"📊 {game['icon']} {game['name']} is trending!\nAverage multiplier: {multiplier}x\nJump in!",
     ]
-    
+
     return random.choice(message_types)
 
 def get_daily_casino_promo():
@@ -135,7 +135,7 @@ def get_casino_stats():
     total_bets = random.randint(500, 5000)
     total_wins = random.randint(200, 2500)
     biggest_win = random.randint(1000, 50000)
-    
+
     return (
         f"📊 <b>Casino Stats</b>\n"
         f"👥 Total Players: <b>{total_players}</b>\n"
@@ -173,11 +173,11 @@ def run_bot():
         # Every 2nd cycle: send casino stats
         if cycle % 2 == 0:
             send_message(get_casino_stats())
-        
+
         # Every 3rd cycle: send casino promo
         if cycle % 3 == 0:
             send_message(get_daily_casino_promo())
-        
+
         # Always send a random casino game alert
         send_message(get_random_casino_message())
 
