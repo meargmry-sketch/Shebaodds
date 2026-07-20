@@ -44,7 +44,7 @@ fun SecureBiometricVerificationDialog(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    
+
     // States for simulator in case hardware is not available or fallback is selected
     var scanState by remember { mutableStateOf("AWAITING_TOUCH") } // "AWAITING_TOUCH", "SCANNING", "SUCCESS", "FAILED"
     var progress by remember { mutableStateOf(0f) }
