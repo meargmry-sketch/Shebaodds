@@ -7,6 +7,7 @@ import com.example.data.model.MarketEntity
 import com.example.data.model.SportMatch
 import com.example.data.model.Bet
 import com.example.data.model.TransactionRecord
+import com.example.data.model.CasinoGameEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.firstOrNull
@@ -23,13 +24,17 @@ class BetRepository(private val db: AppDatabase) {
     val allBets: Flow<List<Bet>> = db.betDao().getAllBets()
     val allTransactions: Flow<List<TransactionRecord>> = db.transactionDao().getAllTransactions()
 
+    // Casino Games (NEW)
+    val allCasinoGames: Flow<List<CasinoGameEntity>> = db.casinoGameDao().getAllGames()
+    val favoriteCasinoGames: Flow<List<CasinoGameEntity>> = db.casinoGameDao().getFavoriteGames()
+
     // Relational table direct flows for Admin or advanced sync inspections
     val matchEntities: Flow<List<MatchEntity>> = db.matchDao().getAllMatchEntities()
     val marketEntities: Flow<List<MarketEntity>> = db.matchDao().getAllMarketEntities()
 
     suspend fun updateMatch(match: SportMatch) = withContext(Dispatchers.IO) {
         db.matchDao().updateMatch(match)
-        
+
         // Also update corresponding relational table row
         val currentEntity = db.matchDao().getMatchEntityById(match.id)
         if (currentEntity != null) {
@@ -50,6 +55,7 @@ class BetRepository(private val db: AppDatabase) {
         settlerEngine.processCompletedMatches()
     }
 
+    // --- Sportsbook Bet Placement ---
     suspend fun placeBet(
         matchId: Int,
         selection: String,
@@ -94,6 +100,7 @@ class BetRepository(private val db: AppDatabase) {
         }
     }
 
+    // --- Sportsbook Multi-Bet (Accumulator) ---
     suspend fun placeMultiBet(
         items: List<com.example.data.model.BetItem>,
         stake: Double
@@ -126,10 +133,73 @@ class BetRepository(private val db: AppDatabase) {
         }
     }
 
+    // ==========================================================
+    // 🎰 NEW: CASINO GAME BET PLACEMENT
+    // ==========================================================
+    suspend fun placeCasinoBet(
+        gameId: String,
+        gameName: String,
+        stake: Double,
+        multiplier: Double,
+        result: String
+    ): PlaceBetResult = withContext(Dispatchers.IO) {
+        val walletDao = db.walletDao()
+        val betDao = db.betDao()
+        val casinoDao = db.casinoGameDao()
+
+        val currentWallet = walletDao.getWalletDirect() ?: UserWallet()
+        if (currentWallet.balance < stake) {
+            return@withContext PlaceBetResult.Failure("Insufficient balance")
+        }
+
+        // Calculate win/loss
+        val profit = if (result == "win") {
+            stake * multiplier - stake
+        } else {
+            -stake
+        }
+        val newBalance = currentWallet.balance + profit
+
+        // Update Wallet
+        val updatedWallet = currentWallet.copy(
+            balance = newBalance
+        )
+        walletDao.insertWalletDirect(updatedWallet)
+
+        // Create Bet Record
+        val bet = Bet(
+            userId = 1,
+            matchId = 0, // 0 means Casino/No Match
+            marketType = "CASINO",
+            selection = gameName,
+            odds = multiplier,
+            stake = stake,
+            potentialReturn = if (profit > 0) stake * multiplier else 0.0,
+            status = if (profit > 0) "WON" else "LOST",
+            sport = "Casino",
+            teamA = gameId, // Store Game ID as teamA for easy querying
+            teamB = "",
+            isCasinoBet = true,
+            casinoGameId = gameId,
+            casinoMultiplier = multiplier
+        )
+        val betId = betDao.insertBetDirect(bet)
+
+        // Update Casino Game Statistics
+        if (profit > 0) {
+            casinoDao.updateGameStats(gameId, stake, profit)
+        } else {
+            casinoDao.updateGameStats(gameId, stake, 0.0)
+        }
+
+        PlaceBetResult.Success(bet.copy(id = betId.toInt()))
+    }
+
+    // --- Cashout (Sportsbook only) ---
     suspend fun cashoutBet(betId: Bet, cashoutAmount: Double) = withContext(Dispatchers.IO) {
         val updatedBet = betId.copy(status = "CASHOUT", potentialReturn = cashoutAmount)
         db.betDao().updateBet(updatedBet)
-        
+
         // Refund cashout amount
         val walletDao = db.walletDao()
         val currentWallet = walletDao.getWalletDirect() ?: UserWallet()
@@ -137,10 +207,11 @@ class BetRepository(private val db: AppDatabase) {
         walletDao.insertWallet(updatedWallet)
     }
 
+    // --- Resolve Mock Bet (Testing only) ---
     suspend fun resolveBetMock(bet: Bet, won: Boolean) = withContext(Dispatchers.IO) {
         val updatedBet = bet.copy(status = if (won) "WON" else "LOST")
         db.betDao().updateBet(updatedBet)
-        
+
         if (won) {
             val walletDao = db.walletDao()
             val currentWallet = walletDao.getWalletDirect() ?: UserWallet()
@@ -154,11 +225,12 @@ class BetRepository(private val db: AppDatabase) {
         db.betDao().updateBet(updatedBet)
     }
 
+    // --- Transaction Management ---
     suspend fun updateTransactionStatus(transaction: TransactionRecord, status: String) = withContext(Dispatchers.IO) {
         if (transaction.status == status) return@withContext
         val updatedTrx = transaction.copy(status = status)
         db.transactionDao().insertTransaction(updatedTrx)
-        
+
         val walletDao = db.walletDao()
         val currentWallet = walletDao.getWalletDirect() ?: UserWallet()
         // If we reject a withdrawal, we should refund the user's balance!
@@ -174,7 +246,7 @@ class BetRepository(private val db: AppDatabase) {
     suspend fun createPendingTelebirrDeposit(amount: Double): String = withContext(Dispatchers.IO) {
         val walletDao = db.walletDao()
         val currentWallet = walletDao.getWalletDirect() ?: UserWallet()
-        
+
         val trxId = "TX-" + (100000..999999).random().toString()
         val transaction = TransactionRecord(
             id = trxId,
@@ -193,12 +265,12 @@ class BetRepository(private val db: AppDatabase) {
     suspend fun depositFunds(amount: Double, gateway: String): String = withContext(Dispatchers.IO) {
         val walletDao = db.walletDao()
         val currentWallet = walletDao.getWalletDirect() ?: UserWallet()
-        
+
         val updatedWallet = currentWallet.copy(
             balance = currentWallet.balance + amount
         )
         walletDao.insertWallet(updatedWallet)
-        
+
         val trxId = "#TRX" + (10000..99999).random().toString()
         val transaction = TransactionRecord(
             id = trxId,
@@ -216,16 +288,16 @@ class BetRepository(private val db: AppDatabase) {
     suspend fun withdrawFunds(amount: Double, gateway: String): RequestWithdrawResult = withContext(Dispatchers.IO) {
         val walletDao = db.walletDao()
         val currentWallet = walletDao.getWalletDirect() ?: UserWallet()
-        
+
         if (currentWallet.balance < amount) {
             return@withContext RequestWithdrawResult.Failure("Insufficient balance to request withdrawal.")
         }
-        
+
         val updatedWallet = currentWallet.copy(
             balance = currentWallet.balance - amount
         )
         walletDao.insertWallet(updatedWallet)
-        
+
         val trxId = "#TRX" + (10000..99999).random().toString()
         val transaction = TransactionRecord(
             id = trxId,
@@ -244,6 +316,19 @@ class BetRepository(private val db: AppDatabase) {
         db.walletDao().insertWallet(wallet)
     }
 
+    // --- Casino Favorite Toggle ---
+    suspend fun toggleCasinoFavorite(gameId: String, isFavorite: Boolean) = withContext(Dispatchers.IO) {
+        db.casinoGameDao().updateFavoriteStatus(gameId, isFavorite)
+    }
+
+    // --- Casino Game Stats Update ---
+    suspend fun updateCasinoGameStats(gameId: String, wagered: Double, won: Double) = withContext(Dispatchers.IO) {
+        db.casinoGameDao().updateGameStats(gameId, wagered, won)
+    }
+
+    // ==========================================================
+    // 🚀 INIT DATABASE (Includes 51 Casino Games Seeding)
+    // ==========================================================
     suspend fun initializeDbIfEmpty() = withContext(Dispatchers.IO) {
         // Pre-populate user / wallet matching provided Postgres SQL users schema
         val walletDao = db.walletDao()
@@ -261,63 +346,63 @@ class BetRepository(private val db: AppDatabase) {
                 )
             )
         }
-        
+
         // Pre-populate sport matches if none exist
-        val initialMatches = listOf(
-            // Live matches
-            SportMatch(
-                id = 101, sport = "Football", teamA = "Ethiopia Bunna", teamB = "St. George",
-                scoreA = 2, scoreB = 1, timeString = "64'", isLive = true, status = "LIVE",
-                dateTimeString = "LIVE", odds1 = 1.65, oddsX = 3.40, odds2 = 4.80,
-                oddsOver = 1.85, oddsUnder = 1.95, oddsBttsYes = 1.65, oddsBttsNo = 2.15
-            ),
-            SportMatch(
-                id = 102, sport = "Football", teamA = "Arsenal", teamB = "Chelsea",
-                scoreA = 0, scoreB = 0, timeString = "22'", isLive = true, status = "LIVE",
-                dateTimeString = "LIVE", odds1 = 1.95, oddsX = 3.10, odds2 = 3.60,
-                oddsOver = 1.90, oddsUnder = 1.80, oddsBttsYes = 1.70, oddsBttsNo = 2.05
-            ),
-            SportMatch(
-                id = 103, sport = "Football", teamA = "Real Madrid", teamB = "Bayern Munich",
-                scoreA = 1, scoreB = 1, timeString = "88'", isLive = true, status = "LIVE",
-                dateTimeString = "LIVE", odds1 = 2.10, oddsX = 1.85, odds2 = 5.20,
-                oddsOver = 1.65, oddsUnder = 2.20, oddsBttsYes = 1.55, oddsBttsNo = 2.45
-            ),
-            // Upcoming matches
-            SportMatch(
-                id = 104, sport = "Football", teamA = "Al Ahly", teamB = "Zamalek",
-                scoreA = 0, scoreB = 0, timeString = "Pre-Match", isLive = false, status = "NOT_STARTED",
-                dateTimeString = "Pre-Match", odds1 = 1.50, oddsX = 3.90, odds2 = 6.00,
-                oddsOver = 1.75, oddsUnder = 2.10, oddsBttsYes = 1.80, oddsBttsNo = 2.00
-            ),
-            SportMatch(
-                id = 105, sport = "Basketball", teamA = "LA Lakers", teamB = "Boston Celtics",
-                scoreA = 98, scoreB = 95, timeString = "Q4 3'", isLive = true, status = "LIVE",
-                dateTimeString = "LIVE", odds1 = 1.80, oddsX = 12.0, odds2 = 2.10,
-                oddsOver = 1.90, oddsUnder = 1.90, oddsBttsYes = 1.0, oddsBttsNo = 1.0
-            ),
-            SportMatch(
-                id = 106, sport = "Tennis", teamA = "N. Djokovic", teamB = "J. Sinner",
-                scoreA = 2, scoreB = 1, timeString = "Set 4", isLive = true, status = "LIVE",
-                dateTimeString = "LIVE", odds1 = 1.65, oddsX = 1.0, odds2 = 2.25,
-                oddsOver = 1.90, oddsUnder = 1.90, oddsBttsYes = 1.0, oddsBttsNo = 1.0
-            ),
-            SportMatch(
-                id = 107, sport = "Esports", teamA = "Navi", teamB = "FaZe Clan",
-                scoreA = 1, scoreB = 1, timeString = "Map 3", isLive = true, status = "LIVE",
-                dateTimeString = "LIVE", odds1 = 1.70, oddsX = 1.0, odds2 = 2.15,
-                oddsOver = 1.85, oddsUnder = 1.85, oddsBttsYes = 1.0, oddsBttsNo = 1.0
-            )
-        )
-        
         val matchDao = db.matchDao()
         if (matchDao.getMatchById(101) == null) {
+            val initialMatches = listOf(
+                // Live matches
+                SportMatch(
+                    id = 101, sport = "Football", teamA = "Ethiopia Bunna", teamB = "St. George",
+                    scoreA = 2, scoreB = 1, timeString = "64'", isLive = true, status = "LIVE",
+                    dateTimeString = "LIVE", odds1 = 1.65, oddsX = 3.40, odds2 = 4.80,
+                    oddsOver = 1.85, oddsUnder = 1.95, oddsBttsYes = 1.65, oddsBttsNo = 2.15
+                ),
+                SportMatch(
+                    id = 102, sport = "Football", teamA = "Arsenal", teamB = "Chelsea",
+                    scoreA = 0, scoreB = 0, timeString = "22'", isLive = true, status = "LIVE",
+                    dateTimeString = "LIVE", odds1 = 1.95, oddsX = 3.10, odds2 = 3.60,
+                    oddsOver = 1.90, oddsUnder = 1.80, oddsBttsYes = 1.70, oddsBttsNo = 2.05
+                ),
+                SportMatch(
+                    id = 103, sport = "Football", teamA = "Real Madrid", teamB = "Bayern Munich",
+                    scoreA = 1, scoreB = 1, timeString = "88'", isLive = true, status = "LIVE",
+                    dateTimeString = "LIVE", odds1 = 2.10, oddsX = 1.85, odds2 = 5.20,
+                    oddsOver = 1.65, oddsUnder = 2.20, oddsBttsYes = 1.55, oddsBttsNo = 2.45
+                ),
+                // Upcoming matches
+                SportMatch(
+                    id = 104, sport = "Football", teamA = "Al Ahly", teamB = "Zamalek",
+                    scoreA = 0, scoreB = 0, timeString = "Pre-Match", isLive = false, status = "NOT_STARTED",
+                    dateTimeString = "Pre-Match", odds1 = 1.50, oddsX = 3.90, odds2 = 6.00,
+                    oddsOver = 1.75, oddsUnder = 2.10, oddsBttsYes = 1.80, oddsBttsNo = 2.00
+                ),
+                SportMatch(
+                    id = 105, sport = "Basketball", teamA = "LA Lakers", teamB = "Boston Celtics",
+                    scoreA = 98, scoreB = 95, timeString = "Q4 3'", isLive = true, status = "LIVE",
+                    dateTimeString = "LIVE", odds1 = 1.80, oddsX = 12.0, odds2 = 2.10,
+                    oddsOver = 1.90, oddsUnder = 1.90, oddsBttsYes = 1.0, oddsBttsNo = 1.0
+                ),
+                SportMatch(
+                    id = 106, sport = "Tennis", teamA = "N. Djokovic", teamB = "J. Sinner",
+                    scoreA = 2, scoreB = 1, timeString = "Set 4", isLive = true, status = "LIVE",
+                    dateTimeString = "LIVE", odds1 = 1.65, oddsX = 1.0, odds2 = 2.25,
+                    oddsOver = 1.90, oddsUnder = 1.90, oddsBttsYes = 1.0, oddsBttsNo = 1.0
+                ),
+                SportMatch(
+                    id = 107, sport = "Esports", teamA = "Navi", teamB = "FaZe Clan",
+                    scoreA = 1, scoreB = 1, timeString = "Map 3", isLive = true, status = "LIVE",
+                    dateTimeString = "LIVE", odds1 = 1.70, oddsX = 1.0, odds2 = 2.15,
+                    oddsOver = 1.85, oddsUnder = 1.85, oddsBttsYes = 1.0, oddsBttsNo = 1.0
+                )
+            )
+
             matchDao.clearAllSportMatches()
             matchDao.clearAllMatchEntities()
             matchDao.clearAllMarketEntities()
 
             matchDao.insertMatches(initialMatches)
-            
+
             // Populate relational matches table
             val relationalMatches = initialMatches.map {
                 MatchEntity(
@@ -376,6 +461,67 @@ class BetRepository(private val db: AppDatabase) {
             matchDao.insertMarketEntities(relationalMarkets)
         }
 
+        // ==========================================================
+        // 🎰 NEW: Pre-populate 51 Casino Games
+        // ==========================================================
+        val casinoDao = db.casinoGameDao()
+        if (casinoDao.getGameById("dice") == null) {
+            val casinoGames = listOf(
+                CasinoGameEntity("dice", "Dice", "ዳይስ", "🎲", "table", 1, 10000),
+                CasinoGameEntity("aviator", "Aviator", "አቪዬተር", "✈️", "crash", 1, 5000),
+                CasinoGameEntity("coinflip", "CoinFlip", "ሳንቲም", "🪙", "crash", 1, 5000),
+                CasinoGameEntity("plinko", "Plinko", "ፕሊንኮ", "📉", "crash", 1, 10000),
+                CasinoGameEntity("blackjack", "Blackjack", "ብላክጃክ", "🃏", "classic", 5, 10000),
+                CasinoGameEntity("roulette", "Roulette", "ሩሌት", "🎡", "table", 1, 10000),
+                CasinoGameEntity("mines", "Mines", "ማይንስ", "💣", "crash", 1, 5000),
+                CasinoGameEntity("crash", "Crash", "ክራሽ", "📈", "crash", 1, 5000),
+                CasinoGameEntity("tower", "Tower", "ግንብ", "🏗️", "classic", 1, 5000),
+                CasinoGameEntity("keno", "Keno", "ኬኖ", "🔢", "slots", 1, 5000),
+                CasinoGameEntity("baccarat", "Baccarat", "ባካራት", "♣️", "table", 5, 10000),
+                CasinoGameEntity("wheel", "Wheel of Fortune", "የዕድል መንኮራኩር", "🎰", "table", 1, 5000),
+                CasinoGameEntity("hilo", "Hilo", "ሂሎ", "⬆️⬇️", "classic", 1, 5000),
+                CasinoGameEntity("sicbo", "Sic Bo", "ሲክቦ", "🎲🎲🎲", "table", 1, 10000),
+                CasinoGameEntity("videopoker", "Video Poker", "ቪዲዮ ፖከር", "🃏", "classic", 5, 10000),
+                CasinoGameEntity("bingo", "Bingo", "ቢንጎ", "🎯", "slots", 1, 5000),
+                CasinoGameEntity("craps", "Craps", "ክራፕስ", "🎲", "table", 1, 10000),
+                CasinoGameEntity("dragontiger", "Dragon Tiger", "ድራጎን ታይገር", "🐉🐯", "table", 1, 10000),
+                CasinoGameEntity("andarbahar", "Andar Bahar", "አንዳር ባሃር", "🃏", "table", 1, 10000),
+                CasinoGameEntity("teenpatti", "Teen Patti", "ቲን ፓቲ", "♠️", "classic", 5, 10000),
+                CasinoGameEntity("lucky7", "Lucky 7", "ላኪ 7", "🍀7️⃣", "slots", 1, 5000),
+                CasinoGameEntity("scratch", "Scratch Card", "ስክራች ካርድ", "🎫", "slots", 1, 10000),
+                CasinoGameEntity("football", "Football Prediction", "እግር ኳስ ትንበያ", "⚽", "sports", 1, 10000),
+                CasinoGameEntity("basketball", "Basketball Prediction", "ቅርጫት ኳስ ትንበያ", "🏀", "sports", 1, 10000),
+                CasinoGameEntity("horseracing", "Horse Racing", "ፈረስ እሽቅድምድም", "🐎", "sports", 1, 10000),
+                CasinoGameEntity("spinwin", "Spin & Win", "ደብል አሸንፍ", "🌀", "special", 1, 5000),
+                CasinoGameEntity("slot", "Slot Machine", "ስሎት ማሽን", "🎰", "slots", 1, 10000),
+                CasinoGameEntity("reddog", "Red Dog", "ቀይ ውሻ", "🐕", "classic", 1, 5000),
+                CasinoGameEntity("war", "War", "ጦርነት", "⚔️", "table", 1, 5000),
+                CasinoGameEntity("paigow", "Pai Gow Poker", "ፓይ ጋው ፖከር", "🀄️", "table", 5, 10000),
+                CasinoGameEntity("diceduels", "Dice Duels", "ዳይስ ዱኤልስ", "⚔️🎲", "crash", 1, 5000),
+                CasinoGameEntity("penalty", "Penalty", "ፍፃጎት ምት", "⚽", "sports", 1, 5000),
+                CasinoGameEntity("chickenroad", "Chicken Road", "ዶሮ መንገድ", "🐔", "crash", 1, 5000),
+                CasinoGameEntity("chickenshot", "Chicken Shot", "ዶሮ ምት", "🔫🐔", "crash", 1, 5000),
+                CasinoGameEntity("megaball", "Mega Ball", "ሜጋ ቦል", "⚾", "slots", 1, 5000),
+                CasinoGameEntity("pokerdice", "Poker Dice", "ፖከር ዳይስ", "🎲", "classic", 1, 5000),
+                CasinoGameEntity("lightningdice", "Lightning Dice", "መብረቅ ዳይስ", "⚡🎲", "crash", 1, 5000),
+                CasinoGameEntity("carroulette", "Car Roulette", "መኪና ሩሌት", "🚗", "table", 1, 10000),
+                CasinoGameEntity("knockout", "Knock Out", "ናክ አውት", "🥊", "sports", 1, 10000),
+                CasinoGameEntity("rummy", "Rummy", "ራሚ", "🃏", "classic", 5, 10000),
+                CasinoGameEntity("darts", "Darts", "ዳርትስ", "🎯", "special", 1, 5000),
+                CasinoGameEntity("tennis", "Tennis", "ቴኒስ", "🎾", "sports", 1, 10000),
+                CasinoGameEntity("baseball", "Baseball", "ቤዝቦል", "⚾", "sports", 1, 10000),
+                CasinoGameEntity("greyhound", "Greyhound Racing", "ግሬይሀውንድ እሽቅድምድም", "🐕‍🦺", "sports", 1, 10000),
+                CasinoGameEntity("motorbike", "Motorbike Racing", "ሞተር እሽቅድምድም", "🏍️", "sports", 1, 10000),
+                CasinoGameEntity("cricket", "Cricket", "ክሪኬት", "🏏", "sports", 1, 10000),
+                CasinoGameEntity("roulette360", "Roulette 360", "ሩሌት 360", "🎡", "table", 1, 10000),
+                CasinoGameEntity("megawheel", "Mega Wheel", "ሜጋ መንኮራኩር", "🎡", "table", 1, 10000),
+                CasinoGameEntity("monopoly", "Monopoly", "ሞኖፖሊ", "🎩", "table", 1, 5000),
+                CasinoGameEntity("virtualsports", "Virtual Sports", "ቨርቹዋል ስፖርት", "🎮", "sports", 1, 10000),
+                CasinoGameEntity("texasholdem", "Texas Hold'em", "ቴክሳስ ሆልደም", "♠️", "classic", 5, 10000)
+            )
+            casinoDao.insertGames(casinoGames)
+        }
+
         // Transactions
         val transactionDao = db.transactionDao()
         val existingTrx = transactionDao.getAllTransactions().firstOrNull() ?: emptyList()
@@ -393,14 +539,13 @@ class BetRepository(private val db: AppDatabase) {
         }
     }
 
+    // --- Live Odds Update (Sportsbook only) ---
     suspend fun processLiveDbUpdate(update: NormalizedOddsUpdate) = withContext(Dispatchers.IO) {
         db.runInTransaction {
             val matchDao = db.matchDao()
 
-            // 1. Fetch or initialize SportMatch to get general information (like team names)
             val sportMatch = matchDao.getMatchByIdDirect(update.matchId)
 
-            // 2. Update the live match scoreline state metrics (MatchEntity table)
             val matchEntity = matchDao.getMatchEntityByIdDirect(update.matchId)
             val updatedMatchEntity = if (matchEntity != null) {
                 matchEntity.copy(
@@ -424,8 +569,6 @@ class BetRepository(private val db: AppDatabase) {
             }
             matchDao.insertMatchEntitiesDirect(listOf(updatedMatchEntity))
 
-            // 3. Update or Insert the correct market relation (MarketEntity table)
-            // Normalize raw market types to our local market keys ('1X2', 'Over/Under', 'BTTS')
             val localMarketType = when (update.marketType.lowercase()) {
                 "1x2" -> "1X2"
                 "over/under", "total_goals" -> "Over/Under"
@@ -446,7 +589,6 @@ class BetRepository(private val db: AppDatabase) {
                     else -> existingMarket
                 }
             } else {
-                // Determine pre-filled odds from current SportMatch if available
                 var hOdds = update.oddsValue
                 var dOdds: Double? = if (localMarketType == "1X2") (sportMatch?.oddsX ?: 3.40) else null
                 var aOdds = update.oddsValue
@@ -477,7 +619,6 @@ class BetRepository(private val db: AppDatabase) {
             }
             matchDao.insertMarketEntitiesDirect(listOf(updatedMarket))
 
-            // 4. Update denormalized SportMatch UI model representation for real-time reactivity
             if (sportMatch != null) {
                 var odds1 = sportMatch.odds1
                 var oddsX = sportMatch.oddsX
@@ -558,8 +699,12 @@ class BetRepository(private val db: AppDatabase) {
     }
 
     private fun getCurrentTimeLabel(): String {
-        val sdf = java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault())
-        return sdf.format(java.util.Date())
+        try {
+            val sdf = java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault())
+            return sdf.format(java.util.Date())
+        } catch (e: Exception) {
+            return "Just now"
+        }
     }
 }
 
