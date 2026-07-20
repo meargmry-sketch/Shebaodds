@@ -1,6 +1,7 @@
 // ============================================
 // SHEBAODDS - BET MODEL
 // Complete Bet Schema with Cashout & Tax
+// SUPPORTS: 51+ CASINO GAMES INTEGRATION
 // ============================================
 
 import mongoose, { Schema, Document, Model } from 'mongoose';
@@ -41,31 +42,43 @@ export interface IBetSystemBet {
 
 export interface IBet extends Document {
   userId: mongoose.Types.ObjectId;
-  matchId: mongoose.Types.ObjectId;
   
-  betType: string; // single, accumulator, system, bet_builder
+  // --- Sportsbook Fields ---
+  matchId?: mongoose.Types.ObjectId; // Made optional for Casino bets
+
+  // --- Casino Fields (NEW) ---
+  isCasinoBet: boolean;             // True if this is a Casino game
+  casinoGameId?: string;            // e.g. 'aviator', 'dice', 'slot'
+  casinoMultiplier?: number;        // The multiplier achieved in crash games
+
+  // --- Core Bet Details ---
+  betType: string; // single, accumulator, system, bet_builder, casino
   marketType: string;
   selection: string;
   odds: number;
   stake: number;
   potentialWin: number;
   actualWin: number;
-  
+
+  // --- Tax Information (15% Ethiopian Tax) ---
   taxAmount: number;
   taxRate: number;
   netWin: number;
   taxTransactionId?: mongoose.Types.ObjectId;
   isTaxExempt: boolean;
   taxExemptReason?: string;
-  
+
+  // --- Single Bet ---
   isSingle: boolean;
-  
+
+  // --- Accumulator Bets ---
   isAccumulator: boolean;
   accumulatorId?: string;
   accumulatorSelections: IBetSelection[];
   combinedOdds: number;
   accumulatorType?: 'accumulator' | 'trixie' | 'yankee' | 'patent' | 'lucky15' | 'canadian' | 'heinz' | 'super_heinz' | 'goliath';
-  
+
+  // --- System Bet ---
   isSystemBet: boolean;
   systemBetType?: 'trixie' | 'yankee' | 'patent' | 'lucky15' | 'lucky31' | 'lucky63' | 'canadian' | 'heinz' | 'super_heinz' | 'goliath';
   systemSelections: Array<{
@@ -76,7 +89,8 @@ export interface IBet extends Document {
   systemBets: IBetSystemBet[];
   totalSystemStake?: number;
   numberOfBets?: number;
-  
+
+  // --- Bet Builder ---
   isBetBuilder: boolean;
   betBuilderSelections: Array<{
     marketType?: string;
@@ -84,7 +98,8 @@ export interface IBet extends Document {
     odds?: number;
     isLive?: boolean;
   }>;
-  
+
+  // --- Live Betting ---
   isLive: boolean;
   betPlacedAtMinute?: number;
   liveOddsAtBetTime?: {
@@ -92,7 +107,8 @@ export interface IBet extends Document {
     draw?: number;
     awayWin?: number;
   };
-  
+
+  // --- Cash Out Support ---
   cashOutAvailable: boolean;
   cashOutAmount?: number;
   cashOutMultiplier?: number;
@@ -101,15 +117,18 @@ export interface IBet extends Document {
   autoCashOutMultiplier?: number;
   autoCashOutTriggered: boolean;
   autoCashOutAmount?: number;
-  
+
+  // --- Partial Settlement ---
   isPartialWin: boolean;
   isPartialLoss: boolean;
   isPush: boolean;
   partialWinPercentage?: number;
   partialLossPercentage?: number;
-  
+
+  // --- Period ---
   period: 'full' | 'first_half' | 'second_half' | 'extra_time' | 'penalties';
-  
+
+  // --- Status Tracking ---
   status: string;
   statusHistory: Array<{
     status?: string;
@@ -117,16 +136,19 @@ export interface IBet extends Document {
     reason?: string;
     updatedBy?: string;
   }>;
-  
+
+  // --- Settlement ---
   settledAt?: Date;
   settledBy?: string;
   settledScore?: string;
   actualOutcome?: string;
-  
+
+  // --- Verification ---
   verifiedByAdmin: boolean;
   verifiedAt?: Date;
   verificationNote?: string;
-  
+
+  // --- Device & Location Info ---
   deviceInfo?: {
     deviceId?: string;
     platform?: string;
@@ -140,24 +162,27 @@ export interface IBet extends Document {
     lat?: number;
     lng?: number;
   };
-  
+
+  // --- Bonus Information ---
   bonusId?: mongoose.Types.ObjectId;
   bonusAmountUsed: number;
   usedRealBalance: number;
   usedBonusBalance: number;
-  
+
+  // --- Metadata ---
   metadata?: any;
   notes?: string;
-  
+
+  // --- Timestamps ---
   createdAt: Date;
   updatedAt: Date;
 
-  // Virtual Fields
+  // --- Virtual Fields ---
   isSettled: boolean;
   profit: number;
   roi: number;
 
-  // Instance Methods
+  // --- Instance Methods ---
   calculatePotentialWin(): number;
   calculateTax(): { taxAmount: number; netWin: number };
   checkCashOutAvailability(currentMinute: number, currentLiveOdds: any): boolean;
@@ -169,11 +194,16 @@ export interface IBetModel extends Model<IBet> {
 }
 
 const betSchema = new Schema<IBet, IBetModel>({
-  // References
+  // --- References ---
   userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-  matchId: { type: Schema.Types.ObjectId, ref: 'Match', required: true, index: true },
-  
-  // Bet Details
+  matchId: { type: Schema.Types.ObjectId, ref: 'Match', index: true }, // Optional now
+
+  // --- Casino Integration Fields ---
+  isCasinoBet: { type: Boolean, default: false },
+  casinoGameId: { type: String, index: true }, // e.g. 'aviator', 'dice'
+  casinoMultiplier: { type: Number },
+
+  // --- Bet Details ---
   betType: { type: String, required: true },
   marketType: { type: String, required: true, index: true },
   selection: { type: String, required: true },
@@ -181,19 +211,19 @@ const betSchema = new Schema<IBet, IBetModel>({
   stake: { type: Number, required: true, min: 1 },
   potentialWin: { type: Number, required: true },
   actualWin: { type: Number, default: 0 },
-  
-  // Tax Information (15% Ethiopian Tax)
+
+  // --- Tax Information (15% Ethiopian Tax) ---
   taxAmount: { type: Number, default: 0 },
   taxRate: { type: Number, default: 0.15 },
   netWin: { type: Number, default: 0 },
   taxTransactionId: { type: Schema.Types.ObjectId, ref: 'TaxTransaction' },
   isTaxExempt: { type: Boolean, default: false },
   taxExemptReason: String,
-  
-  // Single Bet (Non-Accumulator)
+
+  // --- Single Bet ---
   isSingle: { type: Boolean, default: true },
-  
-  // Accumulator Bets
+
+  // --- Accumulator Bets ---
   isAccumulator: { type: Boolean, default: false },
   accumulatorId: { type: String, index: true },
   accumulatorSelections: [{
@@ -208,8 +238,8 @@ const betSchema = new Schema<IBet, IBetModel>({
   }],
   combinedOdds: { type: Number, default: 1 },
   accumulatorType: { type: String, enum: ['accumulator', 'trixie', 'yankee', 'patent', 'lucky15', 'canadian', 'heinz', 'super_heinz', 'goliath'] },
-  
-  // System Bet (Trixie, Yankee, Patent, Lucky 15, etc.)
+
+  // --- System Bet ---
   isSystemBet: { type: Boolean, default: false },
   systemBetType: { type: String, enum: ['trixie', 'yankee', 'patent', 'lucky15', 'lucky31', 'lucky63', 'canadian', 'heinz', 'super_heinz', 'goliath'] },
   systemSelections: [{
@@ -227,8 +257,8 @@ const betSchema = new Schema<IBet, IBetModel>({
   }],
   totalSystemStake: Number,
   numberOfBets: Number,
-  
-  // Bet Builder
+
+  // --- Bet Builder ---
   isBetBuilder: { type: Boolean, default: false },
   betBuilderSelections: [{
     marketType: String,
@@ -236,8 +266,8 @@ const betSchema = new Schema<IBet, IBetModel>({
     odds: Number,
     isLive: { type: Boolean, default: false }
   }],
-  
-  // Live Betting
+
+  // --- Live Betting ---
   isLive: { type: Boolean, default: false },
   betPlacedAtMinute: Number,
   liveOddsAtBetTime: {
@@ -245,8 +275,8 @@ const betSchema = new Schema<IBet, IBetModel>({
     draw: Number,
     awayWin: Number
   },
-  
-  // Cash Out Support
+
+  // --- Cash Out Support ---
   cashOutAvailable: { type: Boolean, default: false },
   cashOutAmount: Number,
   cashOutMultiplier: Number,
@@ -255,18 +285,18 @@ const betSchema = new Schema<IBet, IBetModel>({
   autoCashOutMultiplier: Number,
   autoCashOutTriggered: { type: Boolean, default: false },
   autoCashOutAmount: Number,
-  
-  // Partial Settlement (Asian Handicap, etc.)
+
+  // --- Partial Settlement ---
   isPartialWin: { type: Boolean, default: false },
   isPartialLoss: { type: Boolean, default: false },
   isPush: { type: Boolean, default: false },
   partialWinPercentage: Number,
   partialLossPercentage: Number,
-  
-  // Period (Full Time, 1st Half, 2nd Half)
+
+  // --- Period ---
   period: { type: String, default: 'full', enum: ['full', 'first_half', 'second_half', 'extra_time', 'penalties'] },
-  
-  // Status Tracking
+
+  // --- Status Tracking ---
   status: { type: String, default: BET_STATUS.PENDING, index: true },
   statusHistory: [{
     status: String,
@@ -274,19 +304,19 @@ const betSchema = new Schema<IBet, IBetModel>({
     reason: String,
     updatedBy: String
   }],
-  
-  // Settlement
+
+  // --- Settlement ---
   settledAt: Date,
   settledBy: String,
   settledScore: String,
   actualOutcome: String,
-  
-  // Verification
+
+  // --- Verification ---
   verifiedByAdmin: { type: Boolean, default: false },
   verifiedAt: Date,
   verificationNote: String,
-  
-  // Device & Location Info
+
+  // --- Device & Location Info ---
   deviceInfo: {
     deviceId: String,
     platform: String,
@@ -300,14 +330,14 @@ const betSchema = new Schema<IBet, IBetModel>({
     lat: Number,
     lng: Number
   },
-  
-  // Bonus Information
+
+  // --- Bonus Information ---
   bonusId: { type: Schema.Types.ObjectId, ref: 'Bonus' },
   bonusAmountUsed: { type: Number, default: 0 },
   usedRealBalance: { type: Number, default: 0 },
   usedBonusBalance: { type: Number, default: 0 },
-  
-  // Metadata
+
+  // --- Metadata ---
   metadata: Schema.Types.Mixed,
   notes: String
 }, {
@@ -324,6 +354,7 @@ betSchema.index({ accumulatorId: 1 });
 betSchema.index({ createdAt: -1 });
 betSchema.index({ status: 1, createdAt: -1 });
 betSchema.index({ isLive: 1, status: 1 });
+betSchema.index({ isCasinoBet: 1, status: 1 }); // New index for Casino games
 betSchema.index({ 'accumulatorSelections.status': 1 });
 
 // ==================== VIRTUAL FIELDS ====================
@@ -345,6 +376,11 @@ betSchema.virtual('roi').get(function(this: IBet) {
 
 // ==================== INSTANCE METHODS ====================
 betSchema.methods.calculatePotentialWin = function(this: IBet): number {
+  if (this.isCasinoBet && this.casinoMultiplier) {
+    this.potentialWin = this.stake * this.casinoMultiplier;
+    return this.potentialWin;
+  }
+
   let totalOdds = this.odds;
   if (this.isAccumulator && this.accumulatorSelections.length > 0) {
     totalOdds = this.accumulatorSelections.reduce((acc, sel) => acc * (sel.odds || 1), 1);
@@ -357,52 +393,57 @@ betSchema.methods.calculatePotentialWin = function(this: IBet): number {
 betSchema.methods.calculateTax = function(this: IBet): { taxAmount: number; netWin: number } {
   const TAX_RATE = 0.15;
   const TAX_FREE_LIMIT = 100;
-  
+
   let winningAmount = this.actualWin;
   if (this.status === BET_STATUS.CASHED_OUT) winningAmount = this.cashOutAmount || 0;
-  
+
   if (winningAmount <= TAX_FREE_LIMIT || this.isTaxExempt) {
     this.taxAmount = 0;
     this.netWin = winningAmount;
     return { taxAmount: 0, netWin: winningAmount };
   }
-  
+
   this.taxAmount = winningAmount * TAX_RATE;
   this.netWin = winningAmount - this.taxAmount;
   return { taxAmount: this.taxAmount, netWin: this.netWin };
 };
 
 betSchema.methods.checkCashOutAvailability = function(this: IBet, currentMinute: number, currentLiveOdds: any): boolean {
+  // Casino games do not support Cash Out (This remains Sportsbook only)
+  if (this.isCasinoBet) {
+    this.cashOutAvailable = false;
+    return false;
+  }
+
   if (this.status !== BET_STATUS.PENDING && this.status !== BET_STATUS.RUNNING) {
     this.cashOutAvailable = false;
     return false;
   }
-  
+
   if (!this.isLive && !this.isAccumulator) {
     this.cashOutAvailable = false;
     return false;
   }
-  
-  // Calculate cashout value
+
   const progress = Math.min(0.95, currentMinute / 90);
   let currentOdds = this.odds;
-  
+
   if (this.marketType === 'ft_1x2' && currentLiveOdds) {
     if (this.selection === 'Home Win' && currentLiveOdds.homeWin) currentOdds = currentLiveOdds.homeWin;
     else if (this.selection === 'Draw' && currentLiveOdds.draw) currentOdds = currentLiveOdds.draw;
     else if (this.selection === 'Away Win' && currentLiveOdds.awayWin) currentOdds = currentLiveOdds.awayWin;
   }
-  
+
   const baseValue = (this.stake * currentOdds) / this.odds;
   const reduction = progress * 0.3;
   let cashOut = baseValue * (1 - reduction);
   cashOut = Math.max(this.stake * 0.3, Math.min(this.stake * this.odds * 0.95, cashOut));
-  
+
   this.cashOutAvailable = cashOut > this.stake * 0.3;
   this.cashOutAmount = Math.floor(cashOut * 100) / 100;
   this.cashOutMultiplier = cashOut / this.stake;
   this.cashOutPercentage = (cashOut / this.potentialWin) * 100;
-  
+
   return this.cashOutAvailable;
 };
 
@@ -436,11 +477,11 @@ betSchema.statics.getUserBetStats = async function(this: IBetModel, userId: stri
       pendingBets: { $sum: { $cond: [{ $in: ['$status', ['pending', 'running']] }, 1, 0] } }
     }}
   ]);
-  
+
   const result = stats[0] || { totalBets: 0, totalStake: 0, totalWin: 0, totalCashout: 0, wonBets: 0, lostBets: 0, cashedOutBets: 0, pendingBets: 0 };
   result.winRate = result.totalBets ? (result.wonBets / result.totalBets) * 100 : 0;
   result.roi = result.totalStake ? ((result.totalWin + result.totalCashout - result.totalStake) / result.totalStake) * 100 : 0;
-  
+
   return result;
 };
 
