@@ -17,23 +17,22 @@ object LocalWebSocketServer {
     private var job: Job? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val activeClients = CopyOnWriteArrayList<ClientSession>()
-    
+
     fun start() {
         if (job != null && job?.isActive == true) {
             Log.d(TAG, "Local WebSocket Server is already running")
             return
         }
-        
+
         job = scope.launch {
             try {
                 Log.d(TAG, "Starting Local WebSocket Server on port $PORT...")
                 serverSocket = ServerSocket(PORT)
-                
-                // Start a background broadcast loop to generate scores and odds shifts
-                launch {
-                    runBroadcastLoop()
-                }
-                
+
+                // Start background broadcast loops
+                launch { runSportsBroadcastLoop() }
+                launch { runCasinoBroadcastLoop() }
+
                 while (isActive) {
                     val socket = serverSocket?.accept() ?: break
                     Log.d(TAG, "New socket connection from: ${socket.remoteSocketAddress}")
@@ -48,7 +47,7 @@ object LocalWebSocketServer {
             }
         }
     }
-    
+
     fun stop() {
         Log.d(TAG, "Stopping Local WebSocket Server...")
         job?.cancel()
@@ -57,15 +56,15 @@ object LocalWebSocketServer {
             serverSocket?.close()
         } catch (e: Exception) {}
         serverSocket = null
-        
+
         for (client in activeClients) {
             client.close()
         }
         activeClients.clear()
     }
-    
-    private suspend fun CoroutineScope.runBroadcastLoop() {
-        // Map of matchId -> (homeScore, awayScore)
+
+    // ================= SPORTS BROADCAST LOOP (existing) =================
+    private suspend fun CoroutineScope.runSportsBroadcastLoop() {
         val gameScores = mutableMapOf(
             101 to Pair(2, 1),
             102 to Pair(0, 0),
@@ -74,16 +73,14 @@ object LocalWebSocketServer {
             106 to Pair(2, 1),
             107 to Pair(1, 1)
         )
-        // Map of matchId -> elapsed minutes or set text
         val elapsedMinutes = mutableMapOf(
             101 to 64,
             102 to 22,
             103 to 88,
-            105 to 40, // basketball Q4 minutes representation
-            106 to 4,  // set 4 tennis
-            107 to 3   // esport map 3
+            105 to 40,
+            106 to 4,
+            107 to 3
         )
-        // Map of matchId -> Sport
         val matchSports = mapOf(
             101 to "Football",
             102 to "Football",
@@ -92,21 +89,18 @@ object LocalWebSocketServer {
             106 to "Tennis",
             107 to "Esports"
         )
-        
+
         while (isActive) {
-            delay(4000) // update every 4 seconds
+            delay(4000)
             if (activeClients.isEmpty()) continue
-            
-            // Randomly select and update one match
+
             val matchId = gameScores.keys.random()
             val sport = matchSports[matchId] ?: "Football"
             val currentScore = gameScores[matchId] ?: Pair(0, 0)
-            
-            // Randomly advance scores (25% chance of goal or point)
+
             var newScore = currentScore
             if ((1..100).random() < 25) {
                 newScore = if (sport == "Basketball") {
-                    // basketball increments by 2 or 3
                     val delta = if ((1..100).random() > 50) 2 else 3
                     if ((1..100).random() > 50) {
                         Pair(currentScore.first + delta, currentScore.second)
@@ -114,14 +108,12 @@ object LocalWebSocketServer {
                         Pair(currentScore.first, currentScore.second + delta)
                     }
                 } else if (sport == "Tennis" || sport == "Esports") {
-                    // minor tennis point increments check, skip score changes for simplicity, or just increase tennis set score or games
                     if ((1..100).random() > 50) {
                         Pair(currentScore.first + 1, currentScore.second)
                     } else {
                         Pair(currentScore.first, currentScore.second + 1)
                     }
                 } else {
-                    // football increments by 1
                     if ((1..100).random() > 50) {
                         Pair(currentScore.first + 1, currentScore.second)
                     } else {
@@ -130,11 +122,10 @@ object LocalWebSocketServer {
                 }
                 gameScores[matchId] = newScore
             }
-            
-            // Increment clock / minutes representation
+
             val nextMinutes = (elapsedMinutes[matchId] ?: 0) + 1
             elapsedMinutes[matchId] = if (sport == "Football" && nextMinutes > 90) 90 else if (sport == "Basketball" && nextMinutes > 12) 12 else nextMinutes
-            
+
             val clockStr = when (sport) {
                 "Football" -> "$nextMinutes'"
                 "Basketball" -> "Q4 $nextMinutes'"
@@ -142,16 +133,15 @@ object LocalWebSocketServer {
                 "Esports" -> "Map $nextMinutes"
                 else -> "Live"
             }
-            
-            // Compute randomized organic-looking shifting decimal odds
-            val oddsFactor = (1..100).random().toDouble() / 100.0 // 0.0 to 1.0
+
+            val oddsFactor = (1..100).random().toDouble() / 100.0
             val odds1 = 1.15 + (oddsFactor * 3.5)
             val oddsX = 1.40 + (oddsFactor * 2.8)
             val odds2 = 1.25 + (oddsFactor * 4.2)
-            
-            // Create JSON Payload string matching raw JSON format exactly!
+
             val payloadJson = """
             {
+              "type": "sports",
               "eventId": "sr:match:${matchId}",
               "timestamp": ${System.currentTimeMillis()},
               "sport": "${sport}",
@@ -182,11 +172,114 @@ object LocalWebSocketServer {
               ]
             }
             """.trimIndent()
-            
+
             broadcast(payloadJson)
         }
     }
-    
+
+    // ================= CASINO BROADCAST LOOP (NEW) =================
+    // All 51 casino games (matches the frontend list)
+    private val casinoGames = listOf(
+        "dice", "aviator", "coinflip", "plinko", "blackjack", "roulette", "mines", "crash",
+        "tower", "keno", "baccarat", "wheel", "hilo", "sicbo", "videopoker", "bingo", "craps",
+        "dragontiger", "andarbahar", "teenpatti", "lucky7", "scratch", "football", "basketball",
+        "horseracing", "spinwin", "slot", "reddog", "war", "paigow", "diceduels", "penalty",
+        "chickenroad", "chickenshot", "megaball", "pokerdice", "lightningdice", "carroulette",
+        "knockout", "rummy", "darts", "tennis", "baseball", "greyhound", "motorbike", "cricket",
+        "roulette360", "megawheel", "monopoly", "virtualsports", "texasholdem"
+    )
+
+    // Simulate casino events: bet placed, win, loss, multiplier update, crash, etc.
+    private suspend fun CoroutineScope.runCasinoBroadcastLoop() {
+        // Aviator state
+        var aviatorMultiplier = 1.0
+        var aviatorCrashed = false
+        var aviatorCrashPoint = 1.0
+
+        while (isActive) {
+            delay(3000) // every 3 seconds
+            if (activeClients.isEmpty()) continue
+
+            // Randomly pick a game and generate an event
+            val gameId = casinoGames.random()
+            val eventType = listOf("bet_placed", "win", "loss", "multiplier_update").random()
+
+            // Build a fake casino event payload
+            val timestamp = System.currentTimeMillis()
+            val user = "User${(1000..9999).random()}"
+            val betAmount = (10..500).random().toDouble()
+            val profit = when (eventType) {
+                "bet_placed" -> 0.0
+                "win" -> betAmount * (1.0 + (0.5..3.0).random())
+                "loss" -> -betAmount
+                "multiplier_update" -> 0.0
+                else -> 0.0
+            }
+            val multiplier = if (eventType == "multiplier_update") {
+                (1.0 + (0.1..9.9).random()).toFloat()
+            } else null
+
+            // Special handling for Aviator to show rising multiplier and crash
+            if (gameId == "aviator") {
+                if (!aviatorCrashed) {
+                    aviatorMultiplier += 0.05
+                    if (aviatorMultiplier >= aviatorCrashPoint) {
+                        aviatorCrashed = true
+                        // Broadcast crash event
+                        val crashPayload = """
+                        {
+                          "type": "casino",
+                          "game": "aviator",
+                          "event": "crash",
+                          "multiplier": ${String.format("%.2f", aviatorCrashPoint)},
+                          "timestamp": $timestamp
+                        }
+                        """.trimIndent()
+                        broadcast(crashPayload)
+                        // Reset after a few seconds
+                        delay(2000)
+                        aviatorMultiplier = 1.0
+                        aviatorCrashed = false
+                        aviatorCrashPoint = 1.0 + (0.5..9.0).random()
+                        continue
+                    } else {
+                        // Broadcast multiplier update
+                        val multPayload = """
+                        {
+                          "type": "casino",
+                          "game": "aviator",
+                          "event": "multiplier_update",
+                          "multiplier": ${String.format("%.2f", aviatorMultiplier)},
+                          "timestamp": $timestamp
+                        }
+                        """.trimIndent()
+                        broadcast(multPayload)
+                        continue
+                    }
+                }
+            }
+
+            // Generic casino event
+            val outcome = if (eventType == "win") "win" else if (eventType == "loss") "lose" else "pending"
+            val payloadJson = """
+            {
+              "type": "casino",
+              "game": "$gameId",
+              "event": "$eventType",
+              "user": "$user",
+              "bet": ${String.format("%.2f", betAmount)},
+              "profit": ${String.format("%.2f", profit)},
+              "outcome": "$outcome",
+              "multiplier": ${multiplier ?: "null"},
+              "timestamp": $timestamp
+            }
+            """.trimIndent()
+
+            broadcast(payloadJson)
+        }
+    }
+
+    // ================= BROADCAST HELPER =================
     private fun broadcast(payload: String) {
         val deadSessions = mutableListOf<ClientSession>()
         for (client in activeClients) {
@@ -206,12 +299,13 @@ object LocalWebSocketServer {
             deadSessions.forEach { it.close() }
         }
     }
-    
+
+    // ================= WEBSOCKET CLIENT SESSION =================
     internal class ClientSession(private val socket: Socket) {
         private var job: Job? = null
         private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         private var isHandshaked = false
-        
+
         fun start() {
             job = scope.launch {
                 try {
@@ -219,7 +313,7 @@ object LocalWebSocketServer {
                     val out = socket.getOutputStream()
                     var line: String? = reader.readLine()
                     val headers = mutableMapOf<String, String>()
-                    
+
                     while (line != null && line.isNotEmpty()) {
                         val parts = line.split(":", limit = 2)
                         if (parts.size == 2) {
@@ -227,7 +321,7 @@ object LocalWebSocketServer {
                         }
                         line = reader.readLine()
                     }
-                    
+
                     val wsKey = headers["sec-websocket-key"]
                     if (wsKey != null) {
                         val acceptVal = calculateAcceptValue(wsKey)
@@ -239,19 +333,19 @@ object LocalWebSocketServer {
                         out.flush()
                         isHandshaked = true
                         Log.d(TAG, "WebSocket Handshake completed successfully!")
-                        
+
                         // Keep listening to client messages (heartbeats and pings/pongs)
                         val inStream = socket.getInputStream()
                         while (isActive && isConnected()) {
                             val firstByte = inStream.read()
                             if (firstByte == -1) break
-                            
+
                             val secondByte = inStream.read()
                             if (secondByte == -1) break
-                            
+
                             val isMasked = (secondByte and 0x80) != 0
                             var payloadLen = secondByte and 0x7F
-                            
+
                             if (payloadLen == 126) {
                                 val b1 = inStream.read()
                                 val b2 = inStream.read()
@@ -261,12 +355,12 @@ object LocalWebSocketServer {
                                 for (i in 1..8) inStream.read()
                                 payloadLen = 0
                             }
-                            
+
                             val maskingKey = ByteArray(4)
                             if (isMasked) {
                                 inStream.read(maskingKey)
                             }
-                            
+
                             val payload = ByteArray(payloadLen)
                             var readBytes = 0
                             while (readBytes < payloadLen) {
@@ -274,13 +368,13 @@ object LocalWebSocketServer {
                                 if (chunk == -1) break
                                 readBytes += chunk
                             }
-                            
+
                             if (isMasked) {
                                 for (i in 0 until payloadLen) {
                                     payload[i] = (payload[i].toInt() xor maskingKey[i % 4].toInt()).toByte()
                                 }
                             }
-                            
+
                             val textMsg = String(payload, Charsets.UTF_8)
                             if (textMsg.contains("ping")) {
                                 sendFrame("{\"type\":\"pong\"}")
@@ -296,7 +390,7 @@ object LocalWebSocketServer {
                 }
             }
         }
-        
+
         fun sendFrame(payload: String) {
             if (!isHandshaked || !isConnected()) return
             synchronized(socket) {
@@ -325,11 +419,11 @@ object LocalWebSocketServer {
                 out.flush()
             }
         }
-        
+
         fun isConnected(): Boolean {
             return !socket.isClosed && socket.isConnected
         }
-        
+
         fun close() {
             job?.cancel()
             job = null
@@ -337,7 +431,7 @@ object LocalWebSocketServer {
                 socket.close()
             } catch (e: Exception) {}
         }
-        
+
         private fun calculateAcceptValue(key: String): String {
             val md = MessageDigest.getInstance("SHA-1")
             val input = key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
