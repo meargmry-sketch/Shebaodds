@@ -1,6 +1,7 @@
 // ============================================
 // SHEBAODDS - TAX SERVICE
 // 15% Ethiopian Withholding Tax Calculations
+// Supports: Sportsbook & 51+ Casino Games
 // ============================================
 
 import mongoose from 'mongoose';
@@ -34,10 +35,10 @@ export function calculateTax(winningAmount: number, isExempt = false) {
       reason: isExempt ? 'User tax exempt' : 'Below tax-free limit'
     };
   }
-  
+
   const taxAmount = winningAmount * TAX_CONFIG.RATE;
   const netWinning = winningAmount - taxAmount;
-  
+
   return {
     taxAmount: Math.floor(taxAmount * 100) / 100,
     netWinning: Math.floor(netWinning * 100) / 100,
@@ -60,16 +61,16 @@ export function getCurrentTaxPeriod(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
-// Process tax for a winning bet
+// Process tax for a winning bet (Sportsbook or Casino)
 export async function processTaxForWinning(betId: any, userId: any, winningAmount: number, matchId?: any) {
   try {
     // Check if user is tax exempt
     const userTaxProfile = await UserTaxProfile.findOne({ userId });
     const isExempt = userTaxProfile?.taxExempt || false;
-    
+
     const taxCalculation = calculateTax(winningAmount, isExempt);
     const taxPeriod = getCurrentTaxPeriod();
-    
+
     const taxTransaction = new TaxTransaction({
       userId,
       betId,
@@ -85,9 +86,9 @@ export async function processTaxForWinning(betId: any, userId: any, winningAmoun
       status: taxCalculation.isExempt ? 'exempt' : 'deducted',
       deductedAt: taxCalculation.isExempt ? null : new Date()
     });
-    
+
     await taxTransaction.save();
-    
+
     // Update User Tax Profile
     await UserTaxProfile.findOneAndUpdate(
       { userId },
@@ -103,7 +104,7 @@ export async function processTaxForWinning(betId: any, userId: any, winningAmoun
       },
       { upsert: true, new: true }
     );
-    
+
     // Update User wallet totalTaxPaid
     await User.findByIdAndUpdate(userId, {
       $inc: { 
@@ -112,7 +113,7 @@ export async function processTaxForWinning(betId: any, userId: any, winningAmoun
         'taxProfile.totalWinningsTaxed': winningAmount
       }
     });
-    
+
     // Update Tax Summary
     await TaxSummary.findOneAndUpdate(
       { taxPeriod },
@@ -126,8 +127,8 @@ export async function processTaxForWinning(betId: any, userId: any, winningAmoun
       },
       { upsert: true }
     );
-    
-    // Update bet with tax info
+
+    // Update bet with tax info (works for both sports and casino bets)
     await Bet.findByIdAndUpdate(betId, {
       taxAmount: taxCalculation.taxAmount,
       netWin: taxCalculation.netWinning,
@@ -135,9 +136,9 @@ export async function processTaxForWinning(betId: any, userId: any, winningAmoun
       isTaxExempt: taxCalculation.isExempt,
       taxExemptReason: taxCalculation.reason
     });
-    
+
     return taxTransaction;
-    
+
   } catch (error) {
     console.error('Tax processing error:', error);
     return null;
@@ -161,20 +162,20 @@ export async function generateMonthlyTaxReport(taxPeriod: string) {
       });
       await summary.save();
     }
-    
+
     // Get all transactions for this period with user details
     const transactions = await TaxTransaction.find({ taxPeriod })
       .populate('userId', 'username email phone fullName')
-      .populate('betId', 'matchId marketType stake odds')
+      .populate('betId', 'matchId marketType stake odds isCasinoBet casinoGameId')
       .populate('matchId', 'homeTeam awayTeam league');
-    
+
     // Update user count and usernames in summary
     const uniqueUsers = [...new Set(transactions.map(tx => tx.userId?._id?.toString()))];
     summary.totalUsers = uniqueUsers.length;
-    
+
     // Update user details in summary
     const userMap = new Map();
-    
+
     for (const tx of transactions) {
       if (tx.userId && !userMap.has(tx.userId._id.toString())) {
         userMap.set(tx.userId._id.toString(), {
@@ -190,10 +191,10 @@ export async function generateMonthlyTaxReport(taxPeriod: string) {
         userDetail.totalTax += tx.taxAmount;
       }
     }
-    
+
     summary.userTaxDetails = Array.from(userMap.values());
     await summary.save();
-    
+
     // Generate PDF inside a promise to handle stream safely
     const pdfBuffer: Buffer = await new Promise((resolve, reject) => {
       const doc = new PDFDocument({ margin: 50, size: 'A4' });
@@ -201,16 +202,16 @@ export async function generateMonthlyTaxReport(taxPeriod: string) {
       doc.on('data', (chunk: Buffer) => buffers.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(buffers)));
       doc.on('error', (err: any) => reject(err));
-      
+
       // Header with SHEBAODDS branding
       doc.fontSize(24).font('Helvetica-Bold').fillColor('#FFD700').text('SHEBAODDS', { align: 'center' });
       doc.fontSize(12).font('Helvetica').fillColor('#0A0A0A').text('Smart Bets. Real Wins.', { align: 'center' });
       doc.moveDown();
-      
+
       doc.fontSize(18).fillColor('#000000').text('MONTHLY TAX REPORT', { align: 'center' });
       doc.fontSize(12).text(`Period: ${taxPeriod}`, { align: 'center' });
       doc.moveDown();
-      
+
       // Summary Section
       doc.fontSize(14).font('Helvetica-Bold').text('Summary', { underline: true });
       doc.fontSize(10).font('Helvetica')
@@ -219,7 +220,7 @@ export async function generateMonthlyTaxReport(taxPeriod: string) {
         .text(`Total Bets: ${summary.totalBets.toLocaleString()}`)
         .text(`Total Users: ${summary.totalUsers.toLocaleString()}`);
       doc.moveDown();
-      
+
       // Tax Rate Information
       doc.fontSize(14).font('Helvetica-Bold').text('Tax Rate Information', { underline: true });
       doc.fontSize(10).font('Helvetica')
@@ -227,7 +228,7 @@ export async function generateMonthlyTaxReport(taxPeriod: string) {
         .text(`Tax-Free Limit: ${TAX_CONFIG.TAX_FREE_LIMIT} ETB per winning`)
         .text(`Collection Method: ${TAX_CONFIG.COLLECTION_METHOD}`);
       doc.moveDown();
-      
+
       // Authority Information
       doc.fontSize(14).font('Helvetica-Bold').text('Tax Authority', { underline: true });
       doc.fontSize(10).font('Helvetica')
@@ -235,7 +236,7 @@ export async function generateMonthlyTaxReport(taxPeriod: string) {
         .text(`ID: ${TAX_CONFIG.AUTHORITY_ID}`)
         .text(`Reporting Email: ${TAX_CONFIG.REPORTING_EMAIL}`);
       doc.moveDown();
-      
+
       // Payment Information
       doc.fontSize(14).font('Helvetica-Bold').text('Payment Information', { underline: true });
       doc.fontSize(10).font('Helvetica')
@@ -243,10 +244,10 @@ export async function generateMonthlyTaxReport(taxPeriod: string) {
         .text(`Account Number: ${TAX_CONFIG.PAYMENT_ACCOUNT}`)
         .text(`Reference Prefix: ${TAX_CONFIG.PAYMENT_REFERENCE_PREFIX}`);
       doc.moveDown();
-      
+
       // User Tax Details Table
       doc.fontSize(12).font('Helvetica-Bold').text('User Tax Details');
-      
+
       // Create table
       const tableTop = doc.y + 10;
       doc.fontSize(8).font('Helvetica-Bold');
@@ -254,10 +255,10 @@ export async function generateMonthlyTaxReport(taxPeriod: string) {
       doc.text('Total Winnings (ETB)', 200, tableTop);
       doc.text('Tax Paid (ETB)', 350, tableTop);
       doc.text('Net Winnings (ETB)', 450, tableTop);
-      
+
       doc.fontSize(8).font('Helvetica');
       let rowY = tableTop + 15;
-      
+
       for (const userDetail of summary.userTaxDetails) {
         if (rowY > 700) {
           doc.addPage();
@@ -269,30 +270,30 @@ export async function generateMonthlyTaxReport(taxPeriod: string) {
         doc.text((userDetail.totalWinnings - userDetail.totalTax).toLocaleString(), 450, rowY);
         rowY += 15;
       }
-      
+
       doc.moveDown();
-      
+
       // Footer
       doc.fontSize(8).font('Helvetica')
         .text('This is an official tax report generated by SHEBAODDS.', { align: 'center' })
         .text(`Generated: ${new Date().toLocaleString()}`, { align: 'center' })
         .text('SHEBAODDS - Smart Bets. Real Wins.', { align: 'center' });
-      
+
       doc.end();
     });
-    
+
     // Generate Excel
     const workbook = new ExcelJS.Workbook();
     workbook.creator = 'SHEBAODDS';
     workbook.created = new Date();
-    
+
     // Summary Sheet
     const summarySheet = workbook.addWorksheet('Tax Summary');
     summarySheet.columns = [
       { header: 'Metric', key: 'metric', width: 30 },
       { header: 'Value', key: 'value', width: 20 }
     ];
-    
+
     summarySheet.addRow({ metric: 'Period', value: taxPeriod });
     summarySheet.addRow({ metric: 'Total Winnings (ETB)', value: summary.totalWinnings });
     summarySheet.addRow({ metric: 'Total Tax Collected (ETB)', value: summary.totalTaxCollected });
@@ -300,7 +301,7 @@ export async function generateMonthlyTaxReport(taxPeriod: string) {
     summarySheet.addRow({ metric: 'Total Users', value: summary.totalUsers });
     summarySheet.addRow({ metric: 'Tax Rate', value: `${TAX_CONFIG.RATE * 100}%` });
     summarySheet.addRow({ metric: 'Tax-Free Limit (ETB)', value: TAX_CONFIG.TAX_FREE_LIMIT });
-    
+
     // Transactions Sheet
     const transactionsSheet = workbook.addWorksheet('Tax Transactions');
     transactionsSheet.columns = [
@@ -310,11 +311,16 @@ export async function generateMonthlyTaxReport(taxPeriod: string) {
       { header: 'Gross Winning', key: 'gross', width: 15 },
       { header: 'Tax Amount', key: 'tax', width: 15 },
       { header: 'Net Winning', key: 'net', width: 15 },
-      { header: 'Match', key: 'match', width: 30 },
+      { header: 'Match/Casino', key: 'match', width: 30 },
       { header: 'Date', key: 'date', width: 20 }
     ];
-    
+
     for (const tx of transactions) {
+      const bet = tx.betId as any;
+      const matchLabel = bet?.isCasinoBet 
+        ? `Casino: ${bet?.casinoGameId || 'Unknown'}`
+        : tx.matchId ? `${(tx.matchId as any).homeTeam} vs ${(tx.matchId as any).awayTeam}` : 'N/A';
+
       transactionsSheet.addRow({
         reference: tx.taxReference,
         username: (tx.userId as any)?.username || 'Unknown',
@@ -322,11 +328,11 @@ export async function generateMonthlyTaxReport(taxPeriod: string) {
         gross: tx.grossWinning,
         tax: tx.taxAmount,
         net: tx.netWinning,
-        match: tx.matchId ? `${(tx.matchId as any).homeTeam} vs ${(tx.matchId as any).awayTeam}` : 'N/A',
+        match: matchLabel,
         date: tx.calculatedAt ? tx.calculatedAt.toLocaleDateString() : new Date().toLocaleDateString()
       });
     }
-    
+
     // User Details Sheet
     const userSheet = workbook.addWorksheet('User Details');
     userSheet.columns = [
@@ -335,7 +341,7 @@ export async function generateMonthlyTaxReport(taxPeriod: string) {
       { header: 'Tax Paid (ETB)', key: 'tax', width: 15 },
       { header: 'Net Winnings (ETB)', key: 'net', width: 15 }
     ];
-    
+
     for (const userDetail of summary.userTaxDetails) {
       userSheet.addRow({
         username: userDetail.username || 'Unknown',
@@ -344,11 +350,11 @@ export async function generateMonthlyTaxReport(taxPeriod: string) {
         net: userDetail.totalWinnings - userDetail.totalTax
       });
     }
-    
+
     const excelBuffer = await workbook.xlsx.writeBuffer() as Buffer;
-    
+
     return { pdf: pdfBuffer, excel: excelBuffer, summary };
-    
+
   } catch (error) {
     console.error('Generate tax report error:', error);
     throw error;
@@ -359,7 +365,7 @@ export async function generateMonthlyTaxReport(taxPeriod: string) {
 export async function submitTaxReport(taxPeriod: string) {
   try {
     const { pdf, excel, summary } = await generateMonthlyTaxReport(taxPeriod);
-    
+
     await sendEmail({
       to: TAX_CONFIG.REPORTING_EMAIL,
       subject: `Tax Report - ${taxPeriod} - SHEBAODDS`,
@@ -380,7 +386,7 @@ export async function submitTaxReport(taxPeriod: string) {
         { filename: `tax_report_${taxPeriod}.xlsx`, content: excel }
       ]
     });
-    
+
     await TaxSummary.findOneAndUpdate(
       { taxPeriod },
       {
@@ -389,9 +395,9 @@ export async function submitTaxReport(taxPeriod: string) {
         reportReference: `REP_${taxPeriod}_${Date.now()}`
       }
     );
-    
+
     return { success: true, message: 'Tax report submitted successfully' };
-    
+
   } catch (error: any) {
     console.error('Submit tax report error:', error);
     return { success: false, error: error.message };
@@ -411,15 +417,15 @@ export async function registerUserForTax(userId: any, taxId: string, taxRegistra
       },
       { upsert: true, new: true }
     );
-    
+
     await User.findByIdAndUpdate(userId, {
       'taxProfile.taxId': taxId,
       'taxProfile.taxRegistrationNumber': taxRegistrationNumber,
       'taxProfile.isTaxRegistered': true
     });
-    
+
     return userTaxProfile;
-    
+
   } catch (error) {
     console.error('Tax registration error:', error);
     throw error;
@@ -439,14 +445,14 @@ export async function exemptUserFromTax(userId: any, exemptionType: string, exem
       },
       { upsert: true, new: true }
     );
-    
+
     await User.findByIdAndUpdate(userId, {
       'taxProfile.taxExempt': true,
       'taxProfile.exemptionType': exemptionType
     });
-    
+
     return userTaxProfile;
-    
+
   } catch (error) {
     console.error('Tax exemption error:', error);
     throw error;
