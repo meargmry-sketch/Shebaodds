@@ -21,11 +21,20 @@ const REQUIRED_ENV_VARIABLES = [
 ];
 
 /**
+ * Optional environment variables for casino games
+ */
+const CASINO_ENV_VARIABLES = [
+  'CASINO_GAMES_ENABLED',
+  'CASINO_SECRET_KEY',
+  'CASINO_AGGREGATOR_URL'
+];
+
+/**
  * Step 1: Check Injected Key Environment Mappings & Fail Fast Guard
  */
 function verifyEnvironmentMappings(): void {
   console.log('🔄 [BOOTSTRAP] Step 1: Checking injected key environment mappings...');
-  
+
   // Dynamic fallbacks for enterprise environment compatibility
   if (!process.env.WELCOME_BONUS && process.env.WELCOME_BONUS_AMOUNT) {
     process.env.WELCOME_BONUS = process.env.WELCOME_BONUS_AMOUNT;
@@ -36,9 +45,9 @@ function verifyEnvironmentMappings(): void {
   if (!process.env.REDIS_HOST) {
     process.env.REDIS_HOST = '127.0.0.1';
   }
-  
+
   const missingVars: string[] = [];
-  
+
   for (const variable of REQUIRED_ENV_VARIABLES) {
     if (!process.env[variable] || process.env[variable]?.includes('change_this') || process.env[variable]?.includes('your_')) {
       missingVars.push(variable);
@@ -56,6 +65,13 @@ function verifyEnvironmentMappings(): void {
     }
   }
 
+  // Check casino environment variables (optional – only warn if missing)
+  for (const variable of CASINO_ENV_VARIABLES) {
+    if (!process.env[variable]) {
+      console.warn(`⚠️ [BOOTSTRAP WARNING] Optional casino environment variable "${variable}" is not set. Casino features may be limited.`);
+    }
+  }
+
   console.log('✅ [BOOTSTRAP] Environment configuration mappings validated.');
 }
 
@@ -65,7 +81,7 @@ function verifyEnvironmentMappings(): void {
 async function connectAndValidateReplicaSet(): Promise<void> {
   const mongoUri = process.env.MONGODB_URI as string;
   console.log('🔄 [BOOTSTRAP] Step 2: Initiating Mongoose cluster connection check...');
-  
+
   try {
     // Attempt database connection
     await mongoose.connect(mongoUri);
@@ -78,14 +94,14 @@ async function connectAndValidateReplicaSet(): Promise<void> {
     if (!status || !status.ok) {
       // In MongoDB, transactions require a replica set. Sharded clusters or standalone instances without replSet will fail ACID transactions.
       console.warn('⚠️ [BOOTSTRAP WARN] "replSetGetStatus" command was not recognized or returned not OK.');
-      
+
       // Secondary check: examine the connection string for replicaSet parameters
       const hasReplicaSetParam = mongoUri.includes('replicaSet=') || mongoUri.includes('replicaSet');
-      
+
       if (!hasReplicaSetParam) {
         console.error('❌ [BOOTSTRAP CRITICAL ERROR] MongoDB is not running as an ACID-compliant Replica Set!');
         console.error('👉 Transactions (required for multi-wallet ledger and real-time casino turns) will fail on standalone MongoDB deployments.');
-        
+
         if (process.env.NODE_ENV === 'production') {
           console.error('💥 Standalone Guard Triggered: Terminating server initialization process.');
           // Terminate database connection
@@ -123,6 +139,10 @@ export async function bootstrapAppEngine(): Promise<void> {
 
   // Step 2: Database Connection & Transaction capabilities check
   await connectAndValidateReplicaSet();
+
+  // Casino Games status
+  const casinoEnabled = process.env.CASINO_GAMES_ENABLED === 'true';
+  console.log(`🎰 [BOOTSTRAP] Casino Games: ${casinoEnabled ? 'ENABLED' : 'DISABLED (set CASINO_GAMES_ENABLED=true to enable)'}`);
 
   console.log('----------------------------------------------------------------------');
   console.log('⚡ [BOOTSTRAP SUCCESS] Server validated. Igniting Live Sportsbook and Casino Services...');
