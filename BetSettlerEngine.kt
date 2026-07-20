@@ -12,6 +12,7 @@ class BetSettlerEngine(private val db: AppDatabase) {
 
     /**
      * Scans and processes bets for matches that have recently concluded.
+     * Also settles instant Casino bets that were placed and are still PENDING.
      * Runs atomically inside a Room transaction to prevent race conditions or partial updates.
      * Returns the total number of bets processed during this scan.
      */
@@ -28,7 +29,84 @@ class BetSettlerEngine(private val db: AppDatabase) {
 
             Log.d("BetSettlerEngine", "[SETTLER] Found ${pendingBets.size} pending tickets to scan.")
 
+            // Prevent double-processing Casino bets in the same run
+            val settledCasinoIds = mutableSetOf<Int>()
+
             for (bet in pendingBets) {
+                // ==========================================================
+                // 🎰 NEW: CASINO BET PROCESSING
+                // ==========================================================
+                if (bet.isCasinoBet) {
+                    // Casino bets are settled instantly after play.
+                    // If it's still PENDING here, it means the user played a casino game
+                    // but the system didn't auto-settle it. We settle it now.
+                    if (settledCasinoIds.contains(bet.id)) continue
+
+                    // Casino bets are always considered settled in this scanner.
+                    val finalStatus = bet.status // Could be "WON" or "LOST"
+                    val payoutAmount = if (finalStatus == "WON") bet.potentialReturn else 0.0
+
+                    // Execute Settlement Atomically
+                    db.runInTransaction {
+                        val freshBetDao = db.betDao()
+                        val freshWalletDao = db.walletDao()
+                        val freshTransactionDao = db.transactionDao()
+
+                        // Mark bet as settled
+                        val updatedBet = bet.copy(
+                            status = finalStatus,
+                            settledAt = Date()
+                        )
+                        freshBetDao.updateBetDirect(updatedBet)
+
+                        // Credit wallet if won
+                        if (finalStatus == "WON" && freshWalletDao.getWalletByIdDirect(bet.userId) != null) {
+                            val currentWallet = freshWalletDao.getWalletByIdDirect(bet.userId)!!
+                            
+                            // Calculate Tax (15% Ethiopian Tax on winnings over 100 ETB)
+                            val taxRate = 0.15
+                            val taxFreeLimit = 100.0
+                            val taxAmount = if (payoutAmount > taxFreeLimit) {
+                                payoutAmount * taxRate
+                            } else {
+                                0.0
+                            }
+                            val netWin = payoutAmount - taxAmount
+
+                            val updatedWallet = currentWallet.copy(
+                                balance = currentWallet.balance + netWin
+                            )
+                            freshWalletDao.insertWalletDirect(updatedWallet)
+
+                            // Create transaction ledger record
+                            val timeLabelStr = SimpleDateFormat("MMM d, yyyy  •  hh:mm a", Locale.getDefault()).format(Date())
+                            val ledgerId = "CASINO-${bet.id}-${System.currentTimeMillis().toString().takeLast(6)}"
+                            
+                            val transaction = TransactionRecord(
+                                id = ledgerId,
+                                userId = bet.userId,
+                                type = "PAYOUT",
+                                amount = netWin,
+                                method = "Casino Winnings",
+                                status = "APPROVED",
+                                timeLabel = timeLabelStr,
+                                timestamp = System.currentTimeMillis()
+                            )
+                            freshTransactionDao.insertTransactionDirect(transaction)
+                            
+                            Log.d("BetSettlerEngine", "[SETTLER LOG] Casino Ticket #${bet.id} (${bet.casinoGameId}) marked as ${finalStatus}. Payout: $payoutAmount ETB (Tax: $taxAmount)")
+                        } else {
+                            Log.d("BetSettlerEngine", "[SETTLER LOG] Casino Ticket #${bet.id} (${bet.casinoGameId}) marked as LOST.")
+                        }
+                        processedCount++
+                        settledCasinoIds.add(bet.id)
+                    }
+                    continue
+                }
+
+                // ==========================================================
+                // ⚽ SPORTSBOOK BET PROCESSING (Existing Logic)
+                // ==========================================================
                 val isAccumulator = !bet.subItemsJson.isNullOrEmpty()
                 val finalStatus: String
                 val isSettled: Boolean
