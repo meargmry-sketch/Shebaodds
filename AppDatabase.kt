@@ -9,6 +9,60 @@ import com.example.data.model.Bet
 import com.example.data.model.TransactionRecord
 import kotlinx.coroutines.flow.Flow
 
+// ============================================================
+// NEW: Casino Game Entity (Added for 51+ Casino Games)
+// ============================================================
+@Entity(tableName = "casino_games")
+data class CasinoGameEntity(
+    @PrimaryKey val id: String, // e.g., 'aviator', 'dice', 'slot'
+    val name: String,
+    val nameAm: String,
+    val icon: String,
+    val category: String, // 'crash', 'classic', 'table', 'slots', 'sports', 'special'
+    val minBet: Int,
+    val maxBet: Int,
+    val isFavorite: Boolean = false,
+    val timesPlayed: Int = 0,
+    val totalWagered: Double = 0.0,
+    val totalWon: Double = 0.0
+)
+
+// ============================================================
+// NEW: Casino Game DAO (Added for 51+ Casino Games)
+// ============================================================
+@Dao
+interface CasinoGameDao {
+    @Query("SELECT * FROM casino_games ORDER BY category ASC, name ASC")
+    fun getAllGames(): Flow<List<CasinoGameEntity>>
+
+    @Query("SELECT * FROM casino_games WHERE id = :gameId LIMIT 1")
+    suspend fun getGameById(gameId: String): CasinoGameEntity?
+
+    @Query("SELECT * FROM casino_games WHERE isFavorite = 1")
+    fun getFavoriteGames(): Flow<List<CasinoGameEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertGames(games: List<CasinoGameEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insertGamesDirect(games: List<CasinoGameEntity>)
+
+    @Update
+    suspend fun updateGame(game: CasinoGameEntity)
+
+    @Update
+    fun updateGameDirect(game: CasinoGameEntity)
+
+    @Query("UPDATE casino_games SET isFavorite = :isFavorite WHERE id = :gameId")
+    suspend fun updateFavoriteStatus(gameId: String, isFavorite: Boolean)
+
+    @Query("UPDATE casino_games SET timesPlayed = timesPlayed + 1, totalWagered = totalWagered + :wagered, totalWon = totalWon + :won WHERE id = :gameId")
+    suspend fun updateGameStats(gameId: String, wagered: Double, won: Double)
+}
+
+// ============================================================
+// EXISTING DAOs (Wallet, Match, Bet, Transaction)
+// ============================================================
 @Dao
 interface WalletDao {
     @Query("SELECT * FROM users WHERE id = 1 LIMIT 1")
@@ -124,6 +178,9 @@ interface TransactionDao {
     fun insertTransactionDirect(transaction: TransactionRecord)
 }
 
+// ============================================================
+// UPDATED DATABASE CLASS (Now includes CasinoGameEntity)
+// ============================================================
 @Database(
     entities = [
         UserWallet::class,
@@ -131,9 +188,10 @@ interface TransactionDao {
         MarketEntity::class,
         SportMatch::class,
         Bet::class,
-        TransactionRecord::class
+        TransactionRecord::class,
+        CasinoGameEntity::class // Added the new Casino Game table
     ],
-    version = 4,
+    version = 5, // Incremented version to handle the new table
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -141,6 +199,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun matchDao(): MatchDao
     abstract fun betDao(): BetDao
     abstract fun transactionDao(): TransactionDao
+    abstract fun casinoGameDao(): CasinoGameDao // Added DAO accessor
 
     companion object {
         @Volatile
@@ -153,7 +212,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "bet_master_database"
                 )
-                .fallbackToDestructiveMigration()
+                .fallbackToDestructiveMigration() // Destroys old DB and creates new one safely
                 .build()
                 INSTANCE = instance
                 instance
