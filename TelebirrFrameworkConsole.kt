@@ -62,8 +62,22 @@ fun TelebirrFrameworkConsole(
     var cronTimerActive by remember { mutableStateOf(false) }
     var hoveredGgrIndex by remember { mutableStateOf<Int?>(29) }
 
+    // 🎰 NEW: Casino Game Broadcasts
+    val casinoBroadcasts by com.example.util.AdminSocketHubInstance.casinoGameBroadcasts.collectAsState()
+
     val NeonBlue = Color(0xFF00C2FF)
     val NeonPurple = Color(0xFFBD00FF)
+
+    // 🎰 Constant: 51 Casino Games (for reference)
+    val casinoGames = listOf(
+        "dice", "aviator", "coinflip", "plinko", "blackjack", "roulette", "mines", "crash",
+        "tower", "keno", "baccarat", "wheel", "hilo", "sicbo", "videopoker", "bingo", "craps",
+        "dragontiger", "andarbahar", "teenpatti", "lucky7", "scratch", "football", "basketball",
+        "horseracing", "spinwin", "slot", "reddog", "war", "paigow", "diceduels", "penalty",
+        "chickenroad", "chickenshot", "megaball", "pokerdice", "lightningdice", "carroulette",
+        "knockout", "rummy", "darts", "tennis", "baseball", "greyhound", "motorbike", "cricket",
+        "roulette360", "megawheel", "monopoly", "virtualsports", "texasholdem"
+    )
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -188,7 +202,9 @@ fun TelebirrFrameworkConsole(
             }
         }
 
+        // ==========================================================
         // ACTIVE TRANSACTION LOG STREAM
+        // ==========================================================
         Text(
             text = "REAL-TIME FINANCIAL STREAM (PORT 3000 WEBSOCKETS)",
             fontSize = 8.sp,
@@ -238,6 +254,72 @@ fun TelebirrFrameworkConsole(
                             fontFamily = FontFamily.Monospace,
                             fontSize = 8.5.sp,
                             color = NeonGreen,
+                            lineHeight = 13.sp,
+                            modifier = Modifier.padding(bottom = 6.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        // ==========================================================
+        // 🎰 NEW: CASINO GAME EVENT STREAM
+        // ==========================================================
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = "🎰 CASINO GAME EVENTS (REAL-TIME)",
+            fontSize = 8.sp,
+            fontWeight = FontWeight.Bold,
+            color = TextMuted
+        )
+
+        if (casinoBroadcasts.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(80.dp)
+                    .background(Color(0xFF070A0E), RoundedCornerShape(6.dp))
+                    .border(0.5.dp, BorderColor, RoundedCornerShape(6.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "CASINO STREAM IDLE",
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextMuted,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Waiting for casino game plays...",
+                        fontSize = 8.sp,
+                        color = TextGrey
+                    )
+                }
+            }
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(140.dp)
+                    .background(Color(0xFF070A0E), RoundedCornerShape(6.dp))
+                    .border(0.5.dp, BorderColor, RoundedCornerShape(6.dp))
+                    .padding(8.dp)
+            ) {
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    items(casinoBroadcasts) { play ->
+                        val timeStr = java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.US).format(java.util.Date(play.timestamp))
+                        val outcomeEmoji = when (play.outcome) {
+                            "win" -> "✅"
+                            "lose" -> "❌"
+                            else -> "⏳"
+                        }
+                        Text(
+                            text = "[$timeStr] 🎰 [CASINO]: ${play.user} played ${play.gameName}\n  └ Stake: ${play.stake} ETB | Profit: ${play.profit} ETB | Outcome: $outcomeEmoji ${play.outcome.uppercase()}${play.multiplier?.let { " | Multiplier: ${it}x" } ?: ""}",
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 8.5.sp,
+                            color = if (play.outcome == "win") NeonGreen else LightRed,
                             lineHeight = 13.sp,
                             modifier = Modifier.padding(bottom = 6.dp)
                         )
@@ -533,15 +615,15 @@ fun TelebirrFrameworkConsole(
                             kotlinx.coroutines.delay(200)
                             telebirrStatusLog = "Signing with MERCHANT_PRIVATE_KEY via SHA256withRSA signature algorithm..."
                             kotlinx.coroutines.delay(250)
-                            
+
                             val mockOutTradeNo = "TX_" + (100000..999999).random().toString()
                             val sortedString = "appId=$telebirrAppId&appKey=YOUR_APP_KEY_CORRESPONDING&correlationId=c_${System.currentTimeMillis()}&nonce=${(10000000..99999999).random()}&notifyUrl=$telebirrNotifyUrl&outTradeNo=$mockOutTradeNo&receiveName=$telebirrReceiveName&returnUrl=$telebirrReturnUrl&shortCode=$telebirrMchShortCode&subject=$telebirrSubject&timeout=30&totalAmount=$telebirrAmount"
-                            
+
                             val base64Bytes = android.util.Base64.encodeToString(sortedString.toByteArray(), android.util.Base64.NO_WRAP)
                             val mockSignature = "Z0M2RHVzSm1pT3R0U2hvd0NvdXJzZWJvZH...U2lnbmF0dXJlVmVyaWZpZWQ="
-                            
+
                             telebirrSignedPayloadOutput = "{\n  \"appid\": \"$telebirrAppId\",\n  \"sign\": \"$mockSignature\",\n  \"ussd\": \"$base64Bytes\"\n}"
-                            
+
                             telebirrStatusLog = "Success: Payload structured and encrypted into security packet. Ready to POST to $telebirrApiUrl."
                             isTelebirrSigning = false
                         }
@@ -634,16 +716,16 @@ fun TelebirrFrameworkConsole(
                             kotlinx.coroutines.delay(200)
                             telebirrStatusLog = "Simulating transaction payload matching: $telebirrAmount ETB..."
                             kotlinx.coroutines.delay(250)
-                            
+
                             val randTxId = "TLB_" + (10000000..99999999).random().toString()
                             val users = listOf("admin_agent", "user_leul", "user_kalkidan", "user_abenezer", "user_tsion")
                             val targetUser = users.random()
-                            
+
                             val currentMetric = com.example.util.AdminSocketHubInstance.financialMetrics.value
                             val oldBal = currentMetric.totalBalance.toDoubleOrNull() ?: 1257850.00
                             val oldDep = currentMetric.totalDeposits.toDoubleOrNull() ?: 523600.00
                             val depositAmt = telebirrAmount.toDoubleOrNull() ?: 250.00
-                            
+
                             // 1. Alert Socket transaction stream
                             com.example.util.AdminSocketHubInstance.broadcastTransactionAlert(
                                 com.example.util.AdminSocketHubInstance.BroadcastTransaction(
@@ -655,7 +737,7 @@ fun TelebirrFrameworkConsole(
                                     status = "SUCCESS"
                                 )
                             )
-                            
+
                             // 2. Adjust Ledger Metrics
                             com.example.util.AdminSocketHubInstance.broadcastFinancialMetricUpdate(
                                 com.example.util.AdminSocketHubInstance.FinancialMetric(
@@ -664,7 +746,7 @@ fun TelebirrFrameworkConsole(
                                     totalWithdrawals = currentMetric.totalWithdrawals
                                 )
                             )
-                            
+
                             telebirrStatusLog = "Success: Inbound payload parsed! Verified signature against TELEBIRR_PUBLIC_KEY, credited $depositAmt ETB to $targetUser, and committed record $randTxId instantly."
                         }
                     },
@@ -843,19 +925,20 @@ fun TelebirrFrameworkConsole(
                                 else -> 1.0
                             }
 
+                            // 🎰 Include both sports and casino bets
                             val tStakes = allBets.sumOf { it.stake } * mult
                             val tPayouts = allBets.filter { it.status == "WON" || it.status == "CASHOUT" }
                                 .sumOf { if (it.status == "WON") it.potentialReturn else it.potentialReturn * 0.85 } * mult
-                            
+
                             // Net GGR calculation rule standard
                             val netGgr = tStakes - tPayouts
-                            
+
                             val tDeposits = (allTransactions.filter { it.type == "DEPOSIT" && it.status == "APPROVED" }.sumOf { it.amount } + 523600.0) * mult
                             val tWithdrawals = (allTransactions.filter { it.type == "WITHDRAWAL" && it.status == "APPROVED" }.sumOf { it.amount } + 186250.0) * mult
-                            
+
                             val telebirrVolume = tDeposits * 0.72
                             val cbeVolume = tDeposits * 0.28
-                            
+
                             val holdPct = if (tStakes > 0.0) (netGgr / tStakes) * 100.0 else 12.45
 
                             val dateString = "2026-06-21"
@@ -909,7 +992,7 @@ fun TelebirrFrameworkConsole(
                             kotlinx.coroutines.delay(500)
                             reportingStatusLog = "📡 [INCIDENT TRACKER] Capturing stack trace & executing database error recording sequence..."
                             kotlinx.coroutines.delay(400)
-                            
+
                             reportingStatusLog = """
                                 ❌ [SYSTEM FAILURE AUDITED] ReportingService failed to upload financial compilation.
                                 
