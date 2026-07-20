@@ -26,7 +26,7 @@ data class BettingEngineResult(
 class BettingEngineService(private val db: AppDatabase) {
 
     /**
-     * Processes a new bet request atomically.
+     * Processes a new sportsbook bet request atomically.
      * Uses isolation layers via Room's transaction to prevent race conditions on user wallet balances.
      */
     suspend fun placeSingleBet(request: PlaceBetRequest): BettingEngineResult = withContext(Dispatchers.IO) {
@@ -170,6 +170,9 @@ class BettingEngineService(private val db: AppDatabase) {
         }
     }
 
+    /**
+     * Processes a multi-leg accumulator bet (sportsbook).
+     */
     suspend fun placeMultiBet(
         userId: Int = 1,
         items: List<com.example.data.model.BetItem>,
@@ -316,6 +319,110 @@ class BettingEngineService(private val db: AppDatabase) {
     }
 
     /**
+     * Alias for placeMultiBet to support explicit multi-leg/accumulator betting requests cleanly.
+     */
+    suspend fun placeMultiLegBet(
+        userId: Int = 1,
+        items: List<com.example.data.model.BetItem>,
+        stake: Double
+    ): BettingEngineResult {
+        return placeMultiBet(userId, items, stake)
+    }
+
+    // ==========================================================
+    // 🎰 NEW: CASINO BET PLACEMENT
+    // ==========================================================
+    /**
+     * Processes a new casino game bet atomically.
+     * Creates a bet record with casino-specific fields and broadcasts a CasinoPlay event.
+     */
+    suspend fun placeCasinoBet(
+        userId: Int = 1,
+        gameId: String,
+        gameName: String,
+        stake: Double,
+        multiplier: Double,
+        result: String // "win" or "lose"
+    ): BettingEngineResult = withContext(Dispatchers.IO) {
+        if (stake <= 0) {
+            return@withContext BettingEngineResult(false, "Stake must be greater than 0 ETB.")
+        }
+
+        try {
+            return@withContext db.runInTransaction<BettingEngineResult> {
+                val walletDao = db.walletDao()
+                val betDao = db.betDao()
+
+                // 1. Lock wallet
+                val currentWallet = walletDao.getWalletByIdDirect(userId)
+                    ?: return@runInTransaction BettingEngineResult(false, "Wallet not found.")
+
+                if (currentWallet.balance < stake) {
+                    return@runInTransaction BettingEngineResult(false, "Insufficient balance in wallet.")
+                }
+
+                // 2. Calculate profit and new balance
+                val isWin = result.equals("win", ignoreCase = true)
+                val profit = if (isWin) {
+                    stake * multiplier - stake // net profit
+                } else {
+                    -stake
+                }
+                val newBalance = currentWallet.balance + profit
+
+                // 3. Update wallet
+                val updatedWallet = currentWallet.copy(
+                    balance = newBalance
+                )
+                walletDao.insertWalletDirect(updatedWallet)
+
+                // 4. Create Bet record
+                val bet = Bet(
+                    userId = userId,
+                    matchId = 0, // 0 indicates no sports match
+                    marketType = "CASINO",
+                    selection = gameName,
+                    odds = multiplier,
+                    stake = stake,
+                    potentialReturn = if (isWin) stake * multiplier else 0.0,
+                    status = if (isWin) "WON" else "LOST",
+                    sport = "Casino",
+                    teamA = gameId, // Store game ID for easy querying
+                    teamB = "",
+                    isCasinoBet = true,
+                    casinoGameId = gameId,
+                    casinoMultiplier = multiplier
+                )
+
+                val generatedBetId = betDao.insertBetDirect(bet)
+
+                // 5. Broadcast Casino Play Event
+                val socketCasinoPlay = AdminSocketHubInstance.BroadcastCasinoPlay(
+                    id = "#$generatedBetId",
+                    user = "User$userId",
+                    gameId = gameId,
+                    gameName = gameName,
+                    stake = String.format(java.util.Locale.US, "%.2f", stake),
+                    profit = String.format(java.util.Locale.US, "%.2f", profit),
+                    outcome = result,
+                    multiplier = String.format(java.util.Locale.US, "%.2f", multiplier)
+                )
+                AdminSocketHubInstance.broadcastCasinoPlay(socketCasinoPlay)
+
+                Log.d("BettingEngineService", "[CASINO BET] Game: $gameName, User: $userId, Stake: $stake, Result: $result, Profit: $profit")
+                BettingEngineResult(
+                    success = true,
+                    message = "Casino bet placed successfully.",
+                    betId = generatedBetId.toInt()
+                )
+            }
+        } catch (e: Exception) {
+            Log.e("BettingEngineService", "[CASINO ENGINE ERROR]: ${e.message}", e)
+            BettingEngineResult(false, "A technical error occurred while processing casino bet.")
+        }
+    }
+
+    /**
      * Checks for conflicting markets within the same accumulator ticket.
      * E.g., cannot bet on both teams to win the same game, or both Over and Under on the same game, etc.
      */
@@ -360,16 +467,5 @@ class BettingEngineService(private val db: AppDatabase) {
             }
         }
         return null
-    }
-
-    /**
-     * Alias for placeMultiBet to support explicit multi-leg/accumulator betting requests cleanly.
-     */
-    suspend fun placeMultiLegBet(
-        userId: Int = 1,
-        items: List<com.example.data.model.BetItem>,
-        stake: Double
-    ): BettingEngineResult {
-        return placeMultiBet(userId, items, stake)
     }
 }
