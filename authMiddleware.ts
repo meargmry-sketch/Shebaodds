@@ -1,6 +1,7 @@
 // ============================================
 // SHEBAODDS - AUTHENTICATION MIDDLEWARE
 // JWT Token Verification & Role Checks
+// Supports: Sportsbook & Casino Games
 // ============================================
 
 import { Request, Response, NextFunction } from 'express';
@@ -49,7 +50,7 @@ export const generateRefreshToken = (user: any): string => {
 export const authenticate = async (req: any, res: Response, next: NextFunction) => {
   try {
     const token = req.headers.authorization?.split(' ')[1];
-    
+
     if (!token) {
       return res.status(401).json({
         success: false,
@@ -69,10 +70,10 @@ export const authenticate = async (req: any, res: Response, next: NextFunction) 
 
     // Verify token
     const decoded = jwt.verify(token, JWT_SECRET) as any;
-    
+
     // Get user from database
     const user = await User.findById(decoded.userId);
-    
+
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -124,7 +125,7 @@ export const authenticate = async (req: any, res: Response, next: NextFunction) 
     // Attach user to request
     req.user = user;
     req.token = token;
-    
+
     return next();
   } catch (error: any) {
     if (error.name === 'JsonWebTokenError') {
@@ -141,7 +142,7 @@ export const authenticate = async (req: any, res: Response, next: NextFunction) 
         code: 'TOKEN_EXPIRED'
       });
     }
-    
+
     return res.status(500).json({
       success: false,
       message: 'Authentication error',
@@ -237,14 +238,14 @@ export const canWithdraw = async (req: any, res: Response, next: NextFunction) =
   if (!user) {
     return res.status(401).json({ success: false, message: 'Authentication required' });
   }
-  
+
   // Check if user has pending withdrawals
   const pendingWithdrawals = await Transaction.countDocuments({
     userId: user._id,
     type: 'withdrawal',
     status: { $in: ['pending', 'processing'] }
   });
-  
+
   if (pendingWithdrawals >= 3) {
     return res.status(403).json({
       success: false,
@@ -252,17 +253,17 @@ export const canWithdraw = async (req: any, res: Response, next: NextFunction) =
       code: 'TOO_MANY_PENDING'
     });
   }
-  
+
   return next();
 };
 
-// Check if user can place bet
+// Check if user can place bet (Sportsbook)
 export const canPlaceBet = async (req: any, res: Response, next: NextFunction) => {
   const user = req.user;
   if (!user) {
     return res.status(401).json({ success: false, message: 'Authentication required' });
   }
-  
+
   // Check responsible gambling limits
   if (user.responsibleGambling?.selfExcluded) {
     return res.status(403).json({
@@ -271,6 +272,85 @@ export const canPlaceBet = async (req: any, res: Response, next: NextFunction) =
       code: 'SELF_EXCLUDED'
     });
   }
-  
+
+  // Check cooling-off period
+  if (user.responsibleGambling?.coolingOffPeriodEnd && new Date(user.responsibleGambling.coolingOffPeriodEnd) > new Date()) {
+    return res.status(403).json({
+      success: false,
+      message: `Your account is in cooling-off period until ${new Date(user.responsibleGambling.coolingOffPeriodEnd).toLocaleDateString()}.`,
+      code: 'COOLING_OFF'
+    });
+  }
+
+  // Additional sportsbook-specific checks can go here
+
+  return next();
+};
+
+// 🎰 NEW: Check if user can play casino games
+export const canPlayCasino = async (req: any, res: Response, next: NextFunction) => {
+  const user = req.user;
+  if (!user) {
+    return res.status(401).json({ success: false, message: 'Authentication required' });
+  }
+
+  // Self-exclusion check
+  if (user.responsibleGambling?.selfExcluded) {
+    return res.status(403).json({
+      success: false,
+      message: 'Your account is self-excluded from casino games.',
+      code: 'SELF_EXCLUDED'
+    });
+  }
+
+  // Cooling-off period check
+  if (user.responsibleGambling?.coolingOffPeriodEnd && new Date(user.responsibleGambling.coolingOffPeriodEnd) > new Date()) {
+    return res.status(403).json({
+      success: false,
+      message: `Your account is in cooling-off period until ${new Date(user.responsibleGambling.coolingOffPeriodEnd).toLocaleDateString()}.`,
+      code: 'COOLING_OFF'
+    });
+  }
+
+  // VIP level requirement (e.g., some games may require VIP level 1 or higher)
+  const requiredVipLevel = parseInt(process.env.CASINO_MIN_VIP_LEVEL || '0', 10);
+  if (user.vip?.level < requiredVipLevel) {
+    return res.status(403).json({
+      success: false,
+      message: `Casino games require VIP Level ${requiredVipLevel} or higher.`,
+      code: 'VIP_LEVEL_TOO_LOW'
+    });
+  }
+
+  // KYC requirement – some games may require KYC Level 1 (basic)
+  const requiredKycLevel = parseInt(process.env.CASINO_MIN_KYC_LEVEL || '1', 10);
+  if ((user.kycLevel || 0) < requiredKycLevel) {
+    return res.status(403).json({
+      success: false,
+      message: `Casino games require KYC Level ${requiredKycLevel} verification.`,
+      code: 'KYC_REQUIRED'
+    });
+  }
+
+  // Age verification (minimum age for casino play, typically 18)
+  const minAge = parseInt(process.env.CASINO_MIN_AGE || '18', 10);
+  if (user.dateOfBirth) {
+    const age = Math.floor((new Date().getTime() - new Date(user.dateOfBirth).getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+    if (age < minAge) {
+      return res.status(403).json({
+        success: false,
+        message: `You must be at least ${minAge} years old to play casino games.`,
+        code: 'UNDERAGE'
+      });
+    }
+  } else {
+    // If date of birth is not set, we may require it
+    return res.status(403).json({
+      success: false,
+      message: 'Date of birth is required to verify age for casino games.',
+      code: 'DOB_REQUIRED'
+    });
+  }
+
   return next();
 };
