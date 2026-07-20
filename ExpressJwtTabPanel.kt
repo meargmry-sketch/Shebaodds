@@ -70,7 +70,7 @@ fun ExpressJwtTabPanel() {
 
     var showJwtExpressTypes by remember { mutableStateOf(false) }
     var showExpressMiddleware by remember { mutableStateOf(false) }
-    
+
     var showNpmInstaller by remember { mutableStateOf(true) }
     var isNpmInstalling by remember { mutableStateOf(false) }
     var npmInstallProgress by remember { mutableStateOf(0f) }
@@ -162,9 +162,9 @@ fun ExpressJwtTabPanel() {
                         )
                     }
                 }
-                
+
                 Spacer(modifier = Modifier.height(8.dp))
-                
+
                 // Display Remaining countdown timer!
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -189,7 +189,7 @@ fun ExpressJwtTabPanel() {
                             fontFamily = FontFamily.Monospace
                         )
                     }
-                    
+
                     Column(horizontalAlignment = Alignment.End) {
                         Text(
                             text = "SIMULATION LEVEL",
@@ -283,9 +283,9 @@ fun ExpressJwtTabPanel() {
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                
+
                 Spacer(modifier = Modifier.height(6.dp))
-                
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -301,7 +301,7 @@ fun ExpressJwtTabPanel() {
                             pipelineLog.append("✅ Refresh Token Valid! Re-issued new access token:\n")
                             pipelineLog.append("Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MywidXNlcm5hbWUiOiJhZG1pbl90ZXN0Iiwicm9sZSI6ImFkbWluIn0.verified_signature\n\n")
                             pipelineLog.append("🎉 ACCESS GRANTED: Administrative session extended by 15 mins.")
-                            
+
                             refreshStatusLog = pipelineLog.toString()
                             jwtHeaderInput = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MywidXNlcm5hbWUiOiJhZG1pbl90ZXN0Iiwicm9sZSI6ImFkbWluIn0.verified_signature"
                             isIdleExpired = false
@@ -455,7 +455,7 @@ fun ExpressJwtTabPanel() {
             color = TextMuted
         )
         Spacer(modifier = Modifier.height(4.dp))
-        
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -473,7 +473,7 @@ fun ExpressJwtTabPanel() {
                     "user" -> jwtHeaderInput.contains("john") && !jwtHeaderInput.contains("BAD_SIGNATURE")
                     else -> jwtHeaderInput.contains("BAD_SIGNATURE")
                 }
-                
+
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -497,9 +497,9 @@ fun ExpressJwtTabPanel() {
                 }
             }
         }
-        
+
         Spacer(modifier = Modifier.height(10.dp))
-        
+
         Text(
             text = "HTTP AUTHORIZATION BEARER HEADER",
             fontSize = 8.sp,
@@ -537,7 +537,7 @@ fun ExpressJwtTabPanel() {
                     } else {
                         null
                     }
-                    
+
                     val pipelineLog = StringBuilder()
                     pipelineLog.append("🌐 HTTP REQUEST INTERCEPTED\n")
                     pipelineLog.append("--> $selectedExpressRoute\n\n")
@@ -611,7 +611,7 @@ fun ExpressJwtTabPanel() {
                         pipelineLog.append("✅ Guard Check Approved: User role Level ($userRoleLevel) satisfies route minimum level ($requiredRoleLevel).\n\n")
                         pipelineLog.append("🎉 PIPELINE RESOLVED: Downstream controller route matches!\n")
                         pipelineLog.append("✅ HTTP 200 OK\n")
-                        
+
                         val responseBody = when (selectedExpressRoute) {
                             "POST /bets/place" -> "{\n  \"success\": true,\n  \"message\": \"Wager accepted for user identity: $matchingId\"\n}"
                             "PUT /matches/:id/score" -> "{\n  \"success\": true,\n  \"message\": \"Match scoreline adjusted by administrative authorization.\"\n}"
@@ -646,7 +646,7 @@ fun ExpressJwtTabPanel() {
                 Text("Reset Route", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = TextLight)
             }
         }
-        
+
         Spacer(modifier = Modifier.height(10.dp))
         Text(
             text = "EXPRESS GATEWAY ROUTE RESPONSE SYSTEM LOG:",
@@ -655,7 +655,7 @@ fun ExpressJwtTabPanel() {
             color = TextMuted
         )
         Spacer(modifier = Modifier.height(4.dp))
-        
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -759,7 +759,7 @@ fun ExpressJwtTabPanel() {
                     fontFamily = FontFamily.Monospace,
                     modifier = Modifier.padding(vertical = 2.dp)
                 )
-                
+
                 if (isNpmInstalling) {
                     Spacer(modifier = Modifier.height(8.dp))
                     LinearProgressIndicator(
@@ -769,7 +769,7 @@ fun ExpressJwtTabPanel() {
                         trackColor = SlateSurfaceL2
                     )
                 }
-                
+
                 Spacer(modifier = Modifier.height(8.dp))
                 Box(
                     modifier = Modifier
@@ -815,7 +815,7 @@ fun ExpressJwtTabPanel() {
                         isNpmInstalling = true
                         npmInstallProgress = 0f
                         npmConsoleLog = listOf("[$] npm install express dotenv body-parser uuid")
-                        
+
                         val logSteps = listOf(
                             "--> npm warm: package.json missing name/version descriptor. Initializing spec...",
                             "--> resolving dependencies (direct & peer trees)...",
@@ -830,13 +830,13 @@ fun ExpressJwtTabPanel() {
                             "[SUCCESS] Installed packages mapped securely to node_modules/.",
                             "[SUCCESS] Registered 4 key production pipeline libraries inside package.json."
                         )
-                         
+
                         for (i in logSteps.indices) {
                             delay(250)
                             npmInstallProgress = (i + 1).toFloat() / logSteps.size
                             npmConsoleLog = npmConsoleLog + logSteps[i]
                         }
-                         
+
                         installedPackages = setOf("express", "dotenv", "body-parser", "uuid")
                         isNpmInstalling = false
                     }
@@ -1111,9 +1111,9 @@ fun ExpressJwtTabPanel() {
                         color = TextLight,
                         lineHeight = 10.5.sp
                     )
-                    
+
                     HorizontalDivider(color = BorderColor.copy(0.4f), thickness = 0.5.dp)
-                    
+
                     Text(
                         text = "🛡️ PIPELINE GUARD: authorizeRole",
                         color = NeonBlue,
