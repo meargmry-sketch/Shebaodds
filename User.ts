@@ -1,6 +1,7 @@
 // ============================================
 // SHEBAODDS - USER MODEL
 // Enterprise Grade User Schema
+// SUPPORTS: Sportsbook & Casino Games
 // ============================================
 
 import mongoose, { Schema, Document, Model } from 'mongoose';
@@ -22,12 +23,12 @@ export interface IUser extends Document {
   city?: string;
   address?: string;
   postalCode?: string;
-  
+
   language: string;
   theme: string;
   currency: string;
   timezone: string;
-  
+
   wallet: {
     balance: number;
     bonusBalance: number;
@@ -42,7 +43,7 @@ export interface IUser extends Document {
     totalBonusReceived: number;
     totalCashbackReceived: number;
   };
-  
+
   statistics: {
     totalBets: number;
     totalWins: number;
@@ -54,7 +55,7 @@ export interface IUser extends Document {
     biggestLoss: number;
     averageOdds: number;
   };
-  
+
   vip: {
     level: number;
     name: string;
@@ -65,7 +66,7 @@ export interface IUser extends Document {
     exclusivePromotions: boolean;
     fasterWithdrawals: boolean;
   };
-  
+
   taxProfile: {
     taxExempt: boolean;
     taxId?: string;
@@ -75,7 +76,7 @@ export interface IUser extends Document {
     totalWinningsTaxed: number;
     lastTaxCalculation?: Date;
   };
-  
+
   isActive: boolean;
   isAdmin: boolean;
   isVerified: boolean;
@@ -83,7 +84,7 @@ export interface IUser extends Document {
   isSuspended: boolean;
   suspensionReason?: string;
   suspensionEndDate?: Date;
-  
+
   kycDocuments: Array<{
     type: 'national_id' | 'passport' | 'drivers_license' | 'proof_of_address' | 'selfie';
     documentUrl?: string;
@@ -98,7 +99,7 @@ export interface IUser extends Document {
   }>;
   kycStatus: 'unverified' | 'pending' | 'verified' | 'rejected';
   kycLevel: number;
-  
+
   twoFactorEnabled: boolean;
   twoFactorSecret?: string;
   twoFactorBackupCodes?: string[];
@@ -108,7 +109,7 @@ export interface IUser extends Document {
   emailVerificationExpires?: Date;
   phoneVerificationCode?: string;
   phoneVerificationExpires?: Date;
-  
+
   loginAttempts: number;
   lockedUntil?: Date;
   lastLoginIP?: string;
@@ -118,16 +119,16 @@ export interface IUser extends Document {
     lat?: number;
     lng?: number;
   };
-  
+
   resetPasswordToken?: string;
   resetPasswordExpires?: Date;
-  
+
   referralCode?: string;
   referredBy?: mongoose.Types.ObjectId;
   referralCount: number;
   referralEarnings: number;
   referralTier: number;
-  
+
   responsibleGambling: {
     depositLimit: number;
     lossLimit: number;
@@ -139,7 +140,7 @@ export interface IUser extends Document {
     coolingOffPeriodEnd?: Date;
     lastRealityCheck?: Date;
   };
-  
+
   notifications: {
     email: boolean;
     push: boolean;
@@ -150,7 +151,7 @@ export interface IUser extends Document {
     systemUpdates: boolean;
     securityAlerts: boolean;
   };
-  
+
   devices: Array<{
     deviceId: string;
     deviceName?: string;
@@ -165,7 +166,7 @@ export interface IUser extends Document {
     lastUsed: Date;
     isActive: boolean;
   }>;
-  
+
   sessions: Array<{
     sessionId: string;
     ipAddress?: string;
@@ -175,7 +176,7 @@ export interface IUser extends Document {
     lastActivity: Date;
     expiresAt?: Date;
   }>;
-  
+
   savedPaymentMethods: Array<{
     type: 'tele_birr' | 'cbe' | 'card' | 'paypal' | 'crypto' | 'bank_transfer';
     identifier?: string;
@@ -185,7 +186,7 @@ export interface IUser extends Document {
     addedAt: Date;
     metadata?: any;
   }>;
-  
+
   bettingPreferences: {
     defaultStake: number;
     autoCashoutMultiplier: number;
@@ -193,20 +194,20 @@ export interface IUser extends Document {
     favoriteTeams: string[];
     excludedMarkets: string[];
   };
-  
+
   affiliate: {
     partnerId?: string;
     commissionRate: number;
     totalCommission: number;
     paidCommission: number;
   };
-  
+
   notes: Array<{
     note?: string;
     createdBy?: mongoose.Types.ObjectId;
     createdAt: Date;
   }>;
-  
+
   lastLogin?: Date;
   lastActive: Date;
   createdAt: Date;
@@ -281,13 +282,13 @@ const userSchema = new Schema<IUser, IUserModel>({
   city: { type: String },
   address: { type: String },
   postalCode: { type: String },
-  
+
   // Preferences
   language: { type: String, default: 'en', enum: ['en', 'am', 'ar', 'fr', 'es', 'de', 'it', 'pt', 'ru', 'zh'] },
   theme: { type: String, enum: ['light', 'dark'], default: 'dark' },
   currency: { type: String, default: 'ETB', enum: ['ETB', 'USD', 'EUR', 'GBP', 'BTC', 'ETH', 'USDT'] },
   timezone: { type: String, default: 'Africa/Addis_Ababa' },
-  
+
   // Wallet System - Complete
   wallet: {
     balance: { type: Number, default: 0, min: 0 },
@@ -303,7 +304,7 @@ const userSchema = new Schema<IUser, IUserModel>({
     totalBonusReceived: { type: Number, default: 0 },
     totalCashbackReceived: { type: Number, default: 0 }
   },
-  
+
   // Statistics
   statistics: {
     totalBets: { type: Number, default: 0 },
@@ -316,7 +317,7 @@ const userSchema = new Schema<IUser, IUserModel>({
     biggestLoss: { type: Number, default: 0 },
     averageOdds: { type: Number, default: 0 }
   },
-  
+
   // VIP & Loyalty (1xBet Style)
   vip: {
     level: { type: Number, default: 0, enum: [0, 1, 2, 3, 4, 5, 6, 7, 8] },
@@ -328,7 +329,7 @@ const userSchema = new Schema<IUser, IUserModel>({
     exclusivePromotions: { type: Boolean, default: false },
     fasterWithdrawals: { type: Boolean, default: false }
   },
-  
+
   // Tax Profile
   taxProfile: {
     taxExempt: { type: Boolean, default: false },
@@ -339,7 +340,7 @@ const userSchema = new Schema<IUser, IUserModel>({
     totalWinningsTaxed: { type: Number, default: 0 },
     lastTaxCalculation: { type: Date }
   },
-  
+
   // Account Status
   isActive: { type: Boolean, default: true, index: true },
   isAdmin: { type: Boolean, default: false, index: true },
@@ -348,7 +349,7 @@ const userSchema = new Schema<IUser, IUserModel>({
   isSuspended: { type: Boolean, default: false },
   suspensionReason: { type: String },
   suspensionEndDate: { type: Date },
-  
+
   // KYC Documents
   kycDocuments: [{
     type: { type: String, enum: ['national_id', 'passport', 'drivers_license', 'proof_of_address', 'selfie'] },
@@ -364,7 +365,7 @@ const userSchema = new Schema<IUser, IUserModel>({
   }],
   kycStatus: { type: String, enum: ['unverified', 'pending', 'verified', 'rejected'], default: 'unverified' },
   kycLevel: { type: Number, default: 0, enum: [0, 1, 2, 3] },
-  
+
   // Security
   twoFactorEnabled: { type: Boolean, default: false },
   twoFactorSecret: { type: String, select: false },
@@ -375,7 +376,7 @@ const userSchema = new Schema<IUser, IUserModel>({
   emailVerificationExpires: { type: Date },
   phoneVerificationCode: { type: String },
   phoneVerificationExpires: { type: Date },
-  
+
   // Login Security
   loginAttempts: { type: Number, default: 0 },
   lockedUntil: { type: Date },
@@ -386,18 +387,18 @@ const userSchema = new Schema<IUser, IUserModel>({
     lat: Number,
     lng: Number
   },
-  
+
   // Password Reset
   resetPasswordToken: { type: String },
   resetPasswordExpires: { type: Date },
-  
+
   // Referral System
   referralCode: { type: String, unique: true, sparse: true },
   referredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   referralCount: { type: Number, default: 0 },
   referralEarnings: { type: Number, default: 0 },
   referralTier: { type: Number, default: 1 },
-  
+
   // Responsible Gambling
   responsibleGambling: {
     depositLimit: { type: Number, default: 10000 },
@@ -410,7 +411,7 @@ const userSchema = new Schema<IUser, IUserModel>({
     coolingOffPeriodEnd: { type: Date },
     lastRealityCheck: { type: Date }
   },
-  
+
   // Notification Preferences
   notifications: {
     email: { type: Boolean, default: true },
@@ -422,7 +423,7 @@ const userSchema = new Schema<IUser, IUserModel>({
     systemUpdates: { type: Boolean, default: true },
     securityAlerts: { type: Boolean, default: true }
   },
-  
+
   // Device Management
   devices: [{
     deviceId: { type: String, required: true },
@@ -438,7 +439,7 @@ const userSchema = new Schema<IUser, IUserModel>({
     lastUsed: { type: Date, default: Date.now },
     isActive: { type: Boolean, default: true }
   }],
-  
+
   // Active Sessions
   sessions: [{
     sessionId: { type: String, required: true },
@@ -449,7 +450,7 @@ const userSchema = new Schema<IUser, IUserModel>({
     lastActivity: { type: Date, default: Date.now },
     expiresAt: { type: Date }
   }],
-  
+
   // Saved Payment Methods
   savedPaymentMethods: [{
     type: { type: String, enum: ['tele_birr', 'cbe', 'card', 'paypal', 'crypto', 'bank_transfer'] },
@@ -460,7 +461,7 @@ const userSchema = new Schema<IUser, IUserModel>({
     addedAt: { type: Date, default: Date.now },
     metadata: mongoose.Schema.Types.Mixed
   }],
-  
+
   // Betting Preferences
   bettingPreferences: {
     defaultStake: { type: Number, default: 10 },
@@ -469,7 +470,7 @@ const userSchema = new Schema<IUser, IUserModel>({
     favoriteTeams: [{ type: String }],
     excludedMarkets: [{ type: String }]
   },
-  
+
   // Affiliate/Partner Info
   affiliate: {
     partnerId: { type: String },
@@ -477,14 +478,14 @@ const userSchema = new Schema<IUser, IUserModel>({
     totalCommission: { type: Number, default: 0 },
     paidCommission: { type: Number, default: 0 }
   },
-  
+
   // Account Notes (Admin only)
   notes: [{
     note: { type: String },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     createdAt: { type: Date, default: Date.now }
   }],
-  
+
   // Timestamps
   lastLogin: { type: Date },
   lastActive: { type: Date, default: Date.now },
@@ -512,19 +513,19 @@ userSchema.index({ kycStatus: 1 });
 userSchema.pre('save', async function(next) {
   const user = this as any;
   if (!user.isModified('password')) return next();
-  
+
   const salt = await bcrypt.genSalt(12);
   const hashedPassword = await bcrypt.hash(user.password, salt);
-  
+
   if (!user.passwordHistory) {
     user.passwordHistory = [];
   }
-  
+
   user.passwordHistory.unshift(hashedPassword);
   if (user.passwordHistory.length > 5) {
     user.passwordHistory = user.passwordHistory.slice(0, 5);
   }
-  
+
   user.password = hashedPassword;
   next();
 });
@@ -601,7 +602,7 @@ userSchema.methods.updateVipLevel = function(): void {
   let newLevel = 0;
   let newName = 'Bronze';
   let cashback = 0;
-  
+
   if (totalWagered >= 1000000) { newLevel = 8; newName = 'Ambassador'; cashback = 25; }
   else if (totalWagered >= 500000) { newLevel = 7; newName = 'President'; cashback = 20; }
   else if (totalWagered >= 250000) { newLevel = 6; newName = 'Elite'; cashback = 15; }
@@ -610,7 +611,7 @@ userSchema.methods.updateVipLevel = function(): void {
   else if (totalWagered >= 20000) { newLevel = 3; newName = 'Gold'; cashback = 5; }
   else if (totalWagered >= 5000) { newLevel = 2; newName = 'Silver'; cashback = 3; }
   else { newLevel = 1; newName = 'Bronze'; cashback = 2; }
-  
+
   user.vip.level = newLevel;
   user.vip.name = newName;
   user.vip.cashbackPercentage = cashback;
