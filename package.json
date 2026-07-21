@@ -1,7 +1,7 @@
 {
   "name": "shebaodds-backend",
   "version": "3.0.0",
-  "description": "SHEBAODDS - Enterprise Betting Platform | Smart Bets. Real Wins.",
+  "description": "SHEBAODDS - Enterprise Betting Platform | Smart Bets. Real Wins. (Includes 51+ Casino Games & Telegram Bot)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -85,7 +85,8 @@
     "response-time": "^2.3.2",
     "express-brute": "^1.0.1",
     "express-brute-redis": "^0.0.6",
-    "csrf": "^3.1.0"
+    "csrf": "^3.1.0",
+    "telegraf": "^4.16.3"
   },
   "devDependencies": {
     "nodemon": "^3.0.1",
@@ -95,7 +96,9 @@
     "eslint-config-airbnb-base": "^15.0.0",
     "eslint-plugin-import": "^2.29.0",
     "prettier": "^3.1.0",
-    "faker": "^5.5.3"
+    "faker": "^5.5.3",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
   },
   "engines": {
     "node": ">=18.0.0",
