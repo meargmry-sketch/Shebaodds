@@ -1,0 +1,1234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <title>SHEBAODDS · Secure Ledger Hub</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏆</text></svg>" />
+    <style>
+        /* ============================================================
+           RESET & ROOT
+           ============================================================ */
+        * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+        :root {
+            --gold: #f5b342;
+            --gold-dim: rgba(245,179,66,0.12);
+            --gold-glow: rgba(245,179,66,0.25);
+            --bg: #0b0e14;
+            --card: #131c28;
+            --card-hover: #1a2538;
+            --border: #1e2a3a;
+            --text: #e8edf5;
+            --text-muted: #8a9bb5;
+            --radius: 14px;
+            --shadow: 0 8px 40px rgba(0,0,0,0.6);
+            --transition: 0.25s cubic-bezier(0.4,0,0.2,1);
+            --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            --red: #ef6b6b;
+            --green: #4caf84;
+            --blue: #64b5f6;
+        }
+        html, body { font-family:var(--font); background:var(--bg); color:var(--text); min-height:100vh; padding-bottom:80px; overflow-x:hidden; }
+        ::-webkit-scrollbar { width:3px; }
+        ::-webkit-scrollbar-track { background:var(--bg); }
+        ::-webkit-scrollbar-thumb { background:var(--gold); border-radius:10px; }
+
+        /* ============================================================
+           PREMIUM HEADER – SECURE LEDGER HUB
+           ============================================================ */
+        .top-strip {
+            background: var(--card);
+            padding: 4px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 10px;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border);
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+        .top-strip .lang {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+        .top-strip .lang span {
+            cursor: pointer;
+            font-weight: 600;
+            padding: 0 4px;
+            transition: 0.2s;
+        }
+        .top-strip .lang span.active { color: var(--gold); }
+        .top-strip .lang span:hover { color: var(--gold); }
+        .top-strip .eth-date { color: var(--text-muted); font-size: 9px; }
+
+        .secure-header {
+            background: linear-gradient(135deg, #0f1629 0%, #131c28 100%);
+            padding: 10px 16px 6px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .secure-header .brand {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 800;
+            font-size: 18px;
+            color: var(--gold);
+            letter-spacing: 0.5px;
+        }
+        .secure-header .brand small {
+            font-size: 8px;
+            font-weight: 400;
+            color: var(--text-muted);
+            letter-spacing: 1px;
+            background: var(--bg);
+            padding: 2px 8px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+        }
+        .secure-header .badge-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .secure-header .badge-group .ssl {
+            font-size: 8px;
+            font-weight: 700;
+            color: var(--green);
+            background: rgba(76,175,132,0.15);
+            padding: 2px 10px;
+            border-radius: 20px;
+            border: 1px solid var(--green);
+            letter-spacing: 1px;
+        }
+        .secure-header .badge-group .live-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--green);
+            display: inline-block;
+            animation: pulse-dot 1.8s infinite;
+        }
+        @keyframes pulse-dot { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+
+        /* ===== ANIMATED SPONSOR TICKER ===== */
+        .sponsor-ticker {
+            background: var(--card);
+            padding: 6px 0;
+            border-bottom: 1px solid var(--border);
+            overflow: hidden;
+            white-space: nowrap;
+            position: relative;
+        }
+        .sponsor-ticker .track {
+            display: inline-block;
+            animation: scrollSponsors 22s linear infinite;
+        }
+        .sponsor-ticker .track span {
+            display: inline-block;
+            margin: 0 24px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-muted);
+            letter-spacing: 0.5px;
+        }
+        .sponsor-ticker .track span .icon { margin-right: 4px; }
+        .sponsor-ticker .track span.gold { color: var(--gold); }
+        @keyframes scrollSponsors {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+
+        /* ===== BALANCE CARD (premium) ===== */
+        .balance-hero {
+            background: linear-gradient(135deg, #0f1629, #1a2440);
+            margin: 8px 16px 8px;
+            padding: 14px 18px;
+            border-radius: var(--radius);
+            border: 1px solid var(--gold);
+            box-shadow: 0 0 40px rgba(245,179,66,0.06);
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            position: relative;
+            overflow: hidden;
+        }
+        .balance-hero::before {
+            content: '';
+            position: absolute;
+            top: -60%;
+            right: -20%;
+            width: 200px;
+            height: 200px;
+            background: radial-gradient(circle, rgba(245,179,66,0.06), transparent 70%);
+            pointer-events: none;
+        }
+        .balance-hero .row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+        .balance-hero .label {
+            font-size: 10px;
+            color: var(--text-muted);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+        .balance-hero .amount {
+            font-size: 28px;
+            font-weight: 800;
+            color: var(--gold);
+            line-height: 1.2;
+        }
+        .balance-hero .amount .cur {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-muted);
+            margin-left: 4px;
+        }
+        .balance-hero .sub-info {
+            font-size: 11px;
+            color: var(--text-muted);
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .balance-hero .sub-info .val { color: var(--text); font-weight: 600; }
+        .balance-hero .sub-info .sec-badge {
+            background: rgba(76,175,132,0.12);
+            padding: 2px 10px;
+            border-radius: 20px;
+            font-size: 9px;
+            font-weight: 700;
+            color: var(--green);
+            border: 1px solid var(--green);
+        }
+
+        /* ============================================================
+           REST OF UI (Games, Sports, Aviator, etc.)
+           ============================================================ */
+        /* All the existing styles for games, nav, modals, bet slip, etc. */
+        /* (I will include them fully below) */
+
+        /* ===== SEARCH & CATEGORIES ===== */
+        .search-bar {
+            padding: 8px 16px;
+            background: var(--bg);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .search-bar input {
+            flex:1;
+            background:var(--card);
+            border:1px solid var(--border);
+            border-radius:30px;
+            padding:8px 16px;
+            color:var(--text);
+            outline:none;
+            font-size:13px;
+        }
+        .search-bar input:focus { border-color:var(--gold); }
+        .search-bar input::placeholder { color:var(--text-muted); }
+
+        .categories {
+            display:flex;
+            gap:6px;
+            padding:4px 16px 8px;
+            overflow-x:auto;
+            scrollbar-width:none;
+        }
+        .categories::-webkit-scrollbar { display:none; }
+        .categories .cat {
+            flex:0 0 auto;
+            padding:4px 14px;
+            border-radius:30px;
+            background:var(--card);
+            border:1px solid var(--border);
+            color:var(--text-muted);
+            font-size:11px;
+            font-weight:600;
+            cursor:pointer;
+            transition:var(--transition);
+            white-space:nowrap;
+        }
+        .categories .cat.active { background:var(--gold); color:#000; border-color:var(--gold); }
+        .categories .cat:active { transform:scale(0.94); }
+
+        /* ===== GAME GRID ===== */
+        .game-grid {
+            display:grid;
+            grid-template-columns:repeat(3,1fr);
+            gap:10px;
+            padding:0 16px 12px;
+        }
+        .game-item {
+            background:var(--card);
+            border-radius:var(--radius);
+            border:1px solid var(--border);
+            padding:12px 4px;
+            text-align:center;
+            cursor:pointer;
+            transition:var(--transition);
+            position:relative;
+        }
+        .game-item:hover { border-color:var(--gold); background:var(--card-hover); transform:translateY(-2px); }
+        .game-item:active { transform:scale(0.95); }
+        .game-item .icon { font-size:28px; display:block; }
+        .game-item .name { font-size:10px; font-weight:600; margin-top:2px; }
+        .game-item .provider { font-size:8px; color:var(--text-muted); }
+        .game-item .badge {
+            position:absolute;
+            top:4px;
+            right:4px;
+            font-size:7px;
+            background:var(--gold);
+            color:#000;
+            padding:1px 6px;
+            border-radius:8px;
+            font-weight:700;
+        }
+        .game-item .badge.hot { background:var(--red); color:#fff; }
+        .game-item .badge.live { background:var(--green); color:#fff; animation:pulse-dot 1.5s infinite; }
+
+        /* ===== BOTTOM NAV ===== */
+        .bottom-nav {
+            position:fixed;
+            bottom:0;
+            left:0;
+            right:0;
+            display:grid;
+            grid-template-columns:repeat(5,1fr);
+            background:rgba(11,14,20,0.96);
+            backdrop-filter:blur(20px);
+            border-top:1px solid var(--border);
+            padding:4px 0 8px;
+            z-index:100;
+        }
+        .bottom-nav .nav-item {
+            text-align:center;
+            cursor:pointer;
+            padding:2px 0;
+            border:none;
+            background:none;
+            color:var(--text-muted);
+            transition:var(--transition);
+            position:relative;
+        }
+        .bottom-nav .nav-item .icon { font-size:20px; display:block; }
+        .bottom-nav .nav-item .label { font-size:8px; font-weight:600; margin-top:1px; }
+        .bottom-nav .nav-item.active .label { color:var(--gold); }
+        .bottom-nav .nav-item .badge {
+            position:absolute;
+            top:-2px;
+            right:50%;
+            transform:translateX(50%);
+            background:var(--red);
+            color:#fff;
+            font-size:7px;
+            padding:1px 6px;
+            border-radius:10px;
+        }
+        .bottom-nav .nav-item:active { transform:scale(0.92); }
+
+        /* ===== TAB CONTENT ===== */
+        .tab-content { display:none; animation:fadeUp 0.3s ease; }
+        .tab-content.active { display:block; }
+        @keyframes fadeUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+
+        /* ===== SPORTSBOOK ===== */
+        .match-card {
+            background:var(--card);
+            margin:0 16px 8px;
+            border-radius:var(--radius);
+            border:1px solid var(--border);
+            padding:12px 14px;
+        }
+        .match-card .top { display:flex; justify-content:space-between; font-size:11px; color:var(--text-muted); margin-bottom:6px; }
+        .match-card .top .league { display:flex; gap:4px; align-items:center; }
+        .match-card .top .status.live { color:var(--red); font-weight:700; }
+        .match-card .top .status.live .dot { display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--red); animation:pulse-dot 1s infinite; margin-right:4px; }
+        .match-card .teams { display:flex; align-items:center; justify-content:space-between; font-weight:600; font-size:14px; margin-bottom:6px; }
+        .match-card .teams .score { color:var(--gold); font-size:18px; }
+        .match-card .market-select { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:4px 8px; color:var(--text); font-size:11px; margin-bottom:6px; width:100%; }
+        .match-card .odds-grid {
+            display:grid;
+            grid-template-columns:repeat(auto-fit, minmax(50px,1fr));
+            gap:4px;
+        }
+        .match-card .odds-grid .odd-btn {
+            background:var(--bg);
+            border:1px solid var(--border);
+            border-radius:8px;
+            padding:4px 2px;
+            text-align:center;
+            cursor:pointer;
+            transition:var(--transition);
+            font-weight:700;
+            font-size:13px;
+            color:var(--text);
+        }
+        .match-card .odds-grid .odd-btn .label { display:block; font-size:7px; font-weight:400; color:var(--text-muted); text-transform:uppercase; }
+        .match-card .odds-grid .odd-btn:hover { border-color:var(--gold); background:var(--gold-dim); }
+        .match-card .odds-grid .odd-btn.added { border-color:var(--green); background:rgba(76,175,132,0.15); }
+
+        /* ===== AVIATOR ===== */
+        .aviator-screen {
+            background:var(--card);
+            border-radius:var(--radius);
+            padding:16px;
+            margin:8px 16px;
+            border:1px solid var(--border);
+            text-align:center;
+        }
+        .aviator-screen .multiplier { font-size:48px; font-weight:800; color:var(--gold); transition:transform 0.1s; min-height:60px; }
+        .aviator-screen .history { display:flex; gap:4px; justify-content:center; flex-wrap:wrap; margin:8px 0; }
+        .aviator-screen .history .h-item { background:var(--bg); padding:2px 6px; border-radius:4px; font-size:11px; font-weight:600; color:var(--text-muted); }
+        .aviator-screen .history .h-item.win { color:var(--green); }
+        .aviator-screen .history .h-item.lose { color:var(--red); }
+        .aviator-screen .quick-bets { display:flex; gap:6px; justify-content:center; flex-wrap:wrap; margin:8px 0; }
+        .aviator-screen .quick-bets button { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:6px 12px; color:var(--text); font-weight:700; font-size:14px; cursor:pointer; }
+        .aviator-screen .quick-bets button:active { transform:scale(0.94); }
+        .aviator-screen .quick-bets button.max { background:var(--gold); color:#000; border-color:var(--gold); }
+        .aviator-screen .bet-input { display:flex; gap:8px; align-items:center; margin:8px 0; flex-wrap:wrap; justify-content:center; }
+        .aviator-screen .bet-input input { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:8px; color:var(--text); width:120px; text-align:center; font-size:16px; }
+        .aviator-screen .bet-input input:focus { border-color:var(--gold); }
+        .aviator-screen .play-btn { background:var(--gold); color:#000; border:none; border-radius:var(--radius); padding:10px 30px; font-weight:700; font-size:18px; cursor:pointer; margin:8px 0; }
+        .aviator-screen .play-btn:active { transform:scale(0.94); }
+        .aviator-screen .play-btn:disabled { opacity:0.5; cursor:not-allowed; }
+        .aviator-screen .auto-bet { display:flex; align-items:center; gap:12px; justify-content:center; margin:8px 0; font-size:13px; flex-wrap:wrap; }
+        .aviator-screen .auto-bet label { display:flex; align-items:center; gap:4px; color:var(--text-muted); }
+        .aviator-screen .auto-bet input[type="checkbox"] { accent-color:var(--gold); width:18px; height:18px; }
+        .aviator-screen .auto-bet input[type="number"] { width:60px; background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:4px; color:var(--text); text-align:center; }
+        .aviator-screen .result { font-weight:700; font-size:18px; min-height:30px; }
+        .aviator-screen .result.win { color:var(--green); }
+        .aviator-screen .result.lose { color:var(--red); }
+        .aviator-screen .bet-history { margin-top:12px; max-height:200px; overflow-y:auto; border-top:1px solid var(--border); padding-top:8px; }
+        .aviator-screen .bet-history table { width:100%; font-size:11px; border-collapse:collapse; }
+        .aviator-screen .bet-history th { color:var(--text-muted); font-weight:600; text-align:left; padding:4px 0; border-bottom:1px solid var(--border); }
+        .aviator-screen .bet-history td { padding:4px 0; border-bottom:1px solid var(--border); }
+
+        /* ===== BET SLIP ===== */
+        .bet-slip {
+            position:fixed;
+            bottom:56px;
+            left:0;
+            right:0;
+            background:var(--card);
+            border-top:2px solid var(--gold);
+            padding:10px 16px;
+            max-height:50vh;
+            overflow-y:auto;
+            z-index:99;
+            display:none;
+            border-radius:var(--radius) var(--radius) 0 0;
+        }
+        .bet-slip.show { display:block; }
+        .bet-slip .header { display:flex; justify-content:space-between; font-weight:700; color:var(--gold); margin-bottom:6px; }
+        .bet-slip .header .clear { color:var(--red); cursor:pointer; font-size:12px; }
+        .bet-slip .selection { display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid var(--border); font-size:12px; }
+        .bet-slip .selection .remove { color:var(--red); cursor:pointer; margin-left:8px; font-weight:700; }
+        .bet-slip .total { display:flex; justify-content:space-between; padding:8px 0; font-weight:700; border-top:2px solid var(--border); margin-top:4px; }
+        .bet-slip .stake-row { display:flex; gap:8px; align-items:center; margin:8px 0; flex-wrap:wrap; }
+        .bet-slip .stake-row input { flex:1; padding:8px; border-radius:var(--radius); border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:14px; min-width:80px; }
+        .bet-slip .place-btn { width:100%; padding:10px; background:var(--gold); color:#000; border:none; border-radius:var(--radius); font-weight:700; font-size:16px; cursor:pointer; }
+
+        /* ===== MODALS ===== */
+        .modal-overlay {
+            display:none;
+            position:fixed;
+            inset:0;
+            background:rgba(0,0,0,0.85);
+            backdrop-filter:blur(12px);
+            z-index:200;
+            padding:20px;
+            align-items:center;
+            justify-content:center;
+        }
+        .modal-overlay.active { display:flex; }
+        .modal-content {
+            background:var(--card);
+            border-radius:var(--radius);
+            padding:24px 20px;
+            max-width:420px;
+            width:100%;
+            max-height:90vh;
+            overflow-y:auto;
+            border:1px solid var(--border);
+            position:relative;
+        }
+        .modal-content .close {
+            position:absolute;
+            top:8px;
+            right:14px;
+            font-size:24px;
+            color:var(--text-muted);
+            cursor:pointer;
+            background:none;
+            border:none;
+        }
+        .modal-content h2 { color:var(--gold); text-align:center; margin-bottom:12px; }
+        .modal-content .input-group { margin:8px 0; }
+        .modal-content .input-group label { display:block; font-size:11px; color:var(--text-muted); margin-bottom:2px; }
+        .modal-content .input-group input, .modal-content .input-group select {
+            width:100%; padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text);
+        }
+        .modal-content .btn-confirm { width:100%; padding:10px; background:var(--gold); color:#000; border:none; border-radius:8px; font-weight:700; cursor:pointer; margin-top:8px; }
+
+        /* ===== MY BETS ===== */
+        .bet-item {
+            background:var(--card);
+            margin:0 16px 6px;
+            padding:10px 14px;
+            border-radius:var(--radius);
+            border:1px solid var(--border);
+            display:flex; justify-content:space-between; align-items:center;
+        }
+        .bet-item .info .match { font-weight:600; font-size:13px; }
+        .bet-item .info .detail { font-size:10px; color:var(--text-muted); }
+        .bet-item .status { font-size:10px; font-weight:700; padding:2px 12px; border-radius:20px; }
+        .bet-item .status.won { background:var(--green); color:#fff; }
+        .bet-item .status.lost { background:var(--red); color:#fff; }
+        .bet-item .status.pending { background:#f39c12; color:#fff; }
+
+        /* ===== WALLET ===== */
+        .wallet-card {
+            background:var(--card);
+            margin:0 16px 10px;
+            padding:16px;
+            border-radius:var(--radius);
+            border:1px solid var(--border);
+        }
+        .wallet-card .row { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid var(--border); font-size:13px; }
+        .wallet-card .row:last-child { border-bottom:none; }
+        .wallet-card .row .val.gold { color:var(--gold); }
+        .wallet-card .row .val.green { color:var(--green); }
+        .wallet-card .row .val.red { color:var(--red); }
+
+        .empty-state { padding:40px; text-align:center; color:var(--text-muted); }
+
+        /* ===== RESPONSIVE ===== */
+        @media (max-width:480px) {
+            .game-grid { grid-template-columns:repeat(3,1fr); gap:6px; }
+            .game-item .icon { font-size:24px; }
+            .game-item .name { font-size:9px; }
+            .balance-hero .amount { font-size:24px; }
+            .secure-header .brand { font-size:16px; }
+            .top-strip { font-size:9px; }
+        }
+        @media (min-width:768px) {
+            .game-grid { grid-template-columns:repeat(4,1fr); gap:14px; padding:0 32px; }
+            .match-card { margin:0 32px 10px; }
+            .aviator-screen { margin:8px 32px; }
+            .balance-hero { margin:8px 32px; padding:18px 24px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ============================================================
+         PREMIUM HEADER – SECURE LEDGER HUB
+         ============================================================ -->
+    <div class="top-strip">
+        <span id="liveTimestamp">GC: Jul 21, 2026 • 12:00:00</span>
+        <span class="lang">
+            <span class="active" onclick="setLang('en',this)">EN</span>
+            <span onclick="setLang('fr',this)">FR</span>
+            <span onclick="setLang('de',this)">DE</span>
+        </span>
+        <span class="eth-date" id="ethiopianDate">Sene 25, 2018 E.C. • 4H: 00 Day</span>
+    </div>
+
+    <header class="secure-header">
+        <div class="brand">
+            🏆 SHEBA<span style="color:var(--text);">ODDS</span>
+            <small>SECURE LEDGER HUB</small>
+        </div>
+        <div class="badge-group">
+            <span class="ssl">🔒 SSL ENCRYPTED</span>
+            <span class="live-dot"></span>
+        </div>
+    </header>
+
+    <!-- ===== ANIMATED SPONSOR TICKER ===== -->
+    <div class="sponsor-ticker">
+        <div class="track" id="sponsorTrack">
+            <span>⭐ <span class="gold">BetKing</span> · Platinum Partner</span>
+            <span>⚡ <span class="gold">Telebirr</span> · Official Payment</span>
+            <span>🏦 <span class="gold">CBE</span> · Banking Partner</span>
+            <span>🎯 <span class="gold">Dashen</span> · Premium Sponsor</span>
+            <span>🚀 <span class="gold">Ethio Telecom</span> · Connectivity</span>
+            <!-- Duplicate for seamless loop -->
+            <span>⭐ <span class="gold">BetKing</span> · Platinum Partner</span>
+            <span>⚡ <span class="gold">Telebirr</span> · Official Payment</span>
+            <span>🏦 <span class="gold">CBE</span> · Banking Partner</span>
+            <span>🎯 <span class="gold">Dashen</span> · Premium Sponsor</span>
+            <span>🚀 <span class="gold">Ethio Telecom</span> · Connectivity</span>
+        </div>
+    </div>
+
+    <!-- ===== BALANCE HERO CARD ===== -->
+    <div class="balance-hero">
+        <div class="row">
+            <span class="label">AVAILABLE BALANCE</span>
+            <span class="sec-badge">🔐 SECURED</span>
+        </div>
+        <div class="row">
+            <span class="amount" id="heroBalance">10.00 <span class="cur">ETB</span></span>
+            <span style="font-size:12px;color:var(--text-muted);">+ <span id="heroBonus">0.00</span> bonus</span>
+        </div>
+        <div class="sub-info">
+            <span>📊 Total Wagered: <span class="val" id="heroWagered">0.00</span> ETB</span>
+            <span>🏆 VIP: <span class="val gold" id="heroVip">Bronze</span></span>
+        </div>
+    </div>
+
+    <!-- ============================================================
+         SEARCH & CATEGORIES
+         ============================================================ -->
+    <div class="search-bar">
+        <input type="text" id="searchInput" placeholder="Search games..." oninput="filterGames()" />
+    </div>
+    <div class="categories" id="categoryTabs">
+        <span class="cat active" data-cat="all" onclick="filterCategory('all',this)">All</span>
+        <span class="cat" data-cat="popular" onclick="filterCategory('popular',this)">🔥 Popular</span>
+        <span class="cat" data-cat="crash" onclick="filterCategory('crash',this)">💥 Crash</span>
+        <span class="cat" data-cat="mines" onclick="filterCategory('mines',this)">💣 Mines</span>
+        <span class="cat" data-cat="plinko" onclick="filterCategory('plinko',this)">🔴 Plinko</span>
+        <span class="cat" data-cat="card" onclick="filterCategory('card',this)">🃏 Card</span>
+        <span class="cat" data-cat="dice" onclick="filterCategory('dice',this)">🎲 Dice</span>
+        <span class="cat" data-cat="arcade" onclick="filterCategory('arcade',this)">🎯 Arcade</span>
+        <span class="cat" data-cat="virtual" onclick="filterCategory('virtual',this)">🏇 Virtual</span>
+        <span class="cat" data-cat="promo" onclick="filterCategory('promo',this)">🎁 Promo</span>
+    </div>
+
+    <!-- ============================================================
+         TABS
+         ============================================================ -->
+    <!-- HOME (Games) -->
+    <div id="tab-home" class="tab-content active">
+        <div class="game-grid" id="gameGrid"></div>
+    </div>
+
+    <!-- AVIATOR -->
+    <div id="tab-aviator" class="tab-content">
+        <div class="aviator-screen">
+            <div class="multiplier" id="aviatorMultiplier">1.00x</div>
+            <div class="history" id="aviatorHistory"></div>
+            <div class="quick-bets">
+                <button onclick="quickBetAviator(4)">4</button>
+                <button onclick="quickBetAviator(16)">16</button>
+                <button onclick="quickBetAviator(80)">80</button>
+                <button class="max" onclick="quickBetAviator('max')">MAX</button>
+            </div>
+            <div class="bet-input">
+                <input type="number" id="aviatorBet" placeholder="Bet ETB" min="1" value="4" />
+                <button class="play-btn" id="aviatorPlayBtn" onclick="playAviator()">🚀 Bet</button>
+            </div>
+            <div class="auto-bet">
+                <label><input type="checkbox" id="autoBetCheck" /> Auto</label>
+                <label>Cash out at <input type="number" id="autoTarget" value="2.00" step="0.1" min="1.1" />x</label>
+                <label>Rounds <input type="number" id="autoRounds" value="5" min="1" max="50" /></label>
+            </div>
+            <div class="result" id="aviatorResult"></div>
+            <div class="bet-history">
+                <table>
+                    <thead><tr><th>Player</th><th>Bet</th><th>Win</th></tr></thead>
+                    <tbody id="aviatorHistoryTable"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- SPORTSBOOK -->
+    <div id="tab-sports" class="tab-content">
+        <div id="sportsContainer"></div>
+    </div>
+
+    <!-- MY BETS -->
+    <div id="tab-mybets" class="tab-content">
+        <div id="myBetsContainer"><div class="empty-state">📭 No bets yet</div></div>
+    </div>
+
+    <!-- WALLET -->
+    <div id="tab-wallet" class="tab-content">
+        <div class="wallet-card">
+            <div class="row"><span>Balance</span><span class="val gold" id="walletBalance">ETB 10.00</span></div>
+            <div class="row"><span>Total Deposited</span><span class="val green" id="walletDeposits">ETB 0.00</span></div>
+            <div class="row"><span>Total Withdrawn</span><span class="val red" id="walletWithdrawals">ETB 0.00</span></div>
+            <div class="row"><span>Bonus</span><span class="val gold" id="walletBonus">ETB 0.00</span></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 16px;">
+            <button class="btn-confirm" onclick="openDeposit()">📥 Deposit</button>
+            <button class="btn-confirm" onclick="openWithdraw()" style="background:var(--red);color:#fff;">📤 Withdraw</button>
+        </div>
+        <div id="transactionHistory" style="padding:0 16px;margin-top:12px;"></div>
+    </div>
+
+    <!-- ===== BET SLIP ===== -->
+    <div class="bet-slip" id="betSlip">
+        <div class="header"><span>📋 Bet Slip</span><span class="clear" onclick="clearSlip()">Clear All</span></div>
+        <div id="slipSelections"></div>
+        <div class="total"><span>Total Odds</span><span class="odds" id="slipOdds">0.00</span></div>
+        <div class="stake-row">
+            <input type="number" id="slipStake" placeholder="Stake" min="1" />
+            <span style="font-size:12px;color:var(--text-muted);">Win: <span id="slipPotential">0.00</span> ETB</span>
+        </div>
+        <button class="place-btn" onclick="placeSlipBet()">🚀 Place Bet</button>
+    </div>
+
+    <!-- ===== BOTTOM NAV ===== -->
+    <nav class="bottom-nav">
+        <button class="nav-item active" onclick="switchTab('home',this)"><span class="icon">🏠</span><span class="label">Home</span></button>
+        <button class="nav-item" onclick="switchTab('sports',this)"><span class="icon">⚽</span><span class="label">Sports</span></button>
+        <button class="nav-item" onclick="switchTab('aviator',this)"><span class="icon">✈️</span><span class="label">Aviator</span></button>
+        <button class="nav-item" onclick="switchTab('mybets',this)"><span class="icon">📋</span><span class="label">My Bets</span><span class="badge" id="betCountBadge">0</span></button>
+        <button class="nav-item" onclick="switchTab('wallet',this)"><span class="icon">💰</span><span class="label">Wallet</span></button>
+    </nav>
+
+    <!-- ============================================================
+         MODALS
+         ============================================================ -->
+    <!-- Deposit -->
+    <div class="modal-overlay" id="depositModal">
+        <div class="modal-content">
+            <button class="close" onclick="closeDeposit()">✕</button>
+            <h2>💰 Deposit</h2>
+            <div style="background:var(--bg);padding:12px;border-radius:8px;text-align:center;margin-bottom:12px;">
+                <div style="font-size:10px;color:var(--text-muted);">Send payment to</div>
+                <div style="font-weight:700;color:var(--gold);font-size:20px;">+251 962 692 606</div>
+                <div style="font-size:10px;color:var(--text-muted);">Telebirr · CBE · Dashen</div>
+            </div>
+            <div class="input-group"><label>Amount (min 10 ETB)</label><input type="number" id="depositAmount" min="10" /></div>
+            <div class="input-group"><label>Transaction ID</label><input type="text" id="depositTicket" placeholder="e.g. DGA0P5KUKK" /></div>
+            <div class="input-group"><label>Method</label><select id="depositMethod"><option value="telebirr">📱 Telebirr</option><option value="cbe">🏦 CBE</option></select></div>
+            <button class="btn-confirm" onclick="submitDeposit()">Submit</button>
+        </div>
+    </div>
+
+    <!-- Withdraw -->
+    <div class="modal-overlay" id="withdrawModal">
+        <div class="modal-content">
+            <button class="close" onclick="closeWithdraw()">✕</button>
+            <h2>💸 Withdraw</h2>
+            <div style="background:var(--bg);padding:12px;border-radius:8px;text-align:center;margin-bottom:12px;">
+                <div style="font-size:11px;color:var(--text-muted);">Available</div>
+                <div style="font-size:22px;font-weight:700;color:var(--gold);" id="withdrawBalance">ETB 10.00</div>
+            </div>
+            <div class="input-group"><label>Amount (min 20 ETB)</label><input type="number" id="withdrawAmount" min="20" /></div>
+            <div class="input-group"><label>Method</label><select id="withdrawMethod"><option value="telebirr">📱 Telebirr</option><option value="cbe">🏦 CBE</option></select></div>
+            <div class="input-group"><label>Account / Phone</label><input type="text" id="withdrawAccount" placeholder="Enter account" /></div>
+            <div class="input-group"><label>Account Holder</label><input type="text" id="withdrawName" placeholder="Full name" /></div>
+            <button class="btn-confirm" onclick="submitWithdraw()" style="background:var(--red);color:#fff;">Confirm</button>
+        </div>
+    </div>
+
+    <script>
+        // ============================================================
+        //  DATA: 52 GAMES
+        // ============================================================
+        const GAME_LIST = [
+            { id: 'aviator', icon: '✈️', name: 'Aviator', category: 'popular', badge: 'hot' },
+            { id: 'crash', icon: '💥', name: 'Crash', category: 'popular' },
+            { id: 'penalty', icon: '⚽', name: 'Penalty', category: 'popular', badge: 'hot' },
+            { id: 'chicken', icon: '🐔', name: 'Chicken Road', category: 'popular' },
+            { id: 'mines', icon: '💣', name: 'Mines', category: 'mines' },
+            { id: 'mineslot2', icon: '🎰', name: 'Mine Slot 2', category: 'mines' },
+            { id: 'hotmines', icon: '🔥', name: 'Hot Mines', category: 'mines' },
+            { id: 'luckymines', icon: '🍀', name: 'Lucky Mines', category: 'mines' },
+            { id: 'miner', icon: '⛏️', name: 'Miner', category: 'mines' },
+            { id: 'plinko', icon: '🔴', name: 'Plinko', category: 'plinko' },
+            { id: 'plinko1000', icon: '🔴', name: 'Plinko 1000', category: 'plinko' },
+            { id: 'aztecplinko', icon: '🌄', name: 'Aztec Plinko', category: 'plinko' },
+            { id: 'blackjack', icon: '🃏', name: 'Blackjack', category: 'card' },
+            { id: 'poker', icon: '♠️', name: 'Poker', category: 'card' },
+            { id: 'baccarat', icon: '🎴', name: 'Baccarat', category: 'card' },
+            { id: 'war', icon: '⚔️', name: 'War', category: 'card' },
+            { id: 'hi_lo', icon: '🔼', name: 'High-Low', category: 'card' },
+            { id: 'jokerpoker', icon: '🃏', name: 'Joker Poker', category: 'card' },
+            { id: 'dice', icon: '🎲', name: 'Dice', category: 'dice' },
+            { id: 'craps', icon: '🎲', name: 'Craps', category: 'dice' },
+            { id: 'sic_bo', icon: '🎲', name: 'Sic Bo', category: 'dice' },
+            { id: 'robodice', icon: '🤖', name: 'Robo Dice', category: 'dice' },
+            { id: 'slots', icon: '🎰', name: 'Slots', category: 'arcade' },
+            { id: 'roulette', icon: '🎯', name: 'Roulette', category: 'arcade' },
+            { id: 'wheel', icon: '🎡', name: 'Wheel', category: 'arcade' },
+            { id: 'keno', icon: '🎱', name: 'Keno', category: 'arcade' },
+            { id: 'bingo', icon: '🎯', name: 'Bingo', category: 'arcade' },
+            { id: 'rockpaperscissors', icon: '✊', name: 'Rock Paper Scissors', category: 'arcade' },
+            { id: 'jumper', icon: '🏃', name: 'Jumper', category: 'arcade' },
+            { id: 'tower', icon: '🏰', name: 'Tower', category: 'arcade' },
+            { id: 'triple', icon: '3️⃣', name: 'Triple', category: 'arcade' },
+            { id: 'chickenshoot', icon: '🐔', name: 'Chicken Shoot', category: 'arcade' },
+            { id: 'greyhound', icon: '🐕', name: 'Greyhound Racing', category: 'virtual' },
+            { id: 'formula7', icon: '🏎️', name: 'Formula 7', category: 'virtual' },
+            { id: 'cricketroad', icon: '🏏', name: 'Cricket Road', category: 'virtual' },
+            { id: 'cryptos', icon: '🪙', name: 'Cryptos', category: 'virtual' },
+            { id: 'freespins', icon: '🎁', name: 'Free Spins', category: 'promo', badge: 'live' },
+            { id: 'bonuswheel', icon: '🎡', name: 'Bonus Wheel', category: 'promo' },
+            { id: 'dragonwealth', icon: '🐉', name: 'Dragon Wealth', category: 'promo' },
+            { id: '15dragonpearls', icon: '🐉', name: '15 Dragon Pearls', category: 'promo' },
+            { id: 'chickenroadvegas', icon: '🐔', name: 'Chicken Road Vegas', category: 'popular' },
+            { id: 'chickenvszombies', icon: '🧟', name: 'Chicken vs Zombies', category: 'popular' },
+            { id: 'coinflip', icon: '🪙', name: 'Coin Flip', category: 'arcade' },
+            { id: 'diver', icon: '🤿', name: 'Diver', category: 'arcade' },
+            { id: 'rabbitroad', icon: '🐇', name: 'Rabbit Road', category: 'arcade' },
+            { id: 'twist', icon: '🌀', name: 'Twist', category: 'arcade' },
+            { id: 'fishboom', icon: '🐟', name: 'Fish Boom', category: 'arcade' },
+            { id: 'goblintower', icon: '👹', name: 'Goblin Tower', category: 'arcade' },
+            { id: 'limbo', icon: '🌀', name: 'Limbo', category: 'arcade' },
+            { id: 'sugardaddy', icon: '🍭', name: 'Sugar Daddy', category: 'arcade' },
+            { id: 'sweetkeno', icon: '🍬', name: 'Sweet Keno', category: 'arcade' },
+            { id: 'mineslot', icon: '🎰', name: 'Mine Slot', category: 'mines' },
+        ];
+
+        // ============================================================
+        //  STATE
+        // ============================================================
+        let balance = 10.00;
+        let totalWagered = 0;
+        let bonusEarned = 0;
+        let betSlipSelections = [];
+        let slipTotalOdds = 0;
+        let allBets = [];
+        let txHistory = [];
+        let depositHistory = [];
+        let aviatorHistory = [];
+        let aviatorRunning = false;
+
+        // ============================================================
+        //  INIT
+        // ============================================================
+        renderGames('all');
+        renderSports();
+        updateUI();
+        updateClockAndDate();
+
+        // Telegram WebApp
+        if (window.Telegram && Telegram.WebApp) {
+            Telegram.WebApp.ready();
+            Telegram.WebApp.expand();
+            const user = Telegram.WebApp.initDataUnsafe?.user;
+            Telegram.WebApp.onEvent('data', function(data) {
+                try {
+                    const msg = JSON.parse(data);
+                    if (msg.action === 'bet_approved') {
+                        const bet = allBets.find(b => b.id === msg.ticket);
+                        if (bet && bet.status === 'pending') {
+                            if (bet.stake > balance) { alert('Insufficient balance'); return; }
+                            balance -= bet.stake;
+                            totalWagered += bet.stake;
+                            bet.status = 'approved';
+                            updateUI();
+                            renderMyBets();
+                            setTimeout(() => {
+                                const won = Math.random() > 0.45;
+                                bet.status = won ? 'won' : 'lost';
+                                if (won) {
+                                    balance += bet.potentialWin;
+                                    txHistory.push({ type: 'win', amount: bet.potentialWin, desc: 'Won: ' + bet.match });
+                                } else {
+                                    txHistory.push({ type: 'loss', amount: 0, desc: 'Lost: ' + bet.match });
+                                }
+                                updateUI();
+                                renderMyBets();
+                                renderTxHistory();
+                                alert(won ? '🎉 You won ETB ' + bet.potentialWin.toFixed(2) : '💔 You lost');
+                            }, 2000);
+                        }
+                    } else if (msg.action === 'deposit_approved') {
+                        const dep = depositHistory.find(d => d.ticket === msg.ticket);
+                        if (dep) {
+                            dep.status = 'approved';
+                            balance += dep.amount;
+                            txHistory.push({ type: 'deposit', amount: dep.amount, desc: 'Deposit approved' });
+                            updateUI();
+                            renderTxHistory();
+                            alert('✅ Deposit approved!');
+                        }
+                    } else if (msg.action === 'deposit_rejected') {
+                        const dep = depositHistory.find(d => d.ticket === msg.ticket);
+                        if (dep) { dep.status = 'rejected'; alert('❌ Deposit rejected'); }
+                    }
+                } catch(e) { console.log('WebApp data error', e); }
+            });
+        }
+
+        // ============================================================
+        //  HELPERS
+        // ============================================================
+        function setLang(lang, el) {
+            document.querySelectorAll('.top-strip .lang span').forEach(s => s.classList.remove('active'));
+            el.classList.add('active');
+        }
+
+        function updateClockAndDate() {
+            const now = new Date();
+            const h = String(now.getHours()).padStart(2,'0');
+            const m = String(now.getMinutes()).padStart(2,'0');
+            const s = String(now.getSeconds()).padStart(2,'0');
+            document.getElementById('liveTimestamp').textContent = `GC: Jul 21, 2026 • ${h}:${m}:${s}`;
+            // Ethiopian date (mock)
+            document.getElementById('ethiopianDate').textContent = `Sene 25, 2018 E.C. • 4H: ${h}:${m} Day`;
+        }
+        setInterval(updateClockAndDate, 1000);
+
+        function getVipLevel(bal) {
+            if (bal >= 10000) return '👑 Diamond';
+            if (bal >= 5000) return '💎 Platinum';
+            if (bal >= 2000) return '🥇 Gold';
+            if (bal >= 500) return '🥈 Silver';
+            return '💰 Bronze';
+        }
+
+        function updateUI() {
+            document.getElementById('heroBalance').innerHTML = balance.toFixed(2) + ' <span class="cur">ETB</span>';
+            document.getElementById('heroBonus').textContent = bonusEarned.toFixed(2);
+            document.getElementById('heroWagered').textContent = totalWagered.toFixed(2);
+            document.getElementById('heroVip').textContent = getVipLevel(balance);
+            document.getElementById('walletBalance').textContent = 'ETB ' + balance.toFixed(2);
+            document.getElementById('withdrawBalance').textContent = 'ETB ' + balance.toFixed(2);
+            const totalDep = txHistory.filter(t => t.type === 'deposit').reduce((s, t) => s + (t.amount || 0), 0);
+            const totalWd = txHistory.filter(t => t.type === 'withdraw').reduce((s, t) => s + Math.abs(t.amount || 0), 0);
+            const totalBonus = txHistory.filter(t => t.type === 'bonus').reduce((s, t) => s + (t.amount || 0), 0);
+            document.getElementById('walletDeposits').textContent = 'ETB ' + totalDep.toFixed(2);
+            document.getElementById('walletWithdrawals').textContent = 'ETB ' + totalWd.toFixed(2);
+            document.getElementById('walletBonus').textContent = 'ETB ' + totalBonus.toFixed(2);
+            document.getElementById('betCountBadge').textContent = allBets.filter(b => b.status === 'pending' || b.status === 'approved').length;
+        }
+
+        // ============================================================
+        //  GAMES
+        // ============================================================
+        function renderGames(category) {
+            const grid = document.getElementById('gameGrid');
+            const filtered = category === 'all' ? GAME_LIST : GAME_LIST.filter(g => g.category === category);
+            grid.innerHTML = filtered.map(g => `
+                <div class="game-item" onclick="playGame('${g.id}')">
+                    ${g.badge ? `<span class="badge ${g.badge}">${g.badge.toUpperCase()}</span>` : ''}
+                    <span class="icon">${g.icon}</span>
+                    <span class="name">${g.name}</span>
+                    <span class="provider">${g.category}</span>
+                </div>
+            `).join('');
+        }
+
+        function filterCategory(cat, el) {
+            document.querySelectorAll('.categories .cat').forEach(c => c.classList.remove('active'));
+            el.classList.add('active');
+            renderGames(cat);
+        }
+
+        function filterGames() {
+            const q = document.getElementById('searchInput').value.toLowerCase();
+            document.querySelectorAll('.game-item').forEach(item => {
+                const name = item.querySelector('.name').textContent.toLowerCase();
+                item.style.display = name.includes(q) ? '' : 'none';
+            });
+        }
+
+        function playGame(gameId) {
+            if (gameId === 'aviator') { switchTab('aviator', document.querySelector('.bottom-nav .nav-item:nth-child(3)')); return; }
+            const bet = prompt(`Enter bet amount for ${gameId} (min 1 ETB):`);
+            if (bet === null) return;
+            const amount = parseFloat(bet);
+            if (isNaN(amount) || amount < 1) { alert('Min bet is 1 ETB'); return; }
+            if (amount > balance) { alert('Insufficient balance'); return; }
+            const winMultiplier = Math.random() > 0.5 ? (Math.random() * 5 + 1) : 0;
+            const winnings = winMultiplier > 0 ? Math.round(amount * winMultiplier) : 0;
+            if (winMultiplier > 0) {
+                balance += winnings;
+                txHistory.push({ type: 'win', amount: winnings, desc: 'Won at ' + gameId });
+                alert(`🎉 You won ETB ${winnings}!`);
+            } else {
+                balance -= amount;
+                totalWagered += amount;
+                txHistory.push({ type: 'loss', amount: 0, desc: 'Lost at ' + gameId });
+                alert('💔 You lost!');
+            }
+            updateUI();
+            renderMyBets();
+            renderTxHistory();
+            if (window.Telegram && Telegram.WebApp) {
+                Telegram.WebApp.sendData(JSON.stringify({ action: 'play_game', game: gameId, bet: amount, result: winMultiplier > 0 ? 'win' : 'loss', winnings: winnings }));
+            }
+        }
+
+        // ============================================================
+        //  AVIATOR
+        // ============================================================
+        function quickBetAviator(val) {
+            const input = document.getElementById('aviatorBet');
+            if (val === 'max') input.value = Math.floor(balance);
+            else input.value = val;
+        }
+
+        function playAviator() {
+            if (aviatorRunning) return;
+            const bet = parseFloat(document.getElementById('aviatorBet').value);
+            if (!bet || bet < 1) { alert('Min bet is 1 ETB'); return; }
+            if (bet > balance) { alert('Insufficient balance'); return; }
+            aviatorRunning = true;
+            const btn = document.getElementById('aviatorPlayBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ Flying...';
+            const resultEl = document.getElementById('aviatorResult');
+            resultEl.textContent = '';
+            resultEl.className = 'result';
+            let multiplier = 1.00;
+            const interval = setInterval(() => {
+                multiplier += 0.05 + Math.random() * 0.15;
+                multiplier = Math.round(multiplier * 100) / 100;
+                document.getElementById('aviatorMultiplier').textContent = multiplier.toFixed(2) + 'x';
+                if (document.getElementById('autoBetCheck').checked) {
+                    const target = parseFloat(document.getElementById('autoTarget').value);
+                    if (multiplier >= target) {
+                        clearInterval(interval);
+                        cashOutAviator(multiplier, bet);
+                        return;
+                    }
+                }
+            }, 100);
+            const crashTime = 2000 + Math.random() * 6000;
+            const crashMultiplier = 1.5 + Math.random() * 8;
+            setTimeout(() => {
+                clearInterval(interval);
+                if (multiplier >= crashMultiplier) {
+                    balance -= bet;
+                    totalWagered += bet;
+                    aviatorHistory.push({ multiplier: crashMultiplier, win: false, bet: bet });
+                    resultEl.textContent = `💥 Crashed at ${crashMultiplier.toFixed(2)}x`;
+                    resultEl.className = 'result lose';
+                    txHistory.push({ type: 'loss', amount: 0, desc: 'Aviator crash' });
+                    updateUI();
+                    renderAviatorHistory();
+                    renderTxHistory();
+                } else {
+                    cashOutAviator(multiplier, bet);
+                }
+                aviatorRunning = false;
+                btn.disabled = false;
+                btn.textContent = '🚀 Bet';
+            }, crashTime);
+        }
+
+        function cashOutAviator(multiplier, bet) {
+            const winAmount = Math.round(bet * multiplier);
+            balance += winAmount;
+            aviatorHistory.push({ multiplier: multiplier, win: true, bet: bet });
+            document.getElementById('aviatorResult').textContent = `✅ Cashed out at ${multiplier.toFixed(2)}x! Won ETB ${winAmount}`;
+            document.getElementById('aviatorResult').className = 'result win';
+            txHistory.push({ type: 'win', amount: winAmount, desc: 'Aviator cash out' });
+            updateUI();
+            renderAviatorHistory();
+            renderTxHistory();
+            if (window.Telegram && Telegram.WebApp) {
+                Telegram.WebApp.sendData(JSON.stringify({ action: 'play_game', game: 'aviator', bet: bet, result: 'win', winnings: winAmount }));
+            }
+        }
+
+        function renderAviatorHistory() {
+            const histDiv = document.getElementById('aviatorHistory');
+            histDiv.innerHTML = aviatorHistory.slice(-20).map(h => `<span class="h-item ${h.win ? 'win' : 'lose'}">${h.multiplier.toFixed(2)}x</span>`).join('');
+            const tbody = document.getElementById('aviatorHistoryTable');
+            tbody.innerHTML = aviatorHistory.slice(-20).reverse().map(h => `<tr><td>You</td><td>${h.bet.toFixed(2)}</td><td>${h.win ? (h.bet * h.multiplier).toFixed(2) : '0.00'}</td></tr>`).join('');
+        }
+
+        // ============================================================
+        //  SPORTSBOOK
+        // ============================================================
+        const matchesData = [
+            { id: 1, league: 'UEFA CL', home: 'Real Madrid', away: 'Man City', score: '1-1', status: 'live', markets: { '1X2': { home: 1.85, draw: 3.60, away: 4.20 }, 'BTTS': { yes: 1.70, no: 2.10 }, 'Over2.5': { over: 1.90, under: 1.95 }, 'Handicap': { '-1': 2.10, '+1': 1.80 } } },
+            { id: 2, league: 'EPL', home: 'Arsenal', away: 'Chelsea', score: '1-0', status: 'live', markets: { '1X2': { home: 2.10, draw: 3.20, away: 3.80 }, 'BTTS': { yes: 1.80, no: 2.00 }, 'Over2.5': { over: 1.85, under: 2.05 }, 'Handicap': { '-1': 2.00, '+1': 1.85 } } },
+            { id: 3, league: 'La Liga', home: 'Barcelona', away: 'Sevilla', score: '0-0', status: 'live', markets: { '1X2': { home: 1.65, draw: 3.80, away: 5.50 }, 'BTTS': { yes: 1.90, no: 1.95 }, 'Over2.5': { over: 1.75, under: 2.15 }, 'Handicap': { '-1': 1.90, '+1': 1.95 } } },
+            { id: 4, league: 'Bundesliga', home: 'Bayern', away: 'Dortmund', score: '0-0', status: 'upcoming', time: '21:00', markets: { '1X2': { home: 1.75, draw: 3.90, away: 4.50 }, 'BTTS': { yes: 1.60, no: 2.25 }, 'Over2.5': { over: 1.65, under: 2.20 }, 'Handicap': { '-1': 1.85, '+1': 2.00 } } },
+            { id: 5, league: 'Serie A', home: 'Milan', away: 'Inter', score: '0-0', status: 'upcoming', time: '19:45', markets: { '1X2': { home: 2.40, draw: 3.10, away: 2.90 }, 'BTTS': { yes: 1.70, no: 2.10 }, 'Over2.5': { over: 1.80, under: 2.05 }, 'Handicap': { '-1': 2.20, '+1': 1.70 } } }
+        ];
+
+        function renderSports() {
+            const container = document.getElementById('sportsContainer');
+            container.innerHTML = matchesData.map(m => {
+                const statusText = m.status === 'live' ? `<span class="dot"></span> LIVE ${m.score}` : m.time;
+                const defaultMarket = '1X2';
+                const odds = m.markets[defaultMarket];
+                const marketOptions = Object.keys(m.markets).map(k => `<option value="${k}">${k}</option>`).join('');
+                const oddsButtons = Object.entries(odds).map(([key, val]) => {
+                    const label = key === 'home' ? 'Home' : key === 'draw' ? 'Draw' : key === 'away' ? 'Away' : key;
+                    const added = betSlipSelections.some(s => s.matchId === m.id && s.market === defaultMarket && s.selection === key);
+                    return `<div class="odd-btn ${added?'added':''}" onclick="addSportsSelection(${m.id},'${defaultMarket}','${key}','${m.home} vs ${m.away}',${val})">${val.toFixed(2)}<span class="label">${label}</span></div>`;
+                }).join('');
+                return `
+                    <div class="match-card">
+                        <div class="top"><span class="league">🏆 ${m.league}</span><span class="status ${m.status === 'live' ? 'live' : ''}">${statusText}</span></div>
+                        <div class="teams"><span>${m.home}</span><span class="score">${m.score}</span><span>${m.away}</span></div>
+                        <select class="market-select" onchange="changeMarket(${m.id}, this.value)">${marketOptions}</select>
+                        <div class="odds-grid" id="odds-${m.id}">${oddsButtons}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function changeMarket(matchId, market) {
+            const match = matchesData.find(m => m.id === matchId);
+            if (!match) return;
+            const odds = match.markets[market];
+            const grid = document.getElementById('odds-' + matchId);
+            let html = '';
+            Object.entries(odds).forEach(([key, val]) => {
+                const label = key === 'home' ? 'Home' : key === 'draw' ? 'Draw' : key === 'away' ? 'Away' : key;
+                const added = betSlipSelections.some(s => s.matchId === matchId && s.market === market && s.selection === key);
+                html += `<div class="odd-btn ${added?'added':''}" onclick="addSportsSelection(${matchId},'${market}','${key}','${match.home} vs ${match.away}',${val})">${val.toFixed(2)}<span class="label">${label}</span></div>`;
+            });
+            grid.innerHTML = html;
+        }
+
+        function addSportsSelection(matchId, market, selection, matchName, odd) {
+            const existing = betSlipSelections.findIndex(s => s.matchId === matchId && s.market === market && s.selection === selection);
+            if (existing !== -1) { betSlipSelections.splice(existing, 1); }
+            else {
+                betSlipSelections = betSlipSelections.filter(s => !(s.matchId === matchId && s.market === market));
+                betSlipSelections.push({ matchId, market, selection, odd, matchName, marketLabel: market });
+            }
+            updateSlipUI();
+            renderSports();
+        }
+
+        function updateSlipUI() {
+            const slip = document.getElementById('betSlip');
+            const container = document.getElementById('slipSelections');
+            if (betSlipSelections.length === 0) { slip.classList.remove('show'); return; }
+            slip.classList.add('show');
+            container.innerHTML = betSlipSelections.map((s, i) => `<div class="selection"><span>${s.matchName} (${s.marketLabel}) - ${s.selection} @ ${s.odd.toFixed(2)}</span><span class="remove" onclick="removeSelection(${i})">✕</span></div>`).join('');
+            let total = 1; betSlipSelections.forEach(s => total *= s.odd);
+            slipTotalOdds = total;
+            document.getElementById('slipOdds').textContent = total.toFixed(2);
+            const stake = parseFloat(document.getElementById('slipStake').value) || 0;
+            document.getElementById('slipPotential').textContent = (stake * total).toFixed(2);
+        }
+
+        function removeSelection(index) { betSlipSelections.splice(index, 1); updateSlipUI(); renderSports(); }
+        function clearSlip() { betSlipSelections = []; updateSlipUI(); renderSports(); }
+        document.getElementById('slipStake').addEventListener('input', function() {
+            const stake = parseFloat(this.value) || 0;
+            document.getElementById('slipPotential').textContent = (stake * slipTotalOdds).toFixed(2);
+        });
+
+        function placeSlipBet() {
+            if (betSlipSelections.length === 0) { alert('Add selections first'); return; }
+            const stake = parseFloat(document.getElementById('slipStake').value);
+            if (!stake || stake < 1) { alert('Min stake 1 ETB'); return; }
+            if (stake > balance) { alert('Insufficient balance'); return; }
+            const potential = stake * slipTotalOdds;
+            const ticket = 'BET' + Date.now().toString(36).toUpperCase();
+            const matchStr = betSlipSelections.map(s => `${s.matchName} (${s.marketLabel} ${s.selection})`).join(', ');
+            const bet = { id: ticket, type: 'sports', match: matchStr, selection: betSlipSelections.map(s => s.selection).join('/'), odds: slipTotalOdds, stake: stake, potentialWin: potential, status: 'pending', date: new Date().toLocaleString() };
+            allBets.push(bet);
+            if (window.Telegram && Telegram.WebApp) {
+                Telegram.WebApp.sendData(JSON.stringify({ action: 'place_bet_request', ticket, match: matchStr, selection: betSlipSelections.map(s => `${s.marketLabel} ${s.selection}`).join(' / '), odd: slipTotalOdds, stake, potentialWin: potential, selections: betSlipSelections }));
+            }
+            clearSlip();
+            renderMyBets();
+            updateUI();
+            alert('✅ Bet request submitted! Waiting for admin approval.');
+        }
+
+        // ============================================================
+        //  MY BETS, WALLET, DEPOSIT/WITHDRAW
+        // ============================================================
+        function renderMyBets() {
+            const container = document.getElementById('myBetsContainer');
+            if (allBets.length === 0) { container.innerHTML = '<div class="empty-state">📭 No bets yet</div>'; return; }
+            container.innerHTML = allBets.slice().reverse().map(b => `
+                <div class="bet-item">
+                    <div class="info"><div class="match">${b.match}</div><div class="detail">${b.selection} @ ${b.odds.toFixed(2)} · Stake: ETB ${b.stake.toFixed(2)}</div><div class="detail">${b.date}</div></div>
+                    <span class="status ${b.status}">${b.status.charAt(0).toUpperCase() + b.status.slice(1)}</span>
+                </div>
+            `).join('');
+            document.getElementById('betCountBadge').textContent = allBets.filter(b => b.status === 'pending' || b.status === 'approved').length;
+        }
+
+        function renderTxHistory() {
+            const container = document.getElementById('transactionHistory');
+            if (txHistory.length === 0) { container.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:12px;">No transactions</div>'; return; }
+            container.innerHTML = txHistory.slice().reverse().slice(0, 10).map(t => `
+                <div style="display:flex;justify-content:space-between;background:var(--card);padding:8px 12px;border-radius:8px;margin:4px 0;border:1px solid var(--border);">
+                    <span>${t.desc}</span>
+                    <span style="font-weight:700;color:${t.type === 'win' ? 'var(--green)' : t.type === 'deposit' ? 'var(--green)' : t.type === 'loss' ? 'var(--red)' : 'var(--text-muted)'};">${t.type === 'loss' ? '-' : ''}ETB ${(t.amount || 0).toFixed(2)}</span>
+                </div>
+            `).join('');
+        }
+
+        function openDeposit() { document.getElementById('depositModal').classList.add('active'); }
+        function closeDeposit() { document.getElementById('depositModal').classList.remove('active'); }
+        function submitDeposit() {
+            const amt = parseFloat(document.getElementById('depositAmount').value);
+            const ticket = document.getElementById('depositTicket').value.trim().toUpperCase();
+            const method = document.getElementById('depositMethod').value;
+            if (!amt || amt < 10) { alert('Min deposit 10 ETB'); return; }
+            if (!ticket || ticket.length < 4) { alert('Enter valid ticket'); return; }
+            depositHistory.push({ ticket, amount: amt, method, status: 'pending', date: new Date().toLocaleString() });
+            if (window.Telegram && Telegram.WebApp) { Telegram.WebApp.sendData(JSON.stringify({ action: 'deposit_request', ticket, amount: amt, method })); }
+            closeDeposit();
+            alert('✅ Deposit submitted! Waiting for admin approval.');
+        }
+
+        function openWithdraw() { document.getElementById('withdrawModal').classList.add('active'); }
+        function closeWithdraw() { document.getElementById('withdrawModal').classList.remove('active'); }
+        function submitWithdraw() {
+            const amt = parseFloat(document.getElementById('withdrawAmount').value);
+            const method = document.getElementById('withdrawMethod').value;
+            const account = document.getElementById('withdrawAccount').value.trim();
+            const name = document.getElementById('withdrawName').value.trim();
+            if (!amt || amt < 20) { alert('Min withdrawal 20 ETB'); return; }
+            if (amt > balance) { alert('Insufficient balance'); return; }
+            if (!account || !name) { alert('Fill all fields'); return; }
+            balance -= amt;
+            txHistory.push({ type: 'withdraw', amount: -amt, desc: 'Withdraw via ' + method });
+            updateUI();
+            renderTxHistory();
+            closeWithdraw();
+            alert('✅ Withdrawal submitted! Processing within 24h.');
+            if (window.Telegram && Telegram.WebApp) { Telegram.WebApp.sendData(JSON.stringify({ action: 'withdraw_request', amount: amt, method, account, name })); }
+        }
+
+        // ============================================================
+        //  TAB SWITCH
+        // ============================================================
+        function switchTab(tab, btn) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.getElementById('tab-' + tab).classList.add('active');
+            document.querySelectorAll('.bottom-nav .nav-item').forEach(el => el.classList.remove('active'));
+            if (btn) btn.classList.add('active');
+            else {
+                const map = ['home', 'sports', 'aviator', 'mybets', 'wallet'];
+                const idx = map.indexOf(tab);
+                const items = document.querySelectorAll('.bottom-nav .nav-item');
+                if (items[idx]) items[idx].classList.add('active');
+            }
+            if (tab === 'mybets') renderMyBets();
+            if (tab === 'wallet') { renderTxHistory(); updateUI(); }
+            if (tab === 'sports') renderSports();
+            if (tab === 'aviator') renderAviatorHistory();
+        }
+
+        // ============================================================
+        //  INITIAL RENDER
+        // ============================================================
+        renderAviatorHistory();
+        renderMyBets();
+        renderTxHistory();
+        updateUI();
+        console.log('🏆 SHEBAODDS Secure Ledger Hub loaded – 52 games, Aviator, multi-market sportsbook!');
+    </script>
+</body>
+</html>
