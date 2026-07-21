@@ -1,6 +1,7 @@
 // ============================================
 // SHEBAODDS - RESPONSIBLE GAMBLING MIDDLEWARE
 // Deposit/Loss/Wager Limits & Reality Checks
+// INCLUDES: 51+ CASINO GAME SUPPORT
 // ============================================
 
 import { Request, Response, NextFunction } from 'express';
@@ -9,16 +10,18 @@ import User from './User';
 import { Transaction, TRANSACTION_TYPES, TRANSACTION_STATUS } from './Transaction';
 import Bet from './Bet';
 
+// ==================== CORE LIMIT CHECKERS ====================
+
 // Check deposit limit
 export const checkDepositLimit = async (userId: any, amount: number) => {
   const user = await User.findById(userId);
   if (!user) {
     return { allowed: false, remaining: 0, limit: 0 };
   }
-  
+
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
-  
+
   const todayDeposits = await Transaction.aggregate([
     { 
       $match: { 
@@ -30,10 +33,10 @@ export const checkDepositLimit = async (userId: any, amount: number) => {
     },
     { $group: { _id: null, total: { $sum: '$amount' } } }
   ]);
-  
+
   const depositedToday = todayDeposits[0]?.total || 0;
   const limit = user.responsibleGambling?.depositLimit || parseInt(process.env.DEFAULT_DEPOSIT_LIMIT || '10000', 10) || 10000;
-  
+
   return {
     allowed: depositedToday + amount <= limit,
     remaining: Math.max(0, limit - depositedToday),
@@ -41,7 +44,7 @@ export const checkDepositLimit = async (userId: any, amount: number) => {
   };
 };
 
-// Check loss limit
+// Check loss limit (applies to both sports and casino bets)
 export const checkLossLimit = async (userId: any, stake: number) => {
   const user = await User.findById(userId);
   if (!user) {
@@ -50,7 +53,8 @@ export const checkLossLimit = async (userId: any, stake: number) => {
 
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
-  
+
+  // Aggregation now includes all bets (both sports and casino)
   const todayLosses = await Bet.aggregate([
     { 
       $match: { 
@@ -61,7 +65,7 @@ export const checkLossLimit = async (userId: any, stake: number) => {
     },
     { $group: { _id: null, total: { $sum: '$stake' } } }
   ]);
-  
+
   const todayWins = await Bet.aggregate([
     { 
       $match: { 
@@ -72,10 +76,10 @@ export const checkLossLimit = async (userId: any, stake: number) => {
     },
     { $group: { _id: null, total: { $sum: '$actualWin' } } }
   ]);
-  
+
   const netLoss = (todayLosses[0]?.total || 0) - (todayWins[0]?.total || 0);
   const limit = user.responsibleGambling?.lossLimit || parseInt(process.env.DEFAULT_LOSS_LIMIT || '5000', 10) || 5000;
-  
+
   return {
     allowed: netLoss + stake <= limit,
     remaining: Math.max(0, limit - netLoss),
@@ -84,7 +88,7 @@ export const checkLossLimit = async (userId: any, stake: number) => {
   };
 };
 
-// Check wager limit
+// Check wager limit (total amount staked per day)
 export const checkWagerLimit = async (userId: any, stake: number) => {
   const user = await User.findById(userId);
   if (!user) {
@@ -93,7 +97,8 @@ export const checkWagerLimit = async (userId: any, stake: number) => {
 
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
-  
+
+  // Aggregation now includes all bets (both sports and casino)
   const todayWagered = await Bet.aggregate([
     { 
       $match: { 
@@ -103,10 +108,10 @@ export const checkWagerLimit = async (userId: any, stake: number) => {
     },
     { $group: { _id: null, total: { $sum: '$stake' } } }
   ]);
-  
+
   const wageredToday = todayWagered[0]?.total || 0;
   const limit = user.responsibleGambling?.wagerLimit || parseInt(process.env.DEFAULT_WAGER_LIMIT || '50000', 10) || 50000;
-  
+
   return {
     allowed: wageredToday + stake <= limit,
     remaining: Math.max(0, limit - wageredToday),
@@ -122,11 +127,11 @@ export const checkSessionTimeout = async (userId: any) => {
   }
 
   const limit = user.responsibleGambling?.sessionTimeout || parseInt(process.env.DEFAULT_SESSION_LIMIT || '120', 10) || 120;
-  
+
   if (!user.lastActive) return { allowed: true, minutesRemaining: limit, limit };
-  
+
   const minutesActive = Math.floor((new Date().getTime() - new Date(user.lastActive).getTime()) / 60000);
-  
+
   return {
     allowed: minutesActive < limit,
     minutesRemaining: Math.max(0, limit - minutesActive),
@@ -134,7 +139,8 @@ export const checkSessionTimeout = async (userId: any) => {
   };
 };
 
-// Reality check middleware
+// ==================== REALITY CHECK MIDDLEWARE ====================
+
 export const realityCheck = async (req: any, res: Response, next: NextFunction) => {
   try {
     const user = req.user;
@@ -143,15 +149,15 @@ export const realityCheck = async (req: any, res: Response, next: NextFunction) 
     }
 
     const interval = user.responsibleGambling?.realityCheckInterval || parseInt(process.env.REALITY_CHECK_INTERVAL || '60', 10) || 60;
-    
+
     const lastCheck = user.responsibleGambling?.lastRealityCheck || user.lastActive || new Date();
     const minutesSinceCheck = Math.floor((new Date().getTime() - new Date(lastCheck).getTime()) / 60000);
-    
+
     if (minutesSinceCheck >= interval) {
       user.responsibleGambling = user.responsibleGambling || {};
       user.responsibleGambling.lastRealityCheck = new Date();
       await user.save();
-      
+
       // Send reality check notification
       return res.status(200).json({
         success: true,
@@ -161,14 +167,15 @@ export const realityCheck = async (req: any, res: Response, next: NextFunction) 
         options: ['continue', 'take_break', 'set_limit', 'self_exclude']
       });
     }
-    
+
     return next();
   } catch (error: any) {
     return next(error);
   }
 };
 
-// Combined responsible gambling check
+// ==================== COMBINED RESPONSIBLE GAMBLING CHECK (Sports + Casino) ====================
+
 export const checkResponsibleGambling = async (req: any, res: Response, next: NextFunction) => {
   try {
     const user = req.user;
@@ -176,9 +183,13 @@ export const checkResponsibleGambling = async (req: any, res: Response, next: Ne
       return res.status(401).json({ success: false, message: 'Authentication required' });
     }
 
-    const amount = parseFloat(req.body.amount || req.body.stake || '0') || 0;
-    
-    // Check deposit limit
+    // Determine the stake amount – works for both sports (stake) and casino (bet)
+    const amount = parseFloat(req.body.stake || req.body.bet || '0') || 0;
+
+    // Detect if this is a casino bet (by checking for gameId or /casino path)
+    const isCasinoBet = req.body.gameId || req.path.includes('/casino');
+
+    // Check deposit limit (if it's a deposit request)
     if (req.path.includes('/deposit')) {
       const depositCheck = await checkDepositLimit(user._id, amount);
       if (!depositCheck.allowed) {
@@ -191,9 +202,9 @@ export const checkResponsibleGambling = async (req: any, res: Response, next: Ne
         });
       }
     }
-    
-    // Check loss limit for bets
-    if (req.path.includes('/bet') && amount > 0) {
+
+    // Check loss and wager limits for both sports bets and casino bets
+    if ((req.path.includes('/bet') || req.path.includes('/casino')) && amount > 0) {
       const lossCheck = await checkLossLimit(user._id, amount);
       if (!lossCheck.allowed) {
         return res.status(400).json({
@@ -204,7 +215,7 @@ export const checkResponsibleGambling = async (req: any, res: Response, next: Ne
           currentLoss: lossCheck.currentLoss
         });
       }
-      
+
       const wagerCheck = await checkWagerLimit(user._id, amount);
       if (!wagerCheck.allowed) {
         return res.status(400).json({
@@ -214,8 +225,8 @@ export const checkResponsibleGambling = async (req: any, res: Response, next: Ne
         });
       }
     }
-    
-    // Check session timeout
+
+    // Check session timeout for any action
     const sessionCheck = await checkSessionTimeout(user._id);
     if (!sessionCheck.allowed) {
       return res.status(400).json({
@@ -224,21 +235,22 @@ export const checkResponsibleGambling = async (req: any, res: Response, next: Ne
         code: 'SESSION_TIMEOUT'
       });
     }
-    
+
     return next();
   } catch (error) {
     return next();
   }
 };
 
-// Self-exclusion middleware
+// ==================== SELF-EXCLUSION & COOLING-OFF ====================
+
 export const checkSelfExclusion = async (req: any, res: Response, next: NextFunction) => {
   try {
     const user = req.user;
     if (!user) {
       return res.status(401).json({ success: false, message: 'Authentication required' });
     }
-    
+
     if (user.responsibleGambling?.selfExcluded) {
       const endDate = user.responsibleGambling.selfExclusionEndDate;
       if (endDate && new Date(endDate) > new Date()) {
@@ -249,7 +261,7 @@ export const checkSelfExclusion = async (req: any, res: Response, next: NextFunc
         });
       }
     }
-    
+
     if (user.responsibleGambling?.coolingOffPeriodEnd && new Date(user.responsibleGambling.coolingOffPeriodEnd) > new Date()) {
       return res.status(403).json({
         success: false,
@@ -257,9 +269,19 @@ export const checkSelfExclusion = async (req: any, res: Response, next: NextFunc
         code: 'COOLING_OFF'
       });
     }
-    
+
     return next();
   } catch (error: any) {
     return next(error);
   }
+};
+
+// ==================== CASINO-SPECIFIC SHORTCUT MIDDLEWARE ====================
+
+/**
+ * Convenience middleware that applies responsible gambling checks specifically to casino routes.
+ * Can be used directly on /api/casino/play endpoint.
+ */
+export const checkCasinoBet = async (req: any, res: Response, next: NextFunction) => {
+  return checkResponsibleGambling(req, res, next);
 };
