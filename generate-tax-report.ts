@@ -1,5 +1,8 @@
 import mongoose from 'mongoose';
 import * as dotenv from 'dotenv';
+import { Wallet, Wager } from './MongoDBWalletEngine';
+import { Bet } from './Bet';
+import { Transaction } from './Transaction';
 
 dotenv.config();
 
@@ -8,17 +11,8 @@ const TAX_RATE = parseFloat(process.env.TAX_RATE || '0.15');
 const TAX_FREE_LIMIT = parseFloat(process.env.TAX_FREE_LIMIT || '100');
 
 // Local representation of Wager Schema for query purposes
-const WagerSchema = new mongoose.Schema({
-  userId: String,
-  gameSlug: String,
-  stake: Number,
-  multiplier: Number,
-  payout: Number,
-  taxDeducted: Number,
-  status: String
-}, { timestamps: true });
-
-const WagerModel = mongoose.models.Wager || mongoose.model('Wager', WagerSchema);
+// (We already have Wager model from MongoDBWalletEngine)
+// We also need to include the Bet model for sportsbook bets.
 
 async function generateTaxReport() {
   console.log('🔄 [TAX AUDIT] Initializing Regional 15% Taxation Compliance Report...');
@@ -28,30 +22,60 @@ async function generateTaxReport() {
 
   try {
     await mongoose.connect(MONGODB_URI);
-    
-    // Fetch all won/processed wagers
-    const wagers = await WagerModel.find({ status: { $in: ['Won', 'Settled'] } });
-    
-    let totalVolume = 0;
-    let totalPayouts = 0;
-    let totalTaxCollected = 0;
+
+    // --------------------------------------------------------------
+    // 1. Fetch all completed sportsbook bets (Won/Lost)
+    // --------------------------------------------------------------
+    const sportsBets = await Bet.find({ status: { $in: ['Won', 'Lost'] } });
+
+    // --------------------------------------------------------------
+    // 2. Fetch all casino wagers (Won/Lost) – using the Wager model
+    // --------------------------------------------------------------
+    const casinoWagers = await Wager.find({ status: { $in: ['Won', 'Lost'] } });
+
+    // --------------------------------------------------------------
+    // 3. Aggregate totals
+    // --------------------------------------------------------------
+    let totalVolume = 0;           // Total stake across all bets (sports + casino)
+    let totalPayouts = 0;         // Total net payouts (including tax deduction)
+    let totalTaxCollected = 0;    // Total tax deducted
     let taxableTicketsCount = 0;
     let exemptTicketsCount = 0;
 
-    for (const wager of wagers) {
-      totalVolume += wager.stake;
-      totalPayouts += wager.payout;
-      totalTaxCollected += wager.taxDeducted || 0;
-      
-      const netGain = wager.payout - wager.stake;
-      if (netGain > TAX_FREE_LIMIT) {
+    // --- Process sports bets ---
+    for (const bet of sportsBets) {
+      // For sports bets, we already have taxAmount and netWin fields.
+      // We consider the stake as the volume.
+      totalVolume += bet.stake;
+      totalPayouts += bet.netWin || bet.actualWin || 0;
+      totalTaxCollected += bet.taxAmount || 0;
+
+      const netProfit = (bet.actualWin || 0) - bet.stake;
+      if (netProfit > TAX_FREE_LIMIT) {
         taxableTicketsCount++;
       } else {
         exemptTicketsCount++;
       }
     }
 
-    // Output formatted ASCII Report card
+    // --- Process casino wagers ---
+    for (const wager of casinoWagers) {
+      // For casino wagers, we have stake, payout (net after tax), and taxDeducted.
+      totalVolume += wager.stake;
+      totalPayouts += wager.payout || 0;
+      totalTaxCollected += wager.taxDeducted || 0;
+
+      const netProfit = wager.payout - wager.stake;
+      if (netProfit > TAX_FREE_LIMIT) {
+        taxableTicketsCount++;
+      } else {
+        exemptTicketsCount++;
+      }
+    }
+
+    // --------------------------------------------------------------
+    // 4. Output formatted ASCII Report
+    // --------------------------------------------------------------
     console.log(`📊 STATUTORY TAX PERFORMANCE SHEET (Rate: ${(TAX_RATE * 100).toFixed(1)}%)`);
     console.log(`======================================================================`);
     console.log(`📅 Report Range          : Current Fiscal Ledger Block`);
