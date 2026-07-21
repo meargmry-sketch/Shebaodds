@@ -110,3 +110,961 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #ffd700;
 }
+
+
+/* ==========================================================
+   🎰 CASINO GAMES STYLES (51+ Games)
+   ========================================================== */
+
+.casino-games-page {
+  padding: 20px;
+  max-width: 1400px;
+  margin: 0 auto;
+  min-height: 100vh;
+  background: #0b0e1a;
+  color: #fff;
+}
+
+.casino-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: #1a1f33;
+  border-radius: 16px;
+  margin-bottom: 24px;
+  border-bottom: 2px solid #f0b90b;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.casino-header h1 {
+  font-size: 24px;
+  font-weight: 700;
+  color: #f0b90b;
+  margin: 0;
+}
+
+.game-count {
+  font-size: 14px;
+  color: #8892b0;
+  background: #1e2338;
+  padding: 4px 12px;
+  border-radius: 20px;
+}
+
+.balance-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #1e2338;
+  padding: 8px 20px;
+  border-radius: 30px;
+  border: 1px solid #f0b90b55;
+}
+
+.balance-amount {
+  font-size: 20px;
+  font-weight: 700;
+  color: #f0b90b;
+}
+
+.refresh-balance {
+  background: transparent;
+  border: none;
+  color: #8892b0;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 4px;
+}
+
+.refresh-balance:hover {
+  color: #f0b90b;
+}
+
+/* Game categories */
+.game-category {
+  margin-bottom: 28px;
+}
+
+.category-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 14px;
+  color: #ccd6f6;
+}
+
+.category-title small {
+  font-size: 13px;
+  font-weight: 400;
+  color: #8892b0;
+}
+
+/* Game grid */
+.game-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 12px;
+}
+
+/* Game card */
+.game-card {
+  background: #151b2b;
+  border-radius: 16px;
+  padding: 16px 8px 12px;
+  text-align: center;
+  cursor: pointer;
+  transition: 0.25s;
+  border: 2px solid transparent;
+  position: relative;
+}
+
+.game-card:hover {
+  transform: translateY(-4px);
+  border-color: #f0b90b66;
+  background: #1c2338;
+}
+
+.game-card.active {
+  border-color: #f0b90b;
+  background: #1c2338;
+}
+
+.game-card .game-icon {
+  font-size: 32px;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.game-card .game-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: #ccd6f6;
+}
+
+.game-card .game-min-bet {
+  font-size: 9px;
+  color: #8892b0;
+  display: block;
+  margin-top: 4px;
+}
+
+/* Badges (LIVE / HOT) */
+.badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  font-size: 8px;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.badge.live {
+  background: #ff4757;
+  color: #fff;
+  animation: pulse 1.5s infinite;
+}
+
+.badge.hot {
+  background: #f0b90b;
+  color: #0b0e1a;
+}
+
+/* Favorite button */
+.favorite-btn {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  background: transparent;
+  border: none;
+  color: #8892b0;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px;
+  transition: 0.2s;
+  z-index: 2;
+}
+
+.favorite-btn.active {
+  color: #f0b90b;
+}
+
+.favorite-btn:hover {
+  transform: scale(1.2);
+}
+
+/* Game view (selected game) */
+.game-view {
+  background: #0f1322;
+  border-radius: 24px;
+  padding: 24px;
+  margin-top: 16px;
+  border: 1px solid #f0b90b44;
+}
+
+.game-view-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.game-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #f0b90b;
+  margin: 0;
+}
+
+.game-stats {
+  display: flex;
+  gap: 16px;
+  font-size: 14px;
+  color: #8892b0;
+}
+
+.game-stats span {
+  background: #1e2338;
+  padding: 4px 12px;
+  border-radius: 20px;
+}
+
+.game-area {
+  background: #1a1f33;
+  border-radius: 16px;
+  padding: 20px;
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.game-tutorial {
+  margin-top: 12px;
+  text-align: center;
+}
+
+.tutorial-btn {
+  background: transparent;
+  border: 1px solid #2a3150;
+  color: #8892b0;
+  padding: 6px 16px;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: 0.2s;
+}
+
+.tutorial-btn:hover {
+  border-color: #f0b90b;
+  color: #f0b90b;
+}
+
+/* Game controls (buttons) */
+.game-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+
+.game-controls button {
+  background: #2a3150;
+  border: none;
+  color: #fff;
+  padding: 10px 24px;
+  border-radius: 30px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: 0.2s;
+}
+
+.game-controls button:hover:not(:disabled) {
+  background: #f0b90b;
+  color: #0b0e1a;
+  transform: scale(1.05);
+}
+
+.game-controls button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-play {
+  background: #f0b90b;
+  border: none;
+  color: #0b0e1a;
+  padding: 12px 32px;
+  border-radius: 30px;
+  font-weight: 700;
+  font-size: 16px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.btn-play:hover:not(:disabled) {
+  transform: scale(1.05);
+  box-shadow: 0 0 20px #f0b90b66;
+}
+
+.btn-play:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-bet {
+  background: #2a3150;
+  border: none;
+  color: #fff;
+  padding: 10px 24px;
+  border-radius: 30px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: 0.2s;
+}
+
+.btn-bet:hover:not(:disabled) {
+  background: #f0b90b;
+  color: #0b0e1a;
+}
+
+.btn-bet:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-cashout {
+  background: #2ed573;
+  border: none;
+  color: #fff;
+  padding: 10px 24px;
+  border-radius: 30px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: 0.2s;
+}
+
+.btn-cashout:hover:not(:disabled) {
+  background: #f0b90b;
+  color: #0b0e1a;
+}
+
+.btn-cashout:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Bet panel (bottom fixed) */
+.bet-panel {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(11, 14, 26, 0.96);
+  border-top: 2px solid #f0b90b55;
+  padding: 12px 16px 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  z-index: 200;
+  backdrop-filter: blur(12px);
+}
+
+.game-info {
+  font-size: 14px;
+  font-weight: 600;
+  color: #f0b90b;
+  min-width: 100px;
+  text-align: center;
+}
+
+.game-info small {
+  display: block;
+  font-size: 10px;
+  color: #8892b0;
+  font-weight: 400;
+}
+
+.quick-bets {
+  display: flex;
+  gap: 4px;
+}
+
+.quick-bet-btn {
+  background: #1e2338;
+  border: 1px solid #2a3150;
+  color: #ccd6f6;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: 0.15s;
+}
+
+.quick-bet-btn:hover:not(:disabled) {
+  background: #2a3150;
+  border-color: #f0b90b66;
+}
+
+.quick-bet-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.bet-amounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.amt-btn {
+  background: #1e2338;
+  border: 1px solid #2a3150;
+  color: #ccd6f6;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.15s;
+  min-width: 44px;
+}
+
+.amt-btn:hover {
+  background: #2a3150;
+  border-color: #f0b90b66;
+}
+
+.amt-btn.active {
+  background: #f0b90b;
+  color: #0b0e1a;
+  border-color: #f0b90b;
+}
+
+.amt-btn.max {
+  border-color: #ff4757;
+  color: #ff4757;
+}
+
+.manual-input {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #1e2338;
+  border-radius: 8px;
+  padding: 2px 8px 2px 12px;
+  border: 1px solid #2a3150;
+}
+
+.manual-input input {
+  background: transparent;
+  border: none;
+  color: #fff;
+  width: 70px;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 6px 0;
+  outline: none;
+}
+
+.bet-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.play-btn {
+  background: #f0b90b;
+  border: none;
+  color: #0b0e1a;
+  padding: 10px 32px;
+  border-radius: 30px;
+  font-weight: 700;
+  font-size: 16px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.play-btn:hover:not(:disabled) {
+  transform: scale(1.03);
+  box-shadow: 0 0 20px #f0b90b66;
+}
+
+.play-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.close-btn {
+  background: transparent;
+  border: none;
+  color: #8892b0;
+  font-size: 22px;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.close-btn:hover {
+  color: #fff;
+}
+
+.balance-display {
+  font-size: 13px;
+  color: #8892b0;
+  min-width: 80px;
+  text-align: center;
+}
+
+.balance-display strong {
+  color: #f0b90b;
+  font-size: 16px;
+}
+
+.balance-warning {
+  color: #ff4757;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  width: 100%;
+}
+
+/* Result modal overlay */
+.result-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.result-modal {
+  background: #151b2b;
+  border-radius: 24px;
+  max-width: 440px;
+  width: 100%;
+  padding: 30px 24px 24px;
+  text-align: center;
+  border: 1px solid #f0b90b44;
+  animation: modalIn 0.3s ease;
+}
+
+@keyframes modalIn {
+  from { transform: scale(0.9); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.modal-icon {
+  font-size: 48px;
+}
+
+.modal-title {
+  font-size: 20px;
+  color: #ccd6f6;
+  margin: 8px 0;
+}
+
+.result-value {
+  font-size: 36px;
+  font-weight: 800;
+  margin: 12px 0;
+}
+
+.result-value.win {
+  color: #2ed573;
+}
+
+.result-value.lose {
+  color: #ff4757;
+}
+
+.result-value.push {
+  color: #f0b90b;
+}
+
+.result-details {
+  margin: 16px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.result-details div {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 4px;
+  border-bottom: 1px solid #1e2338;
+}
+
+.result-details .green {
+  color: #2ed573;
+}
+
+.result-details .red {
+  color: #ff4757;
+}
+
+.result-details .gold {
+  color: #f0b90b;
+}
+
+.result-details .yellow {
+  color: #f0b90b;
+}
+
+.result-extra {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #8892b0;
+}
+
+.modal-btn {
+  margin-top: 18px;
+  background: #f0b90b;
+  border: none;
+  color: #0b0e1a;
+  padding: 12px;
+  border-radius: 30px;
+  font-weight: 700;
+  font-size: 16px;
+  cursor: pointer;
+  width: 100%;
+  transition: 0.2s;
+}
+
+.modal-btn:hover {
+  transform: scale(1.02);
+  box-shadow: 0 0 20px #f0b90b66;
+}
+
+/* Game‑specific UI components */
+.aviator-canvas {
+  width: 100%;
+  max-width: 400px;
+  height: 200px;
+  background: #1e2338;
+  border-radius: 8px;
+}
+
+.aviator-multiplier {
+  font-size: 42px;
+  font-weight: 800;
+  color: #f0b90b;
+  text-align: center;
+}
+
+.dice-display {
+  display: flex;
+  gap: 20px;
+  font-size: 48px;
+  align-items: center;
+}
+
+.dice {
+  font-size: 64px;
+}
+
+.vs-text {
+  color: #8892b0;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.dice-info {
+  color: #8892b0;
+  font-size: 14px;
+}
+
+.coin-display {
+  font-size: 80px;
+  animation: coinFlip 0.5s ease;
+}
+
+@keyframes coinFlip {
+  0% { transform: rotateY(0deg); }
+  100% { transform: rotateY(360deg); }
+}
+
+.slot-reels {
+  display: flex;
+  gap: 16px;
+  font-size: 48px;
+}
+
+.slot-reels span {
+  background: #0b0e1a;
+  padding: 16px;
+  border-radius: 12px;
+  border: 2px solid #2a3150;
+}
+
+.plinko-multiplier {
+  font-size: 24px;
+  font-weight: 700;
+  color: #f0b90b;
+}
+
+.bj-display {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 400px;
+}
+
+.bj-hand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #0b0e1a;
+  padding: 12px 16px;
+  border-radius: 8px;
+}
+
+.hand-label {
+  color: #8892b0;
+  font-weight: 600;
+  min-width: 60px;
+}
+
+.hand-score {
+  margin-left: auto;
+  font-weight: 700;
+  font-size: 18px;
+  color: #f0b90b;
+}
+
+/* Game history list */
+.game-history {
+  background: #1a1f33;
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-top: 16px;
+  border: 1px solid #2a3150;
+}
+
+.game-history h4 {
+  margin: 0 0 12px 0;
+  color: #f0b90b;
+  font-size: 16px;
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.history-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  background: #0b0e1a;
+}
+
+.history-item.win {
+  border-left: 3px solid #2ed573;
+}
+
+.history-item.lose {
+  border-left: 3px solid #ff4757;
+}
+
+.history-item.push {
+  border-left: 3px solid #f0b90b;
+}
+
+.history-profit.positive {
+  color: #2ed573;
+}
+
+.history-profit.negative {
+  color: #ff4757;
+}
+
+/* Toast notifications */
+.toast {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 16px 24px;
+  border-radius: 12px;
+  z-index: 999;
+  font-weight: 600;
+  max-width: 400px;
+  animation: slideIn 0.3s ease;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.toast-info {
+  background: #1a1f33;
+  color: #ccd6f6;
+  border: 1px solid #2a3150;
+}
+
+.toast-success {
+  background: #2ed573;
+  color: #0b0e1a;
+}
+
+.toast-error {
+  background: #ff4757;
+  color: #fff;
+}
+
+.toast-warning {
+  background: #f0b90b;
+  color: #0b0e1a;
+}
+
+@keyframes slideIn {
+  from { transform: translateX(100px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+/* Responsive adjustments */
+@media (max-width: 700px) {
+  .game-grid {
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  }
+
+  .bet-panel {
+    padding: 10px;
+    gap: 6px;
+  }
+
+  .amt-btn {
+    font-size: 11px;
+    padding: 4px 8px;
+    min-width: 34px;
+  }
+
+  .casino-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .balance-box {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .game-view-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .game-controls button {
+    padding: 8px 16px;
+    font-size: 13px;
+  }
+
+  .result-modal {
+    margin: 12px;
+    padding: 20px;
+  }
+
+  .result-value {
+    font-size: 28px;
+  }
+
+  .dice-display {
+    font-size: 32px;
+  }
+
+  .slot-reels {
+    font-size: 32px;
+  }
+
+  .slot-reels span {
+    padding: 10px;
+  }
+
+  .mines-grid {
+    max-width: 250px;
+    gap: 6px;
+  }
+
+  .mine-tile {
+    font-size: 18px;
+  }
+
+  .recent-winners .winners-list {
+    flex-direction: column;
+    gap: 4px;
+  }
+}
+
+@media (max-width: 480px) {
+  .game-grid {
+    grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+    gap: 8px;
+  }
+
+  .game-card {
+    padding: 12px 6px 10px;
+  }
+
+  .game-card .game-icon {
+    font-size: 24px;
+  }
+
+  .game-card .game-name {
+    font-size: 10px;
+  }
+
+  .bet-panel {
+    padding: 8px;
+  }
+
+  .bet-amounts {
+    gap: 4px;
+  }
+
+  .amt-btn {
+    font-size: 10px;
+    padding: 3px 6px;
+    min-width: 28px;
+  }
+
+  .manual-input input {
+    width: 50px;
+    font-size: 12px;
+  }
+
+  .play-btn {
+    padding: 8px 20px;
+    font-size: 14px;
+  }
+
+  .game-title {
+    font-size: 20px;
+  }
+}
+
+/* ==========================================================
+   END CASINO GAMES STYLES
+   ========================================================== */
