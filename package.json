@@ -74,7 +74,6 @@
     "lodash": "^4.17.21",
     "agenda": "^5.0.0",
     "newrelic": "^11.8.0",
-    "sentry": "^0.0.1",
     "@sentry/node": "^7.88.0",
     "datadog-metrics": "^0.10.1",
     "prom-client": "^15.0.0",
