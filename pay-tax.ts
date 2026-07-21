@@ -8,7 +8,7 @@ const REF_PREFIX = process.env.TAX_PAYMENT_REFERENCE_PREFIX || 'TAX';
 
 const WagerSchema = new mongoose.Schema({
   userId: String,
-  gameSlug: String,
+  gameSlug: String,          // Stores both sports match IDs and casino game IDs (e.g., 'dice', 'aviator')
   stake: Number,
   multiplier: Number,
   payout: Number,
@@ -27,7 +27,7 @@ async function executeTaxPayment() {
   try {
     await mongoose.connect(MONGODB_URI);
 
-    // Sum up tax collected across all settled wagers
+    // Sum up tax collected across all settled wagers (Sportsbook + Casino)
     const wagers = await WagerModel.find({ status: { $in: ['Won', 'Settled'] } });
     const totalTaxToPay = wagers.reduce((sum, w) => sum + (w.taxDeducted || 0), 0);
 
@@ -37,7 +37,7 @@ async function executeTaxPayment() {
     }
 
     console.log(`🔄 [TAX REMIT] Contacting Commercial Bank of Ethiopia API to transfer ${totalTaxToPay.toFixed(2)} ETB...`);
-    
+
     // Simulate API delay
     await new Promise(resolve => setTimeout(resolve, 1500));
 
