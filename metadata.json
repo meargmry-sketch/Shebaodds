@@ -1,6 +1,8 @@
 {
   "name": "ShebaOdds",
-  "description": "An enterprise-standard sports betting application featuring real-time odds, a secure payment gateway flow, and a gorgeous Material 3 responsive dark theme featuring ShebaOdds branding.",
+  "description": "An enterprise-standard sports betting and casino gaming application featuring real-time odds, a secure payment gateway flow, a full suite of 51+ casino games (Aviator, Dice, Slots, Blackjack, Roulette, etc.), and a gorgeous Material 3 responsive dark theme with ShebaOdds branding.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }
