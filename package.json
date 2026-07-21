@@ -83,7 +83,7 @@
     "express-request-id": "^1.4.1",
     "response-time": "^2.3.2",
     "express-brute": "^1.0.1",
-    "express-brute-redis": "^0.0.6",
+    "express-brute-redis": "^0.0.2",        // ✅ changed from ^0.0.6 to ^0.0.2
     "csrf": "^3.1.0",
     "telegraf": "^4.16.3"
   },
