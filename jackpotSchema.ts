@@ -1,58 +1,137 @@
-import mongoose, { Schema, Document } from 'mongoose';
+import mongoose, { Schema, Document, Model } from "mongoose";
 
-// ==============================================================================
-// 1. Jackpot Pool Schema (supports both Sports and Casino)
-// ==============================================================================
+/* ============================================================================
+   Jackpot Pool Schema
+============================================================================ */
+
 export interface IJackpotPool extends Document {
-  title: string;                    // e.g., "Grand Weekend 12 Jackpot"
-  type: 'sports' | 'casino';        // Distinguishes between sports and casino
-  matchIds?: number[];              // For sports: array of 12 match IDs (optional for casino)
-  casinoGameId?: string;            // For casino: e.g., 'aviator', 'slot'
-  criteria?: string;                // For casino: 'highest_multiplier' or 'highest_total_winnings'
-  grandPrize: number;               // Total prize pool (e.g., 100000 ETB)
-  entryFee: number;                 // Cost per ticket (e.g., 50 ETB)
-  status: 'Open' | 'Locked' | 'Settled';
-  results?: string[];               // For sports: array of 12 outcomes ("1", "X", "2")
-  winnerUserId?: string;            // Store the winning user ID(s) after settlement (comma-separated if multiple)
+  title: string;
+  type: "sports" | "casino";
+
+  matchIds?: number[];
+
+  casinoGameId?: string;
+  criteria?: "highest_multiplier" | "highest_total_winnings";
+
+  grandPrize: number;
+  entryFee: number;
+
+  status: "Open" | "Locked" | "Settled";
+
+  results?: string[];
+
+  winnerUserId?: string;
+
   createdAt: Date;
   updatedAt: Date;
 }
 
 const JackpotPoolSchema = new Schema<IJackpotPool>(
   {
-    title: { type: String, required: true },
-    type: { type: String, enum: ['sports', 'casino'], default: 'sports', required: true },
+    title: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    type: {
+      type: String,
+      enum: ["sports", "casino"],
+      required: true,
+      default: "sports",
+    },
+
     matchIds: {
       type: [Number],
       validate: {
-        validator: function (this: IJackpotPool, val: number[]) {
-          return this.type === 'sports' ? val && val.length === 12 : true;
+        validator: function (this: IJackpotPool, value: number[]) {
+          if (this.type === "sports") {
+            return Array.isArray(value) && value.length === 12;
+          }
+          return true;
         },
-        message: 'Sports jackpots must contain exactly 12 games.',
+        message: "Sports jackpots must contain exactly 12 matches.",
       },
     },
-    casinoGameId: { type: String },
-    criteria: { type: String, enum: ['highest_multiplier', 'highest_total_winnings'] },
-    grandPrize: { type: Number, default: 100000, min: 0 },
-    entryFee: { type: Number, default: 50, min: 0 },
-    status: { type: String, enum: ['Open', 'Locked', 'Settled'], default: 'Open' },
-    results: { type: [String] },
-    winnerUserId: { type: String },
+
+    casinoGameId: {
+      type: String,
+      required: function (this: IJackpotPool) {
+        return this.type === "casino";
+      },
+    },
+
+    criteria: {
+      type: String,
+      enum: [
+        "highest_multiplier",
+        "highest_total_winnings",
+      ],
+      required: function (this: IJackpotPool) {
+        return this.type === "casino";
+      },
+    },
+
+    grandPrize: {
+      type: Number,
+      default: 100000,
+      min: 0,
+    },
+
+    entryFee: {
+      type: Number,
+      default: 50,
+      min: 0,
+    },
+
+    status: {
+      type: String,
+      enum: ["Open", "Locked", "Settled"],
+      default: "Open",
+    },
+
+    results: {
+      type: [String],
+      validate: {
+        validator: function (this: IJackpotPool, value: string[]) {
+          if (this.type === "sports") {
+            return !value || value.length === 12;
+          }
+          return true;
+        },
+        message: "Sports results must contain exactly 12 outcomes.",
+      },
+    },
+
+    winnerUserId: {
+      type: String,
+      default: null,
+    },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+  }
 );
 
-// ==============================================================================
-// 2. Jackpot Ticket Schema (stores player predictions and performance)
-// ==============================================================================
+/* ============================================================================
+   Jackpot Ticket Schema
+============================================================================ */
+
 export interface IJackpotTicket extends Document {
   jackpotPoolId: mongoose.Types.ObjectId;
+
   userId: string;
-  predictions?: string[];           // For sports: array of 12 predictions
-  multiplier?: number;              // For casino: highest multiplier achieved
-  totalWon?: number;                // For casino: total winnings accumulated
-  correctGuessesCount: number;      // For sports: number of correct predictions
+
+  predictions?: string[];
+
+  multiplier?: number;
+
+  totalWon?: number;
+
+  correctGuessesCount: number;
+
   isWinner: boolean;
+
   createdAt: Date;
   updatedAt: Date;
 }
@@ -61,22 +140,75 @@ const JackpotTicketSchema = new Schema<IJackpotTicket>(
   {
     jackpotPoolId: {
       type: Schema.Types.ObjectId,
-      ref: 'JackpotPool',
+      ref: "JackpotPool",
       required: true,
       index: true,
     },
-    userId: { type: String, required: true, index: true },
-    predictions: { type: [String] },
-    multiplier: { type: Number, default: 0 },
-    totalWon: { type: Number, default: 0 },
-    correctGuessesCount: { type: Number, default: 0 },
-    isWinner: { type: Boolean, default: false },
+
+    userId: {
+      type: String,
+      required: true,
+      index: true,
+    },
+
+    predictions: {
+      type: [String],
+      validate: {
+        validator: function (value: string[]) {
+          return !value || value.length === 12;
+        },
+        message: "Exactly 12 predictions are required.",
+      },
+    },
+
+    multiplier: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    totalWon: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    correctGuessesCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 12,
+    },
+
+    isWinner: {
+      type: Boolean,
+      default: false,
+    },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+  }
 );
 
-// ==============================================================================
-// 3. Export Models
-// ==============================================================================
-export const JackpotPool = mongoose.model<IJackpotPool>('JackpotPool', JackpotPoolSchema);
-export const JackpotTicket = mongoose.model<IJackpotTicket>('JackpotTicket', JackpotTicketSchema);
+/* ============================================================================
+   Export Models
+============================================================================ */
+
+export const JackpotPool: Model<IJackpotPool> =
+  mongoose.models.JackpotPool ||
+  mongoose.model<IJackpotPool>(
+    "JackpotPool",
+    JackpotPoolSchema
+  );
+
+export const JackpotTicket: Model<IJackpotTicket> =
+  mongoose.models.JackpotTicket ||
+  mongoose.model<IJackpotTicket>(
+    "JackpotTicket",
+    JackpotTicketSchema
+  );
+
+export default {
+  JackpotPool,
+  JackpotTicket,
+};
