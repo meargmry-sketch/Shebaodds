@@ -1,6 +1,6 @@
 // ============================================
 // SHEBAODDS - MATCHES ROUTES
-// Complete Match Data, Live Scores, Odds
+// Complete Match Data, Live Scores, Odds & Casino Games
 // ============================================
 
 import express, { Request, Response, NextFunction } from 'express';
@@ -9,7 +9,7 @@ import { authenticate, isAdmin } from './authMiddleware';
 
 const router = express.Router();
 
-// Simple in-memory cache to replace Redis cleanly
+// ---------- In‑memory cache ----------
 class MemoryCache {
   private cache = new Map<string, { value: any; expiry: number }>();
 
@@ -38,9 +38,9 @@ class MemoryCache {
 
 const cache = new MemoryCache();
 
-// ==================== SPORTS MATCHES ROUTES ====================
-
-// ... (existing sports routes remain unchanged)
+// ============================================
+// SPORTS MATCHES ROUTES
+// ============================================
 
 /**
  * GET /api/matches
@@ -48,20 +48,19 @@ const cache = new MemoryCache();
  */
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const { 
-      league, 
-      status, 
-      featured, 
-      date, 
+    const {
+      league,
+      status,
+      featured,
+      date,
       search,
-      limit = '50', 
+      limit = '50',
       page = '1',
       sortBy = 'matchDate',
       sortOrder = 'asc'
     } = req.query;
 
     const query: any = {};
-
     if (league) query.league = league;
     if (status) query.status = status;
     if (featured === 'true') query.isFeatured = true;
@@ -85,12 +84,9 @@ router.get('/', async (req: Request, res: Response) => {
     const skip = (pageNum - 1) * limitNum;
     const sort = { [sortBy as string]: sortOrder === 'desc' ? -1 : 1 } as any;
 
-    // Try cache
     const cacheKey = `matches:${JSON.stringify(req.query)}`;
     const cached = cache.get(cacheKey);
-    if (cached) {
-      return res.json(cached);
-    }
+    if (cached) return res.json(cached);
 
     const [matches, total] = await Promise.all([
       Match.find(query)
@@ -112,20 +108,252 @@ router.get('/', async (req: Request, res: Response) => {
       }
     };
 
-    // Cache for 30 seconds
     cache.set(cacheKey, response, 30);
-
     return res.json(response);
-
   } catch (error: any) {
     return res.status(500).json({ success: false, message: error.message });
   }
 });
 
-// ... (GET /:matchId, GET /live/all, GET /upcoming/all, GET /featured/all, GET /:matchId/statistics, GET /:matchId/events, GET /:matchId/odds/live, GET /:matchId/odds/history, GET /leagues/all, and the admin POST routes remain exactly as they were)
-// We'll not repeat them for brevity, but they should be kept.
+/**
+ * GET /api/matches/:matchId
+ * Fetch a single match by ID
+ */
+router.get('/:matchId', async (req: Request, res: Response) => {
+  try {
+    const { matchId } = req.params;
 
-// ==================== NEW: CASINO GAMES ROUTES ====================
+    const cacheKey = `match:${matchId}`;
+    const cached = cache.get(cacheKey);
+    if (cached) return res.json(cached);
+
+    const match = await Match.findById(matchId);
+    if (!match) {
+      return res.status(404).json({ success: false, message: 'Match not found' });
+    }
+
+    const response = { success: true, match };
+    cache.set(cacheKey, response, 30);
+    return res.json(response);
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * GET /api/matches/live/all
+ * Fetch all live matches
+ */
+router.get('/live/all', async (req: Request, res: Response) => {
+  try {
+    const cacheKey = 'live_matches';
+    const cached = cache.get(cacheKey);
+    if (cached) return res.json(cached);
+
+    const matches = await Match.find({
+      status: MATCH_STATUS.LIVE
+    }).sort({ matchDate: -1 });
+
+    const response = { success: true, matches };
+    cache.set(cacheKey, response, 10); // short cache for live
+    return res.json(response);
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * GET /api/matches/upcoming/all
+ * Fetch all upcoming matches (status = SCHEDULED)
+ */
+router.get('/upcoming/all', async (req: Request, res: Response) => {
+  try {
+    const cacheKey = 'upcoming_matches';
+    const cached = cache.get(cacheKey);
+    if (cached) return res.json(cached);
+
+    const matches = await Match.find({
+      status: MATCH_STATUS.SCHEDULED,
+      matchDate: { $gte: new Date() }
+    }).sort({ matchDate: 1 });
+
+    const response = { success: true, matches };
+    cache.set(cacheKey, response, 60);
+    return res.json(response);
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * GET /api/matches/featured/all
+ * Fetch featured matches
+ */
+router.get('/featured/all', async (req: Request, res: Response) => {
+  try {
+    const cacheKey = 'featured_matches';
+    const cached = cache.get(cacheKey);
+    if (cached) return res.json(cached);
+
+    const matches = await Match.find({ isFeatured: true })
+      .sort({ matchDate: 1 })
+      .limit(10);
+
+    const response = { success: true, matches };
+    cache.set(cacheKey, response, 60);
+    return res.json(response);
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * GET /api/matches/:matchId/statistics
+ * Fetch match statistics (head‑to‑head, form, etc.)
+ */
+router.get('/:matchId/statistics', async (req: Request, res: Response) => {
+  try {
+    const { matchId } = req.params;
+    const match = await Match.findById(matchId).select('statistics');
+    if (!match) {
+      return res.status(404).json({ success: false, message: 'Match not found' });
+    }
+    return res.json({ success: true, statistics: match.statistics || {} });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * GET /api/matches/:matchId/events
+ * Fetch live events (goals, cards, substitutions)
+ */
+router.get('/:matchId/events', async (req: Request, res: Response) => {
+  try {
+    const { matchId } = req.params;
+    const match = await Match.findById(matchId).select('events');
+    if (!match) {
+      return res.status(404).json({ success: false, message: 'Match not found' });
+    }
+    return res.json({ success: true, events: match.events || [] });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * GET /api/matches/:matchId/odds/live
+ * Fetch live odds for a match
+ */
+router.get('/:matchId/odds/live', async (req: Request, res: Response) => {
+  try {
+    const { matchId } = req.params;
+    const match = await Match.findById(matchId).select('odds');
+    if (!match) {
+      return res.status(404).json({ success: false, message: 'Match not found' });
+    }
+    return res.json({ success: true, odds: match.odds || {} });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * GET /api/matches/:matchId/odds/history
+ * Fetch historical odds changes for a match
+ */
+router.get('/:matchId/odds/history', async (req: Request, res: Response) => {
+  try {
+    const { matchId } = req.params;
+    const match = await Match.findById(matchId).select('oddsHistory');
+    if (!match) {
+      return res.status(404).json({ success: false, message: 'Match not found' });
+    }
+    return res.json({ success: true, history: match.oddsHistory || [] });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * GET /api/matches/leagues/all
+ * Fetch all unique leagues
+ */
+router.get('/leagues/all', async (req: Request, res: Response) => {
+  try {
+    const cacheKey = 'leagues_all';
+    const cached = cache.get(cacheKey);
+    if (cached) return res.json(cached);
+
+    const leagues = await Match.distinct('league');
+    const response = { success: true, leagues };
+    cache.set(cacheKey, response, 3600);
+    return res.json(response);
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ============================================
+// ADMIN ROUTES (Sports)
+// ============================================
+
+/**
+ * POST /api/matches/admin/create
+ * Admin: create a new match
+ */
+router.post('/admin/create', authenticate, isAdmin, async (req: any, res: Response) => {
+  try {
+    const matchData = req.body;
+    const newMatch = new Match(matchData);
+    await newMatch.save();
+    cache.clear(); // clear all cache
+    return res.status(201).json({ success: true, match: newMatch });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * PUT /api/matches/admin/:matchId
+ * Admin: update a match
+ */
+router.put('/admin/:matchId', authenticate, isAdmin, async (req: any, res: Response) => {
+  try {
+    const { matchId } = req.params;
+    const updateData = req.body;
+    const match = await Match.findByIdAndUpdate(matchId, updateData, { new: true });
+    if (!match) {
+      return res.status(404).json({ success: false, message: 'Match not found' });
+    }
+    cache.clear();
+    return res.json({ success: true, match });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * DELETE /api/matches/admin/:matchId
+ * Admin: delete a match
+ */
+router.delete('/admin/:matchId', authenticate, isAdmin, async (req: any, res: Response) => {
+  try {
+    const { matchId } = req.params;
+    const match = await Match.findByIdAndDelete(matchId);
+    if (!match) {
+      return res.status(404).json({ success: false, message: 'Match not found' });
+    }
+    cache.clear();
+    return res.json({ success: true });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ============================================
+// CASINO GAMES ROUTES
+// ============================================
 
 /**
  * GET /api/casino/games
@@ -139,16 +367,12 @@ router.get('/casino/games', async (req: Request, res: Response) => {
 
     const cacheKey = `casino_games:${JSON.stringify(req.query)}`;
     const cached = cache.get(cacheKey);
-    if (cached) {
-      return res.json(cached);
-    }
+    if (cached) return res.json(cached);
 
     const games = await CasinoGame.find(query).sort({ name: 1 });
     const response = { success: true, games };
 
-    // Cache for 60 seconds
     cache.set(cacheKey, response, 60);
-
     return res.json(response);
   } catch (error: any) {
     return res.status(500).json({ success: false, message: error.message });
@@ -165,9 +389,7 @@ router.get('/casino/games/:id', async (req: Request, res: Response) => {
 
     const cacheKey = `casino_game:${id}`;
     const cached = cache.get(cacheKey);
-    if (cached) {
-      return res.json(cached);
-    }
+    if (cached) return res.json(cached);
 
     const game = await CasinoGame.findOne({ gameId: id });
     if (!game) {
@@ -176,7 +398,6 @@ router.get('/casino/games/:id', async (req: Request, res: Response) => {
 
     const response = { success: true, game };
     cache.set(cacheKey, response, 60);
-
     return res.json(response);
   } catch (error: any) {
     return res.status(500).json({ success: false, message: error.message });
@@ -190,7 +411,7 @@ router.get('/casino/games/:id', async (req: Request, res: Response) => {
 router.put('/casino/games/:id/favorite', authenticate, async (req: any, res: Response) => {
   try {
     const { id } = req.params;
-    const { isFavorite } = req.body; // boolean
+    const { isFavorite } = req.body;
 
     if (typeof isFavorite !== 'boolean') {
       return res.status(400).json({ success: false, message: 'isFavorite must be a boolean' });
@@ -204,10 +425,8 @@ router.put('/casino/games/:id/favorite', authenticate, async (req: any, res: Res
     game.isFavorite = isFavorite;
     await game.save();
 
-    // Clear cache
     cache.del(`casino_game:${id}`);
     cache.del('casino_games:*');
-
     return res.json({ success: true, game });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: error.message });
@@ -222,9 +441,7 @@ router.get('/casino/stats', async (req: Request, res: Response) => {
   try {
     const cacheKey = 'casino_stats';
     const cached = cache.get(cacheKey);
-    if (cached) {
-      return res.json(cached);
-    }
+    if (cached) return res.json(cached);
 
     const [totalGames, totalWagered, totalWon, mostPlayed] = await Promise.all([
       CasinoGame.countDocuments(),
@@ -241,8 +458,7 @@ router.get('/casino/stats', async (req: Request, res: Response) => {
     };
 
     const response = { success: true, stats };
-    cache.set(cacheKey, response, 300); // cache 5 minutes
-
+    cache.set(cacheKey, response, 300);
     return res.json(response);
   } catch (error: any) {
     return res.status(500).json({ success: false, message: error.message });
@@ -251,7 +467,7 @@ router.get('/casino/stats', async (req: Request, res: Response) => {
 
 /**
  * POST /api/casino/admin/games/:id/stats
- * Admin: manually update a game's stats (e.g., after a batch settlement)
+ * Admin: manually update a game's stats
  */
 router.post('/casino/admin/games/:id/stats', authenticate, isAdmin, async (req: any, res: Response) => {
   try {
@@ -269,7 +485,6 @@ router.post('/casino/admin/games/:id/stats', authenticate, isAdmin, async (req: 
 
     await game.save();
 
-    // Clear caches
     cache.del(`casino_game:${id}`);
     cache.del('casino_games:*');
     cache.del('casino_stats');
@@ -280,5 +495,4 @@ router.post('/casino/admin/games/:id/stats', authenticate, isAdmin, async (req: 
   }
 });
 
-// ==================== EXPORT ====================
 export default router;
