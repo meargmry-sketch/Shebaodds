@@ -26,7 +26,6 @@ const JackpotPoolSchema = new Schema<IJackpotPool>(
       type: [Number],
       validate: {
         validator: function (this: IJackpotPool, val: number[]) {
-          // Only validate if it's a sports jackpot
           return this.type === 'sports' ? val && val.length === 12 : true;
         },
         message: 'Sports jackpots must contain exactly 12 games.',
@@ -49,10 +48,10 @@ const JackpotPoolSchema = new Schema<IJackpotPool>(
 export interface IJackpotTicket extends Document {
   jackpotPoolId: mongoose.Types.ObjectId;
   userId: string;
-  predictions?: string[];              // For sports: array of 12 predictions
-  multiplier?: number;                 // For casino: highest multiplier achieved
-  totalWon?: number;                   // For casino: total winnings accumulated
-  correctGuessesCount: number;         // For sports: number of correct predictions
+  predictions?: string[];           // For sports: array of 12 predictions
+  multiplier?: number;              // For casino: highest multiplier achieved
+  totalWon?: number;                // For casino: total winnings accumulated
+  correctGuessesCount: number;      // For sports: number of correct predictions
   isWinner: boolean;
   createdAt: Date;
   updatedAt: Date;
