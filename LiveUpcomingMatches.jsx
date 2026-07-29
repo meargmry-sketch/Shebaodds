@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  LayoutDashboard, Users, Trophy, Landmark, Receipt, FileBarChart2, 
-  Gift, Settings, ShieldAlert, FileText, Mail, Search, Bell, 
-  ChevronDown, Plus, Lock, Unlock, Trash2, Edit2, Check, X, 
-  ArrowUpRight, ArrowDownRight, Wallet, Filter, CheckCircle2, 
-  AlertTriangle, Play, Eye, DollarSign, Activity, Globe, Gamepad2, 
+import {
+  LayoutDashboard, Users, Trophy, Landmark, Receipt, FileBarChart2,
+  Gift, Settings, ShieldAlert, FileText, Mail, Search, Bell,
+  ChevronDown, Plus, Lock, Unlock, Trash2, Edit2, Check, X,
+  ArrowUpRight, ArrowDownRight, Wallet, Filter, CheckCircle2,
+  AlertTriangle, Play, Eye, DollarSign, Activity, Globe, Gamepad2,
   Star, RefreshCcw, Zap, Coins, Swords, Car, Bike, Dice6, Atom, Sparkles
 } from 'lucide-react';
 
@@ -35,7 +35,7 @@ export default function LiveUpcomingMatches({ wsUrl = 'ws://127.0.0.1:9090' }) {
   const [transactions, setTransactions] = useState([ /* ... existing transactions ... */ ]);
   const [liveBets, setLiveBets] = useState([ /* ... existing live bets ... */ ]);
   const [users, setUsers] = useState([ /* ... existing users ... */ ]);
-  
+
   // ==========================================================
   // 🎰 NEW: CASINO STATE (51+ Games)
   // ==========================================================
@@ -166,7 +166,7 @@ export default function LiveUpcomingMatches({ wsUrl = 'ws://127.0.0.1:9090' }) {
     try {
       const logic = gameLogic[game.id] || gameLogic.default;
       const result = logic(casinoBetAmount, params);
-      
+
       // Update Balance
       const newBalance = casinoBalance + result.profit;
       setCasinoBalance(newBalance);
@@ -447,39 +447,113 @@ export default function LiveUpcomingMatches({ wsUrl = 'ws://127.0.0.1:9090' }) {
           <div className="relative w-full sm:hidden"><span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500 pointer-events-none"><Search className="h-4 w-4" /></span><input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search user, match, odds..." className="w-full bg-[#111625] border border-slate-800 rounded-xl py-2 pl-9 pr-4 text-xs font-medium text-slate-300 placeholder-slate-500 focus:outline-none focus:border-amber-500 transition-colors" /></div>
 
           {/* --- DASHBOARD VIEW --- */}
-          {activeTab === 'dashboard' && ( /* ... dashboard layout ... */ )}
+          {activeTab === 'dashboard' ? (
+            <div className="tab-content p-4 bg-[#111625] rounded-xl border border-slate-800">
+              <h2 className="text-xl font-bold text-amber-400">Dashboard</h2>
+              <p className="text-slate-400">Place your dashboard content here.</p>
+            </div>
+          ) : null}
 
           {/* --- VIEW: USERS --- */}
-          {activeTab === 'users' && ( /* ... users table ... */ )}
+          {activeTab === 'users' ? (
+            <div className="tab-content p-4 bg-[#111625] rounded-xl border border-slate-800">
+              <h2 className="text-xl font-bold text-amber-400">Users</h2>
+              <p className="text-slate-400">Place your users table here.</p>
+            </div>
+          ) : null}
 
           {/* --- VIEW: MATCHES --- */}
-          {activeTab === 'matches' && ( /* ... matches grid ... */ )}
+          {activeTab === 'matches' ? (
+            <div className="tab-content p-4 bg-[#111625] rounded-xl border border-slate-800">
+              <h2 className="text-xl font-bold text-amber-400">Matches & Odds</h2>
+              <p className="text-slate-400">Place your matches grid here.</p>
+            </div>
+          ) : null}
 
-          {/* --- VIEW: DEPOSITS & WITHDRAWALS --- */}
-          {(activeTab === 'deposits' || activeTab === 'withdrawals' || activeTab === 'transactions') && ( /* ... transactions table ... */ )}
+          {/* --- VIEW: BET MANAGEMENT --- */}
+          {activeTab === 'bets' ? (
+            <div className="tab-content p-4 bg-[#111625] rounded-xl border border-slate-800">
+              <h2 className="text-xl font-bold text-amber-400">Bet Management</h2>
+              <p className="text-slate-400">Place your bet management content here.</p>
+            </div>
+          ) : null}
+
+          {/* --- VIEW: DEPOSITS --- */}
+          {activeTab === 'deposits' ? (
+            <div className="tab-content p-4 bg-[#111625] rounded-xl border border-slate-800">
+              <h2 className="text-xl font-bold text-amber-400">Deposits</h2>
+              <p className="text-slate-400">Place your deposits table here.</p>
+            </div>
+          ) : null}
+
+          {/* --- VIEW: WITHDRAWALS --- */}
+          {activeTab === 'withdrawals' ? (
+            <div className="tab-content p-4 bg-[#111625] rounded-xl border border-slate-800">
+              <h2 className="text-xl font-bold text-amber-400">Withdrawals</h2>
+              <p className="text-slate-400">Place your withdrawals table here.</p>
+            </div>
+          ) : null}
+
+          {/* --- VIEW: TRANSACTIONS --- */}
+          {activeTab === 'transactions' ? (
+            <div className="tab-content p-4 bg-[#111625] rounded-xl border border-slate-800">
+              <h2 className="text-xl font-bold text-amber-400">All Transactions</h2>
+              <p className="text-slate-400">Place your transactions list here.</p>
+            </div>
+          ) : null}
 
           {/* --- VIEW: REPORTS --- */}
-          {activeTab === 'reports' && ( /* ... reports block ... */ )}
+          {activeTab === 'reports' ? (
+            <div className="tab-content p-4 bg-[#111625] rounded-xl border border-slate-800">
+              <h2 className="text-xl font-bold text-amber-400">Reports</h2>
+              <p className="text-slate-400">Place your reports charts here.</p>
+            </div>
+          ) : null}
 
           {/* --- VIEW: BONUSES --- */}
-          {activeTab === 'bonuses' && ( /* ... bonuses block ... */ )}
+          {activeTab === 'bonuses' ? (
+            <div className="tab-content p-4 bg-[#111625] rounded-xl border border-slate-800">
+              <h2 className="text-xl font-bold text-amber-400">Bonus Management</h2>
+              <p className="text-slate-400">Place your bonus configuration here.</p>
+            </div>
+          ) : null}
 
           {/* --- VIEW: SETTINGS --- */}
-          {activeTab === 'settings' && ( /* ... settings block ... */ )}
+          {activeTab === 'settings' ? (
+            <div className="tab-content p-4 bg-[#111625] rounded-xl border border-slate-800">
+              <h2 className="text-xl font-bold text-amber-400">System Settings</h2>
+              <p className="text-slate-400">Place your system settings form here.</p>
+            </div>
+          ) : null}
 
           {/* --- VIEW: ADMINS --- */}
-          {activeTab === 'admins' && ( /* ... admins block ... */ )}
+          {activeTab === 'admins' ? (
+            <div className="tab-content p-4 bg-[#111625] rounded-xl border border-slate-800">
+              <h2 className="text-xl font-bold text-amber-400">Admin Management</h2>
+              <p className="text-slate-400">Place your admin list here.</p>
+            </div>
+          ) : null}
 
           {/* --- VIEW: LOGS --- */}
-          {activeTab === 'logs' && ( /* ... logs block ... */ )}
+          {activeTab === 'logs' ? (
+            <div className="tab-content p-4 bg-[#111625] rounded-xl border border-slate-800">
+              <h2 className="text-xl font-bold text-amber-400">Logs & Activity</h2>
+              <p className="text-slate-400">Place your activity logs here.</p>
+            </div>
+          ) : null}
 
           {/* --- VIEW: SUPPORT --- */}
-          {activeTab === 'support' && ( /* ... support block ... */ )}
+          {activeTab === 'support' ? (
+            <div className="tab-content p-4 bg-[#111625] rounded-xl border border-slate-800">
+              <h2 className="text-xl font-bold text-amber-400">Support Messages</h2>
+              <p className="text-slate-400">Place your support tickets here.</p>
+            </div>
+          ) : null}
 
           {/* ============================================================== */}
-          {/* 🎰 NEW: 51+ CASINO GAMES VIEW */}
+          {/* 🎰 CASINO GAMES VIEW (already fully implemented) */}
           {/* ============================================================== */}
-          {activeTab === 'casino' && (
+          {activeTab === 'casino' ? (
             <div className="casino-games-page p-4 bg-[#0b0e1a] rounded-xl text-white">
               <div className="casino-header flex justify-between items-center p-4 bg-[#1a1f33] rounded-xl mb-6 border-b-2 border-amber-400">
                 <div className="header-left flex items-center gap-3">
@@ -531,7 +605,7 @@ export default function LiveUpcomingMatches({ wsUrl = 'ws://127.0.0.1:9090' }) {
                 </div>
               </div>
             </div>
-          )}
+          ) : null}
         </main>
       </div>
 
@@ -604,7 +678,6 @@ export default function LiveUpcomingMatches({ wsUrl = 'ws://127.0.0.1:9090' }) {
         .favorite-btn:hover { transform: scale(1.2); }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
       `}</style>
-
     </div>
   );
 }
