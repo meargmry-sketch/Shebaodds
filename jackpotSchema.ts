@@ -1,19 +1,16 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
-// ==============================================================================
-// 1. Jackpot Pool Schema (supports both Sports and Casino)
-// ==============================================================================
 export interface IJackpotPool extends Document {
   title: string;
   type: 'sports' | 'casino';
   matchIds?: number[];
   casinoGameId?: string;
-  criteria?: string;               // 'highest_multiplier' or 'highest_total_winnings'
+  criteria?: string;
   grandPrize: number;
   entryFee: number;
   status: 'Open' | 'Locked' | 'Settled';
   results?: string[];
-  winnerUserId?: string;           // comma-separated if multiple winners
+  winnerUserId?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -28,7 +25,7 @@ const JackpotPoolSchema = new Schema<IJackpotPool>(
         validator: function (this: IJackpotPool, val: number[]) {
           return this.type === 'sports' ? val && val.length === 12 : true;
         },
-        message: 'Sports jackpots must contain exactly 12 games.',
+        message: 'Sports jackpots must contain exactly 12 games.', // ✅ fixed
       },
     },
     casinoGameId: { type: String },
@@ -42,16 +39,13 @@ const JackpotPoolSchema = new Schema<IJackpotPool>(
   { timestamps: true }
 );
 
-// ==============================================================================
-// 2. Jackpot Ticket Schema
-// ==============================================================================
 export interface IJackpotTicket extends Document {
   jackpotPoolId: mongoose.Types.ObjectId;
   userId: string;
-  predictions?: string[];          // sports: 12 predictions
-  multiplier?: number;             // casino: highest multiplier
-  totalWon?: number;               // casino: total winnings
-  correctGuessesCount: number;     // sports: number of correct picks
+  predictions?: string[];
+  multiplier?: number;
+  totalWon?: number;
+  correctGuessesCount: number;
   isWinner: boolean;
   createdAt: Date;
   updatedAt: Date;
