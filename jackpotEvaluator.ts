@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import { JackpotPool, JackpotTicket } from './jackpotSchema';
-import User from './User'; // Import your User model (contains wallet.balance)
+import User from './User'; // Adjust the import path to your actual User model
 
 // ==============================================================================
 // 🏆 SPORTS JACKPOT EVALUATOR (12 matches, 1X2)
@@ -73,6 +73,7 @@ export async function evaluateSportsJackpot(
 
     // 4. Distribute prize if there are winners
     const taxRate = parseFloat(process.env.JACKPOT_TAX_RATE || '0.10');
+
     if (winners.length > 0) {
       const prizePerWinner = Math.floor(pool.grandPrize / winners.length);
       const taxDeduction = Math.floor(prizePerWinner * taxRate);
