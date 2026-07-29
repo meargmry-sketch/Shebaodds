@@ -1,5 +1,8 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
+// ==============================================================================
+// 1. Jackpot Pool Schema (supports both Sports and Casino)
+// ==============================================================================
 export interface IJackpotPool extends Document {
   title: string;
   type: 'sports' | 'casino';
@@ -25,7 +28,7 @@ const JackpotPoolSchema = new Schema<IJackpotPool>(
         validator: function (this: IJackpotPool, val: number[]) {
           return this.type === 'sports' ? val && val.length === 12 : true;
         },
-        message: 'Sports jackpots must contain exactly 12 games.', // ✅ fixed
+        message: 'Sports jackpots must contain exactly 12 games.',
       },
     },
     casinoGameId: { type: String },
@@ -39,6 +42,9 @@ const JackpotPoolSchema = new Schema<IJackpotPool>(
   { timestamps: true }
 );
 
+// ==============================================================================
+// 2. Jackpot Ticket Schema (stores player predictions and performance)
+// ==============================================================================
 export interface IJackpotTicket extends Document {
   jackpotPoolId: mongoose.Types.ObjectId;
   userId: string;
@@ -69,5 +75,8 @@ const JackpotTicketSchema = new Schema<IJackpotTicket>(
   { timestamps: true }
 );
 
+// ==============================================================================
+// 3. Export Models
+// ==============================================================================
 export const JackpotPool = mongoose.model<IJackpotPool>('JackpotPool', JackpotPoolSchema);
 export const JackpotTicket = mongoose.model<IJackpotTicket>('JackpotTicket', JackpotTicketSchema);
