@@ -3,6 +3,10 @@
 // Enterprise-grade password requirements
 // ============================================
 
+// Make sure these packages are installed:
+// npm install express bcryptjs
+// npm install --save-dev @types/express @types/bcryptjs
+
 import { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 
@@ -130,7 +134,7 @@ export function validatePasswordStrength(password: string, userInfo: UserInfo = 
       'abcdefghijklmnopqrstuvwxyz', 'qwertyuiop', 'asdfghjkl', 'zxcvbnm',
       '1234567890', '0123456789'
     ];
-    
+
     for (const pattern of sequentialPatterns) {
       for (let i = 0; i < password.length - 3; i++) {
         const substr = password.substring(i, i + 4).toLowerCase();
@@ -157,7 +161,7 @@ export function validatePasswordStrength(password: string, userInfo: UserInfo = 
       userInfo.fullName,
       userInfo.phone
     ].filter(Boolean) as string[];
-    
+
     for (const info of personalInfo) {
       if (info && password.toLowerCase().includes(info.toLowerCase())) {
         errors.push('Password should not contain personal information like username, email, or name');
@@ -218,12 +222,12 @@ export class PasswordHistory {
 
   async addToHistory(newPasswordHash: string): Promise<string[]> {
     this.passwordHistory.unshift(newPasswordHash);
-    
+
     // Keep only last N passwords
     if (this.passwordHistory.length > PASSWORD_RULES.maxHistory) {
       this.passwordHistory = this.passwordHistory.slice(0, PASSWORD_RULES.maxHistory);
     }
-    
+
     return this.passwordHistory;
   }
 }
@@ -278,23 +282,23 @@ export function getPasswordStrengthMeter(strength: string) {
       suggestions: []
     }
   };
-  
+
   return meters[strength] || meters[PASSWORD_STRENGTH.WEAK];
 }
 
 // Express middleware for password validation
 export function validatePassword(req: Request, res: Response, next: NextFunction) {
   const { password, ...userInfo } = req.body;
-  
+
   if (!password) {
     return res.status(400).json({
       success: false,
       message: 'Password is required'
     });
   }
-  
+
   const validation = validatePasswordStrength(password, userInfo);
-  
+
   if (!validation.isValid) {
     return res.status(400).json({
       success: false,
@@ -303,7 +307,7 @@ export function validatePassword(req: Request, res: Response, next: NextFunction
       strength: validation.strength
     });
   }
-  
+
   // Add warnings/strength to request
   (req as any).passwordWarnings = validation.warnings;
   (req as any).passwordStrength = validation.strength;
