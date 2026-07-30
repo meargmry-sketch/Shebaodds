@@ -13,9 +13,10 @@ import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import mongoSanitize from 'express-mongo-sanitize';
 import hpp from 'hpp';
-import xss from 'xss';
 import { config } from 'dotenv';
 import path from 'path';
+
+config();
 
 // ---------- Import Routes ----------
 import adminRoutes from './routes/adminRoutes';
@@ -35,8 +36,6 @@ import { validatePassword } from './middleware/passwordValidator';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { requestLogger } from './middleware/logger';
 
-// ---------- Load Environment ----------
-config();
 const PORT = process.env.PORT || 3000;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/shebaodds';
 
@@ -53,7 +52,6 @@ const io = new SocketServer(httpServer, {
   }
 });
 
-// Make io accessible to routes via `req.io`
 app.use((req: Request, res: Response, next: NextFunction) => {
   (req as any).io = io;
   next();
@@ -76,17 +74,13 @@ app.use(cors({
   credentials: true
 }));
 
-// Rate Limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  windowMs: 15 * 60 * 1000,
+  max: 100,
   message: 'Too many requests from this IP, please try again later.',
-  standardHeaders: true,
-  legacyHeaders: false,
 });
 app.use('/api', limiter);
 
-// Stricter limiter for auth endpoints
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
@@ -98,12 +92,11 @@ app.use('/api/auth', authLimiter);
 app.use(compression());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-app.use(mongoSanitize()); // Prevent NoSQL injection
-app.use(hpp()); // Prevent HTTP parameter pollution
-app.use(requestLogger); // Custom logging middleware
+app.use(mongoSanitize());
+app.use(hpp());
+app.use(requestLogger);
 
-// ---------- Static Files (if any) ----------
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ---------- Health Check ----------
 app.get('/health', (req: Request, res: Response) => {
@@ -127,29 +120,16 @@ app.use('/api/wallet', walletRoutes);
 app.use('/api/casino', casinoRoutes);
 app.use('/api/jackpot', jackpotRoutes);
 
-// ---------- 404 Handler ----------
+// ---------- Error Handlers ----------
 app.use(notFoundHandler);
-
-// ---------- Global Error Handler ----------
 app.use(errorHandler);
 
-// ---------- Socket.IO Connection ----------
+// ---------- Socket.IO ----------
 io.on('connection', (socket) => {
   console.log(`🔌 Client connected: ${socket.id}`);
-
-  socket.on('join-room', (room) => {
-    socket.join(room);
-    console.log(`📦 Socket ${socket.id} joined room ${room}`);
-  });
-
-  socket.on('leave-room', (room) => {
-    socket.leave(room);
-    console.log(`📤 Socket ${socket.id} left room ${room}`);
-  });
-
-  socket.on('disconnect', () => {
-    console.log(`🔌 Client disconnected: ${socket.id}`);
-  });
+  socket.on('join-room', (room) => socket.join(room));
+  socket.on('leave-room', (room) => socket.leave(room));
+  socket.on('disconnect', () => console.log(`🔌 Client disconnected: ${socket.id}`));
 });
 
 // ---------- Database Connection ----------
@@ -166,7 +146,6 @@ async function connectDB() {
 // ---------- Start Server ----------
 async function startServer() {
   await connectDB();
-
   httpServer.listen(PORT, () => {
     console.log(`🚀 ShebaOdds server running on port ${PORT}`);
     console.log(`📡 WebSocket server ready`);
@@ -178,7 +157,6 @@ async function startServer() {
 process.on('SIGTERM', () => {
   console.log('🛑 SIGTERM received, shutting down gracefully...');
   httpServer.close(() => {
-    console.log('HTTP server closed.');
     mongoose.connection.close(false, () => {
       console.log('MongoDB connection closed.');
       process.exit(0);
@@ -189,7 +167,6 @@ process.on('SIGTERM', () => {
 process.on('SIGINT', () => {
   console.log('🛑 SIGINT received, shutting down gracefully...');
   httpServer.close(() => {
-    console.log('HTTP server closed.');
     mongoose.connection.close(false, () => {
       console.log('MongoDB connection closed.');
       process.exit(0);
@@ -197,15 +174,12 @@ process.on('SIGINT', () => {
   });
 });
 
-// ---------- Unhandled Rejection & Exception ----------
 process.on('unhandledRejection', (err: Error) => {
   console.error('💥 Unhandled Rejection:', err.stack);
-  // In production, you might want to restart the process
 });
 
 process.on('uncaughtException', (err: Error) => {
   console.error('💥 Uncaught Exception:', err.stack);
-  // Graceful shutdown
   httpServer.close(() => {
     mongoose.connection.close(false, () => {
       process.exit(1);
@@ -213,7 +187,6 @@ process.on('uncaughtException', (err: Error) => {
   });
 });
 
-// ---------- Start the server ----------
 startServer();
 
 export { app, io, httpServer };
