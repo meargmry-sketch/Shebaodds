@@ -43,10 +43,6 @@ export const Wager = mongoose.model<IWager>('Wager', WagerSchema);
 // ==================== CASINO GAME ENGINE ====================
 export class MongoDBWalletEngine {
 
-  /**
-   * Processes any casino game round.
-   * Uses a MongoDB transaction to atomically update wallet and log wager.
-   */
   public async processCasinoGame(
     userId: string,
     gameId: string,
@@ -63,27 +59,22 @@ export class MongoDBWalletEngine {
     session.startTransaction();
 
     try {
-      // Lock wallet
       const wallet = await Wallet.findOne({ userId }).session(session);
       if (!wallet) throw new Error('Wallet not found');
       if (wallet.cashBalance < stake) throw new Error('Insufficient balance');
 
-      // Execute game logic
       const gameResult = this.playGame(gameId, stake, params);
       const { result, profit, details } = gameResult;
 
-      // Calculate tax (only on net profit, using environment variable)
       const taxRate = parseFloat(process.env.TAX_RATE || '0.10');
       const netProfit = profit > 0 ? profit : 0;
       const taxAmount = Math.round(netProfit * taxRate * 100) / 100;
-      const finalProfit = profit - taxAmount;   // net after tax (can be negative)
-      const netPayout = stake + finalProfit;    // total returned to wallet
+      const finalProfit = profit - taxAmount;
+      const netPayout = stake + finalProfit;
 
-      // Update wallet: subtract stake, add net payout
       wallet.cashBalance = Math.round((wallet.cashBalance - stake + netPayout) * 100) / 100;
       await wallet.save({ session });
 
-      // Record wager
       await Wager.create([{
         userId,
         gameId,
@@ -166,7 +157,7 @@ export class MongoDBWalletEngine {
   }
 
   // ---------- All 51 Game Implementations ----------
-  private playDice(stake: number, params: any) {
+  private playDice(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const player = Math.floor(Math.random() * 6) + 1;
     const house = Math.floor(Math.random() * 6) + 1;
     const win = player > house;
@@ -174,26 +165,27 @@ export class MongoDBWalletEngine {
     return { result: win ? 'win' : 'lose', profit, details: { playerRoll: player, houseRoll: house } };
   }
 
-  private playCoinFlip(stake: number, params: any) {
+  private playCoinFlip(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const result = Math.random() < 0.5 ? 'heads' : 'tails';
     const win = params.side === result;
     const profit = win ? stake * 0.9 : -stake;
     return { result: win ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { result, side: params.side } };
   }
 
-  private playPlinko(stake: number, params: any) {
+  private playPlinko(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const mult = [5.6, 2.1, 1.1, 1, 1, 1.1, 2.1, 5.6][Math.floor(Math.random() * 8)] || 1;
     const profit = stake * mult - stake;
     return { result: profit > 0 ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { multiplier: mult } };
   }
 
-  private playBlackjack(stake: number, params: any) {
+  private playBlackjack(stake: number, params: any): { result: 'win' | 'lose' | 'push'; profit: number; details: any } {
     const draw = () => Math.min(Math.floor(Math.random() * 13) + 1, 10);
     const playerCards = [draw(), draw()];
     const dealerCards = [draw(), draw()];
     const sum = (c: number[]) => c.reduce((a, b) => a + b, 0);
     const pScore = sum(playerCards), dScore = sum(dealerCards);
-    let result = 'lose', profit = -stake;
+    let result: 'win' | 'lose' | 'push' = 'lose';
+    let profit = -stake;
     if (pScore === 21 && playerCards.length === 2) { result = 'win'; profit = stake * 1.5; }
     else if (pScore > 21) { result = 'lose'; profit = -stake; }
     else if (dScore > 21) { result = 'win'; profit = stake; }
@@ -202,7 +194,7 @@ export class MongoDBWalletEngine {
     return { result, profit: Math.round(profit * 100) / 100, details: { playerScore: pScore, dealerScore: dScore } };
   }
 
-  private playRoulette(stake: number, params: any) {
+  private playRoulette(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const number = Math.floor(Math.random() * 37);
     const reds = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
     const isRed = reds.includes(number), isEven = number > 0 && number % 2 === 0;
@@ -215,7 +207,7 @@ export class MongoDBWalletEngine {
     return { result: win ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { number, isRed, isEven } };
   }
 
-  private playMines(stake: number, params: any) {
+  private playMines(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const total = 25, minesCount = params.mines || 3;
     const mines = new Set<number>();
     while (mines.size < minesCount) mines.add(Math.floor(Math.random() * total));
@@ -225,7 +217,7 @@ export class MongoDBWalletEngine {
     return { result: hit ? 'lose' : 'win', profit: Math.round(profit * 100) / 100, details: { mines: [...mines], tile, hit } };
   }
 
-  private playCrash(stake: number, params: any) {
+  private playCrash(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const crashPoint = 1 + Math.random() * 9;
     const cashOut = params.action === 'cashout' ? Math.min(1 + Math.random() * 5, crashPoint) : 0;
     const win = params.action === 'cashout' && cashOut < crashPoint;
@@ -234,9 +226,11 @@ export class MongoDBWalletEngine {
     return { result: win ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { crashPoint, multiplier } };
   }
 
-  private playAviator(stake: number, params: any) { return this.playCrash(stake, params); }
+  private playAviator(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
+    return this.playCrash(stake, params);
+  }
 
-  private playTower(stake: number, params: any) {
+  private playTower(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     if (params.action === 'cashout') {
       const profit = stake * (params.multiplier || 1) - stake;
       return { result: 'win', profit: Math.round(profit * 100) / 100, details: { level: params.level, multiplier: params.multiplier } };
@@ -245,17 +239,18 @@ export class MongoDBWalletEngine {
     }
   }
 
-  private playKeno(stake: number, params: any) {
+  private playKeno(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const matches = params.matches || 0;
     const profit = matches > 0 ? stake * matches * 2 - stake : -stake;
     return { result: matches > 0 ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { matches } };
   }
 
-  private playBaccarat(stake: number, params: any) {
+  private playBaccarat(stake: number, params: any): { result: 'win' | 'lose' | 'push'; profit: number; details: any } {
     const card = () => Math.floor(Math.random() * 10) + 1;
     const bankerTotal = (card() + card()) % 10;
     const playerTotal = (card() + card()) % 10;
-    let result = 'lose', profit = -stake;
+    let result: 'win' | 'lose' | 'push' = 'lose';
+    let profit = -stake;
     if (params.bet === 'banker') {
       if (bankerTotal > playerTotal) { result = 'win'; profit = stake * 0.95; }
       else if (bankerTotal === playerTotal) { result = 'push'; profit = 0; }
@@ -268,7 +263,7 @@ export class MongoDBWalletEngine {
     return { result, profit: Math.round(profit * 100) / 100, details: { bankerTotal, playerTotal } };
   }
 
-  private playWheel(stake: number, params: any) {
+  private playWheel(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const multipliers = [2, 2, 2, 2, 2, 3, 3, 3, 3, 5, 5, 5, 10, 10, 20, 40, ...Array(38).fill(1)];
     const segment = Math.floor(Math.random() * multipliers.length);
     const mult = multipliers[segment] || 1;
@@ -276,13 +271,13 @@ export class MongoDBWalletEngine {
     return { result: profit > 0 ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { segment, multiplier: mult } };
   }
 
-  private playHilo(stake: number, params: any) {
+  private playHilo(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const win = Math.random() < 0.5;
     const profit = win ? stake * 1.9 - stake : -stake;
     return { result: win ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { win } };
   }
 
-  private playSicBo(stake: number, params: any) {
+  private playSicBo(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const dice = [1, 2, 3].map(() => Math.floor(Math.random() * 6) + 1);
     const sum = dice.reduce((a, b) => a + b, 0);
     let win = false, payout = 0;
@@ -295,19 +290,19 @@ export class MongoDBWalletEngine {
     return { result: win ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { dice, sum } };
   }
 
-  private playVideoPoker(stake: number, params: any) {
+  private playVideoPoker(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const mult = params.multiplier || 0;
     const profit = mult > 0 ? stake * mult - stake : -stake;
     return { result: mult > 0 ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { multiplier: mult } };
   }
 
-  private playBingo(stake: number, params: any) {
+  private playBingo(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const win = Math.random() < 0.3;
     const profit = win ? stake * 2 - stake : -stake;
     return { result: win ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { win } };
   }
 
-  private playCraps(stake: number, params: any) {
+  private playCraps(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const d1 = Math.floor(Math.random() * 6) + 1, d2 = Math.floor(Math.random() * 6) + 1;
     const sum = d1 + d2;
     const win = sum === 7 || sum === 11;
@@ -315,7 +310,7 @@ export class MongoDBWalletEngine {
     return { result: win ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { dice: [d1, d2], sum } };
   }
 
-  private playDragonTiger(stake: number, params: any) {
+  private playDragonTiger(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const dragon = Math.floor(Math.random() * 13) + 1;
     const tiger = Math.floor(Math.random() * 13) + 1;
     let win = false, profit = -stake;
@@ -325,20 +320,20 @@ export class MongoDBWalletEngine {
     return { result: win ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { dragon, tiger } };
   }
 
-  private playAndarBahar(stake: number, params: any) {
+  private playAndarBahar(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const win = Math.random() < 0.5;
     const side = win ? 'andar' : 'bahar';
     const profit = params.bet === side ? stake : -stake;
     return { result: profit > 0 ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { side } };
   }
 
-  private playTeenPatti(stake: number, params: any) {
+  private playTeenPatti(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const win = Math.random() < 0.5;
     const profit = win ? stake * 1.9 - stake : -stake;
     return { result: win ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { win } };
   }
 
-  private playLucky7(stake: number, params: any) {
+  private playLucky7(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const d1 = Math.floor(Math.random() * 6) + 1, d2 = Math.floor(Math.random() * 6) + 1;
     const sum = d1 + d2;
     const win = sum === 7;
@@ -346,13 +341,13 @@ export class MongoDBWalletEngine {
     return { result: win ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { dice: [d1, d2], sum } };
   }
 
-  private playScratch(stake: number, params: any) {
+  private playScratch(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const win = Math.random() < 0.2;
     const profit = win ? stake * 5 - stake : -stake;
     return { result: win ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { win } };
   }
 
-  private playFootball(stake: number, params: any) {
+  private playFootball(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const home = Math.floor(Math.random() * 5), away = Math.floor(Math.random() * 5);
     let result = 'draw';
     if (home > away) result = 'home';
@@ -363,27 +358,27 @@ export class MongoDBWalletEngine {
     return { result: win ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { homeGoals: home, awayGoals: away } };
   }
 
-  private playBasketball(stake: number, params: any) {
+  private playBasketball(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const teamA = Math.floor(Math.random() * 120), teamB = Math.floor(Math.random() * 120);
     const win = params.bet === (teamA > teamB ? 'teamA' : 'teamB');
     const profit = win ? stake : -stake;
     return { result: win ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { teamA, teamB } };
   }
 
-  private playHorseRacing(stake: number, params: any) {
+  private playHorseRacing(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const win = Math.random() < 0.15;
     const profit = win ? stake * 6 - stake : -stake;
     return { result: win ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { winner: params.bet } };
   }
 
-  private playSpinWin(stake: number, params: any) {
+  private playSpinWin(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const multipliers = [0, 0, 0, 1.5, 1.5, 2, 2, 3, 5, 10];
     const mult = multipliers[Math.floor(Math.random() * multipliers.length)] || 0;
     const profit = mult > 0 ? stake * mult - stake : -stake;
     return { result: profit > 0 ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { multiplier: mult } };
   }
 
-  private playSlot(stake: number, params: any) {
+  private playSlot(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const symbols = ['🍒', '🍋', '🍊', '🔔', '💎', '7'];
     const reels = [symbols[Math.floor(Math.random() * 6)], symbols[Math.floor(Math.random() * 6)], symbols[Math.floor(Math.random() * 6)]];
     let mult = 0;
@@ -393,28 +388,29 @@ export class MongoDBWalletEngine {
     return { result: profit > 0 ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { reels, multiplier: mult } };
   }
 
-  private playRedDog(stake: number, params: any) {
+  private playRedDog(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const win = Math.random() < 0.4;
     const profit = win ? stake * 1.5 - stake : -stake;
     return { result: win ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { win } };
   }
 
-  private playWar(stake: number, params: any) {
+  private playWar(stake: number, params: any): { result: 'win' | 'lose' | 'push'; profit: number; details: any } {
     const player = Math.floor(Math.random() * 13) + 1;
     const dealer = Math.floor(Math.random() * 13) + 1;
-    let result = 'lose', profit = -stake;
+    let result: 'win' | 'lose' | 'push' = 'lose';
+    let profit = -stake;
     if (player > dealer) { result = 'win'; profit = stake; }
     else if (player === dealer) { result = 'push'; profit = 0; }
     return { result, profit: Math.round(profit * 100) / 100, details: { playerCard: player, dealerCard: dealer } };
   }
 
-  private playPaiGow(stake: number, params: any) {
+  private playPaiGow(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const win = Math.random() < 0.4;
     const profit = win ? stake * 1.8 - stake : -stake;
     return { result: win ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { win } };
   }
 
-  private playDiceDuels(stake: number, params: any) {
+  private playDiceDuels(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const dice = [1, 2, 3].map(() => Math.floor(Math.random() * 6) + 1);
     const sum = dice.reduce((a, b) => a + b, 0);
     const win = sum >= 10;
@@ -422,32 +418,32 @@ export class MongoDBWalletEngine {
     return { result: win ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { dice, sum } };
   }
 
-  private playPenalty(stake: number, params: any) {
+  private playPenalty(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const win = Math.random() < 0.5;
     const profit = win ? stake * 1.8 - stake : -stake;
     return { result: win ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { score: win } };
   }
 
-  private playChickenRoad(stake: number, params: any) {
+  private playChickenRoad(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const win = Math.random() < 0.7;
     const profit = win ? stake * 1.2 - stake : -stake;
     return { result: win ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { crash: !win } };
   }
 
-  private playChickenShot(stake: number, params: any) {
+  private playChickenShot(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const win = Math.random() < 0.4;
     const profit = win ? stake * 2 - stake : -stake;
     return { result: win ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { hit: win } };
   }
 
-  private playMegaBall(stake: number, params: any) {
+  private playMegaBall(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const drawn = Math.floor(Math.random() * 100);
     const win = drawn % 10 === 0;
     const profit = win ? stake * 10 - stake : -stake;
     return { result: win ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { drawn } };
   }
 
-  private playPokerDice(stake: number, params: any) {
+  private playPokerDice(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const dice = [1, 2, 3, 4, 5].map(() => Math.floor(Math.random() * 6) + 1);
     const sum = dice.reduce((a, b) => a + b, 0);
     const win = sum >= 20;
@@ -455,7 +451,7 @@ export class MongoDBWalletEngine {
     return { result: win ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { dice, sum } };
   }
 
-  private playLightningDice(stake: number, params: any) {
+  private playLightningDice(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const d1 = Math.floor(Math.random() * 6) + 1, d2 = Math.floor(Math.random() * 6) + 1;
     const sum = d1 + d2;
     const mult = Math.random() < 0.1 ? Math.floor(Math.random() * 5) + 2 : 1;
@@ -464,74 +460,73 @@ export class MongoDBWalletEngine {
     return { result: win ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { dice: [d1, d2], sum, multiplier: mult } };
   }
 
-  private playCarRoulette(stake: number, params: any) {
+  private playCarRoulette(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const number = Math.floor(Math.random() * 37);
     const win = number === 0;
     const profit = win ? stake * 35 - stake : -stake;
     return { result: win ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { number } };
   }
 
-  private playKnockout(stake: number, params: any) {
+  private playKnockout(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const round = Math.floor(Math.random() * 12) + 1;
     const win = round <= 6;
     const profit = win ? stake * 1.8 - stake : -stake;
     return { result: win ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { round } };
   }
 
-  private playRummy(stake: number, params: any) {
+  private playRummy(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const win = Math.random() < 0.3;
     const profit = win ? stake * 3 - stake : -stake;
     return { result: win ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { win } };
   }
 
-  private playDarts(stake: number, params: any) {
+  private playDarts(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const score = Math.floor(Math.random() * 60);
     const win = score >= 40;
     const profit = win ? stake * 2 - stake : -stake;
     return { result: win ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { score } };
   }
 
-  private playTennis(stake: number, params: any) {
+  private playTennis(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const win = Math.random() < 0.5;
     const profit = win ? stake : -stake;
     return { result: win ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { winner: params.bet } };
   }
 
-  private playBaseball(stake: number, params: any) {
+  private playBaseball(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const runs = Math.floor(Math.random() * 10);
     const win = (params.bet === 'over' && runs > 5) || (params.bet === 'under' && runs <= 5);
     const profit = win ? stake : -stake;
     return { result: win ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { runs } };
   }
 
-  private playGreyhound(stake: number, params: any) {
+  private playGreyhound(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const win = Math.random() < 0.2;
     const profit = win ? stake * 4 - stake : -stake;
     return { result: win ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { winner: params.bet } };
   }
 
-  private playMotorbike(stake: number, params: any) {
+  private playMotorbike(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const win = Math.random() < 0.2;
     const profit = win ? stake * 4 - stake : -stake;
     return { result: win ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { winner: params.bet } };
   }
 
-  private playCricket(stake: number, params: any) {
+  private playCricket(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const win = Math.random() < 0.5;
     const profit = win ? stake : -stake;
     return { result: win ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { winner: params.bet } };
   }
 
-  private playRoulette360(stake: number, params: any) {
+  private playRoulette360(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const number = Math.floor(Math.random() * 37);
     const win = number % 2 === 0;
     const profit = win ? stake * 1.8 - stake : -stake;
     return { result: win ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { number } };
   }
 
-  private playMegaWheel(stake: number, params: any) {
+  private playMegaWheel(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const multipliers = Array(54).fill(1);
-    // fill some with higher multipliers
     [0,1,2,3,4].forEach(i => multipliers[i] = 2);
     [5,6,7,8].forEach(i => multipliers[i] = 3);
     [9,10,11].forEach(i => multipliers[i] = 5);
@@ -543,7 +538,7 @@ export class MongoDBWalletEngine {
     return { result: profit > 0 ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { segment, multiplier: mult } };
   }
 
-  private playMonopoly(stake: number, params: any) {
+  private playMonopoly(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const d1 = Math.floor(Math.random() * 6) + 1, d2 = Math.floor(Math.random() * 6) + 1;
     const sum = d1 + d2;
     const multipliers = [0, 1, 1, 2, 2, 3, 3, 4, 5, 6, 8, 10];
@@ -552,13 +547,13 @@ export class MongoDBWalletEngine {
     return { result: profit > 0 ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { dice: [d1, d2], sum, multiplier: mult } };
   }
 
-  private playVirtualSports(stake: number, params: any) {
+  private playVirtualSports(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const win = Math.random() < 0.5;
     const profit = win ? stake : -stake;
     return { result: win ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { sport: params.sport } };
   }
 
-  private playTexasHoldem(stake: number, params: any) {
+  private playTexasHoldem(stake: number, params: any): { result: 'win' | 'lose'; profit: number; details: any } {
     const win = Math.random() < 0.4;
     const profit = win ? stake * 1.5 - stake : -stake;
     return { result: win ? 'win' : 'lose', profit: Math.round(profit * 100) / 100, details: { win } };
