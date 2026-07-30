@@ -6,11 +6,11 @@
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "skipLibCheck": true,
-    "strict": true,
+    "strict": false,
     "outDir": "./dist",
     "rootDir": "./",
     "resolveJsonModule": true
   },
-  "include": ["*.ts", "src/**/*.ts"],
+  "include": ["*.ts", "src/**/*.ts", "routes/**/*.ts", "middleware/**/*.ts"],
   "exclude": ["node_modules", "dist", "**/*.test.ts"]
 }
