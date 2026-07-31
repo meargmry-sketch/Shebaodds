@@ -1,0 +1,21 @@
+/**
+ * SHEBAODDS - Production Server Entry Point
+ * Runs the compiled TypeScript output from dist/
+ */
+try {
+  // Check if compiled output exists
+  const fs = require('fs');
+  const path = require('path');
+  
+  const distPath = path.join(__dirname, 'dist', 'server.js');
+  if (!fs.existsSync(distPath)) {
+    console.error('❌ Compiled output not found. Run "npm run build" first.');
+    process.exit(1);
+  }
+  
+  // Run the compiled server
+  require('./dist/server.js');
+} catch (err) {
+  console.error('💥 Failed to start server:', err.message);
+  process.exit(1);
+}
