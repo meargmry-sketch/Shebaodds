@@ -351,7 +351,8 @@ export async function generateMonthlyTaxReport(taxPeriod: string) {
       });
     }
 
-    const excelBuffer = await workbook.xlsx.writeBuffer() as Buffer;
+    // ✅ FIXED: explicit Buffer creation from the workbook's writeBuffer result
+    const excelBuffer = Buffer.from(await workbook.xlsx.writeBuffer());
 
     return { pdf: pdfBuffer, excel: excelBuffer, summary };
 
