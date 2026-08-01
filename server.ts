@@ -156,21 +156,19 @@ async function startServer() {
 // ---------- Graceful Shutdown ----------
 process.on('SIGTERM', () => {
   console.log('🛑 SIGTERM received, shutting down gracefully...');
-  httpServer.close(() => {
-    mongoose.connection.close(false, () => {
-      console.log('MongoDB connection closed.');
-      process.exit(0);
-    });
+  httpServer.close(async () => {
+    await mongoose.connection.close();
+    console.log('MongoDB connection closed.');
+    process.exit(0);
   });
 });
 
 process.on('SIGINT', () => {
   console.log('🛑 SIGINT received, shutting down gracefully...');
-  httpServer.close(() => {
-    mongoose.connection.close(false, () => {
-      console.log('MongoDB connection closed.');
-      process.exit(0);
-    });
+  httpServer.close(async () => {
+    await mongoose.connection.close();
+    console.log('MongoDB connection closed.');
+    process.exit(0);
   });
 });
 
@@ -180,10 +178,10 @@ process.on('unhandledRejection', (err: Error) => {
 
 process.on('uncaughtException', (err: Error) => {
   console.error('💥 Uncaught Exception:', err.stack);
-  httpServer.close(() => {
-    mongoose.connection.close(false, () => {
-      process.exit(1);
-    });
+  httpServer.close(async () => {
+    await mongoose.connection.close();
+    console.log('MongoDB connection closed.');
+    process.exit(1);
   });
 });
 
