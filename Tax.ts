@@ -110,9 +110,15 @@ const userTaxProfileSchema = new Schema<IUserTaxProfile>({
   lastTaxCalculation: Date
 }, { timestamps: true });
 
-export const TaxTransaction = mongoose.models.TaxTransaction || mongoose.model<ITaxTransaction>('TaxTransaction', taxTransactionSchema);
-export const TaxSummary = mongoose.models.TaxSummary || mongoose.model<ITaxSummary>('TaxSummary', taxSummarySchema);
-export const UserTaxProfile = mongoose.models.UserTaxProfile || mongoose.model<IUserTaxProfile>('UserTaxProfile', userTaxProfileSchema);
+export const TaxTransaction: mongoose.Model<ITaxTransaction> =
+  (mongoose.models.TaxTransaction as mongoose.Model<ITaxTransaction>) ||
+  mongoose.model<ITaxTransaction>('TaxTransaction', taxTransactionSchema);
+export const TaxSummary: mongoose.Model<ITaxSummary> =
+  (mongoose.models.TaxSummary as mongoose.Model<ITaxSummary>) ||
+  mongoose.model<ITaxSummary>('TaxSummary', taxSummarySchema);
+export const UserTaxProfile: mongoose.Model<IUserTaxProfile> =
+  (mongoose.models.UserTaxProfile as mongoose.Model<IUserTaxProfile>) ||
+  mongoose.model<IUserTaxProfile>('UserTaxProfile', userTaxProfileSchema);
 
 // Export service methods (they will be updated separately to handle casino winnings)
 export { generateMonthlyTaxReport, submitTaxReport } from './taxService';

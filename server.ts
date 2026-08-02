@@ -19,22 +19,22 @@ import path from 'path';
 config();
 
 // ---------- Import Routes ----------
-import adminRoutes from './routes/adminRoutes';
-import matchesRoutes from './routes/matchesRoutes';
-import authRoutes from './routes/authRoutes';
-import userRoutes from './routes/userRoutes';
-import betRoutes from './routes/betRoutes';
-import transactionRoutes from './routes/transactionRoutes';
-import taxRoutes from './routes/taxRoutes';
-import walletRoutes from './routes/walletRoutes';
-import casinoRoutes from './routes/casinoRoutes';
-import jackpotRoutes from './routes/jackpotRoutes';
+import adminRoutes from './adminRoutes';
+import matchesRoutes from './matchesRoutes';
+import authRoutes from './authRoutes';
+import betRoutes from './bettingRoutes';
+import walletRoutes from './walletRoutes';
+import userRoutes from './userRoutes';
+import transactionRoutes from './transactionRoutes';
+import taxRoutes from './taxRoutes';
+import casinoRoutes from './casinoRoutes';
+import jackpotRoutes from './jackpotRoutes';
 
 // ---------- Import Middleware ----------
-import { authenticate, isAdmin } from './middleware/authMiddleware';
-import { validatePassword } from './middleware/passwordValidator';
-import { errorHandler, notFoundHandler } from './middleware/errorHandler';
-import { requestLogger } from './middleware/logger';
+import { authenticate, isAdmin } from './authMiddleware';
+import { validatePassword } from './passwordValidator';
+import { errorHandler, notFoundHandler } from './middleware';
+import { requestLogger } from './logger';
 
 const PORT = process.env.PORT || 3000;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/shebaodds';

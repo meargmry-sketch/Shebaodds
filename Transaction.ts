@@ -282,5 +282,7 @@ transactionSchema.statics.getUserDepositTotal = async function(this: ITransactio
   return result[0]?.total || 0;
 };
 
-export const Transaction = mongoose.models.Transaction || mongoose.model<ITransaction, ITransactionModel>('Transaction', transactionSchema);
+export const Transaction: ITransactionModel =
+  (mongoose.models.Transaction as ITransactionModel) ||
+  mongoose.model<ITransaction, ITransactionModel>('Transaction', transactionSchema);
 export default Transaction;

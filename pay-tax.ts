@@ -16,7 +16,8 @@ const WagerSchema = new mongoose.Schema({
   status: String
 }, { timestamps: true });
 
-const WagerModel = mongoose.models.Wager || mongoose.model('Wager', WagerSchema);
+const WagerModel: mongoose.Model<any> =
+  (mongoose.models.Wager as mongoose.Model<any>) || mongoose.model('Wager', WagerSchema);
 
 async function executeTaxPayment() {
   console.log('🔄 [TAX REMIT] Initializing secure statutory remittance pipeline...');

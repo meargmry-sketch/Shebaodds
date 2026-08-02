@@ -45,7 +45,7 @@ const UserProfileSchema = new Schema<IUserProfile>({
   deviceHardwareHash: { type: String }
 }, { timestamps: true });
 
-export const UserProfileModel = mongoose.models.UserProfile || mongoose.model<IUserProfile>('UserProfile', UserProfileSchema);
+export const UserProfileModel: mongoose.Model<IUserProfile> = (mongoose.models.UserProfile as mongoose.Model<IUserProfile>) || mongoose.model<IUserProfile>('UserProfile', UserProfileSchema);
 
 // --- Match Schema (Sports Feed) ---
 interface IMatch extends Document {
@@ -92,7 +92,7 @@ const MatchSchema = new Schema<IMatch>({
   }
 }, { timestamps: true });
 
-export const MatchModel = mongoose.models.Match || mongoose.model<IMatch>('Match', MatchSchema);
+export const MatchModel: mongoose.Model<IMatch> = (mongoose.models.Match as mongoose.Model<IMatch>) || mongoose.model<IMatch>('Match', MatchSchema);
 
 // --- Bet / Slip Schema ---
 interface ISelection {
@@ -141,7 +141,7 @@ const BetSchema = new Schema<IBet>({
   status: { type: String, enum: ['Pending', 'Won', 'Lost', 'Void', 'CashedOut'], default: 'Pending' }
 }, { timestamps: true });
 
-export const BetModel = mongoose.models.Bet || mongoose.model<IBet>('Bet', BetSchema);
+export const BetModel: mongoose.Model<IBet> = (mongoose.models.Bet as mongoose.Model<IBet>) || mongoose.model<IBet>('Bet', BetSchema);
 
 // --- Transaction Schema ---
 interface ITransaction extends Document {
@@ -164,7 +164,7 @@ const TransactionSchema = new Schema<ITransaction>({
   reference: { type: String, required: true }
 }, { timestamps: true });
 
-export const TransactionModel = mongoose.models.Transaction || mongoose.model<ITransaction>('Transaction', TransactionSchema);
+export const TransactionModel: mongoose.Model<ITransaction> = (mongoose.models.Transaction as mongoose.Model<ITransaction>) || mongoose.model<ITransaction>('Transaction', TransactionSchema);
 
 // ==============================================================================
 // 🎰 NEW: CASINO GAME MODEL & DATA
@@ -202,7 +202,7 @@ const CasinoGameSchema = new Schema<ICasinoGame>({
   totalWon: { type: Number, default: 0 }
 }, { timestamps: true });
 
-export const CasinoGameModel = mongoose.models.CasinoGame || mongoose.model<ICasinoGame>('CasinoGame', CasinoGameSchema);
+export const CasinoGameModel: mongoose.Model<ICasinoGame> = (mongoose.models.CasinoGame as mongoose.Model<ICasinoGame>) || mongoose.model<ICasinoGame>('CasinoGame', CasinoGameSchema);
 
 // 51+ Casino games static data for seeding
 const CASINO_GAMES_DATA = [

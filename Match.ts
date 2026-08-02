@@ -325,7 +325,7 @@ MatchSchema.statics.findUpcoming = function (this: Model<IMatch>, limit = 20) {
 };
 
 // ===================== EXPORT =====================
-export const Match = mongoose.models.Match || mongoose.model<IMatch, IMatchModel>('Match', MatchSchema);
+export const Match: IMatchModel = (mongoose.models.Match as IMatchModel) || mongoose.model<IMatch, IMatchModel>('Match', MatchSchema);
 
 // ============================================================================
 // 🎰 CASINO GAME MODEL (for 51+ Games)
@@ -368,7 +368,7 @@ const casinoGameSchema = new Schema<ICasinoGame>(
   { timestamps: true }
 );
 
-export const CasinoGame = mongoose.models.CasinoGame || mongoose.model<ICasinoGame>('CasinoGame', casinoGameSchema);
+export const CasinoGame: mongoose.Model<ICasinoGame> = (mongoose.models.CasinoGame as mongoose.Model<ICasinoGame>) || mongoose.model<ICasinoGame>('CasinoGame', casinoGameSchema);
 
 // ============================================================================
 // 🎰 51+ CASINO GAMES DATA
