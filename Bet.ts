@@ -485,6 +485,5 @@ betSchema.statics.getUserBetStats = async function(this: IBetModel, userId: stri
   return result;
 };
 
-export const Bet: IBetModel =
-  (mongoose.models.Bet as IBetModel) || mongoose.model<IBet, IBetModel>('Bet', betSchema);
+export const Bet = mongoose.models.Bet || mongoose.model<IBet, IBetModel>('Bet', betSchema);
 export default Bet;

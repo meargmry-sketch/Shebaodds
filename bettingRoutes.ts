@@ -5,7 +5,7 @@
 // ============================================
 
 import express, { Request, Response, NextFunction, Router } from 'express';
-import mongoose, { Schema, Document, Model } from 'mongoose';
+import mongoose from 'mongoose';
 import { authenticate, canPlaceBet } from './authMiddleware';
 import { checkResponsibleGambling, checkSelfExclusion } from './responsibleGamblingMiddleware';
 import User from './User';
@@ -47,8 +47,7 @@ const casinoGameSchema = new Schema<ICasinoGame>({
   totalWon: { type: Number, default: 0 }
 }, { timestamps: true });
 
-export const CasinoGame: Model<ICasinoGame> =
-  (mongoose.models.CasinoGame as Model<ICasinoGame>) || mongoose.model<ICasinoGame>('CasinoGame', casinoGameSchema);
+export const CasinoGame = mongoose.models.CasinoGame || mongoose.model<ICasinoGame>('CasinoGame', casinoGameSchema);
 
 // ==================== VALIDATION MIDDLEWARE ====================
 const validateBet = (req: Request, res: Response, next: NextFunction) => {
