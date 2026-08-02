@@ -1,31 +1,21 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# Not currently used by App.jsx
 
-# SHEBAODDS – Sportsbook & 51+ Casino Games
+These three files are a **second, more modular** attempt at the same UI that
+`App.jsx` already implements as one big self-contained file:
 
-Welcome to the **SHEBAODDS** enterprise betting platform. This repository contains the full source code for a **real-time sportsbook** and a fully integrated **51+ Casino Games** suite, built with Kotlin (Android) and React (Web).
+- `App.jsx` defines its own inline `BetSlip()` and `CasinoGames()` components
+  (search for `function BetSlip()` and `function CasinoGames()` inside it) and
+  never imports anything from this folder.
+- `SportsbookHeader.jsx` imports `./BetSlip` (present here) and `./CasinoGames`
+  (**does not exist anywhere in the repo** — this file will not compile if you
+  wire it in as-is).
+- `LiveUpcomingMatches.jsx` is misnamed: its actual content (sidebar nav with
+  Users/Trophy/Finance/Withdrawals/Reports, a bets/deposits table, etc.) is an
+  **admin dashboard**, not a live-matches widget. It matches the "Bet Master
+  Admin Panel" mockup, not the player-facing app.
 
-**Features:**
-- Live Sportsbook odds and match tracking.
-- 51+ Casino games (Aviator, Dice, Slots, Blackjack, Roulette, etc.).
-- Real-time WebSocket feed for sports and casino events.
-- Ethiopian calendar and Amharic/Tigrinya/Oromo language support.
-- Secure biometric authentication (Face ID / Fingerprint).
-- Telebirr and CBE Birr payment integration.
-- Admin dashboard for monitoring bets and casino activity.
-
----
-
-## Run Locally
-
-### Prerequisites
-- [Android Studio](https://developer.android.com/studio) (latest stable version)
-- Node.js (v18+) and npm (v9+) for the backend.
-- MongoDB (local or cloud) for database storage.
-
-### Backend Setup (Node.js + MongoDB)
-
-1. Navigate to the backend folder:
-   ```bash
-   cd backend
+Nothing currently imports these three files, so they don't block the build.
+Before wiring any of them in, decide: keep the single-file `App.jsx`
+approach, or switch to this modular version (which needs a `CasinoGames.jsx`
+written and `LiveUpcomingMatches.jsx` renamed/moved into a separate admin
+app)? Pick one — don't try to use both, they duplicate the same screens.
