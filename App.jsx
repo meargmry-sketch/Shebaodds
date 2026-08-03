@@ -9,8 +9,8 @@ import { BrowserRouter, Routes, Route, Navigate, Link, useNavigate, useLocation 
 import axios from 'axios';
 import { io } from 'socket.io-client';
 import { LanguageProvider, LanguageSwitcher, useTranslation, formatNumber, formatDate } from './LanguageContext';
-import './styles/global.css';
-import './styles/theme.css';
+import './global.css';
+import './theme.css';
 
 // ==================== CONFIGURATION ====================
 const API_URL = import.meta.env.VITE_API_URL || 'https://api.shebaodds.com';
