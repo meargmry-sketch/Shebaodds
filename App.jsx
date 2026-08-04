@@ -1,7 +1,7 @@
 // ============================================
 // SHEBAODDS - COMPLETE REACT FRONTEND
 // 85% Black / 15% Gold Theme | Smart Bets. Real Wins.
-// INCLUDES: 51+ CASINO GAMES INTEGRATION
+// INCLUDES: 51+ CASINO GAMES + FULL ANIMATIONS
 // ============================================
 
 import React, { useState, useEffect, createContext, useContext, useCallback, useRef } from 'react';
@@ -16,11 +16,9 @@ import './theme.css';
 const API_URL = import.meta.env.VITE_API_URL || 'https://api.shebaodds.com';
 const WS_URL = import.meta.env.VITE_WS_URL || 'https://shebaodds.com';
 
-// Axios configuration
 axios.defaults.baseURL = API_URL;
 axios.defaults.headers.common['Content-Type'] = 'application/json';
 
-// Socket instance
 let socket;
 
 // ==================== CONTEXTS ====================
@@ -28,12 +26,11 @@ const AuthContext = createContext();
 const BetSlipContext = createContext();
 const NotificationContext = createContext();
 
-// Custom hooks
 const useAuth = () => useContext(AuthContext);
 const useBetSlip = () => useContext(BetSlipContext);
 const useNotifications = () => useContext(NotificationContext);
 
-// ==================== MAIN APP COMPONENT ====================
+// ==================== MAIN APP ====================
 function App() {
   const [token, setToken] = useState(localStorage.getItem('shebaodds_token'));
   const [user, setUser] = useState(null);
@@ -49,10 +46,7 @@ function App() {
     } else {
       setLoading(false);
     }
-
-    return () => {
-      if (socket) socket.disconnect();
-    };
+    return () => { if (socket) socket.disconnect(); };
   }, [token]);
 
   const initSocket = () => {
@@ -63,22 +57,12 @@ function App() {
       reconnectionAttempts: 5,
       reconnectionDelay: 1000
     });
-
-    socket.on('connect', () => {
-      console.log('🦁 SHEBAODDS Socket connected');
-    });
-
+    socket.on('connect', () => console.log('🦁 SHEBAODDS Socket connected'));
     socket.on('wallet_update', (data) => {
       setUser(prev => prev ? { ...prev, balance: data.balance, bonusBalance: data.bonusBalance } : prev);
     });
-
-    socket.on('notification', (notification) => {
-      showToast(notification.title, notification.message);
-    });
-
-    socket.on('odds_update', (data) => {
-      window.dispatchEvent(new CustomEvent('odds_update', { detail: data }));
-    });
+    socket.on('notification', (notification) => showToast(notification.title, notification.message));
+    socket.on('odds_update', (data) => window.dispatchEvent(new CustomEvent('odds_update', { detail: data })));
   };
 
   const fetchUser = async () => {
@@ -86,11 +70,8 @@ function App() {
       const res = await axios.get('/api/auth/me');
       setUser(res.data.user);
       socket?.emit('authenticate', token);
-    } catch (error) {
-      logout();
-    } finally {
-      setLoading(false);
-    }
+    } catch (error) { logout(); }
+    finally { setLoading(false); }
   };
 
   const login = async (email, password, twoFactorCode) => {
@@ -116,9 +97,7 @@ function App() {
   };
 
   const logout = async () => {
-    try {
-      await axios.post('/api/auth/logout');
-    } catch (error) {}
+    try { await axios.post('/api/auth/logout'); } catch (e) {}
     localStorage.removeItem('shebaodds_token');
     delete axios.defaults.headers.common['Authorization'];
     setToken(null);
@@ -137,9 +116,7 @@ function App() {
     localStorage.setItem('shebaodds_language', newLanguage);
   };
 
-  if (loading) {
-    return <LoadingScreen />;
-  }
+  if (loading) return <LoadingScreen />;
 
   return (
     <LanguageProvider>
@@ -147,43 +124,43 @@ function App() {
         <BetSlipContext.Provider value={{}}>
           <NotificationContext.Provider value={{}}>
             <BrowserRouter>
-            <div className="app" data-theme={theme}>
-              <Navigation />
-              <div className="main-content">
-                <TopBar />
-                <div className="page-container">
-                  <Routes>
-                    <Route path="/" element={<HomePage />} />
-                    <Route path="/matches" element={<MatchesPage />} />
-                    <Route path="/matches/:matchId" element={<MatchDetailPage />} />
-                    <Route path="/live" element={<LivePage />} />
-                    <Route path="/games" element={<CasinoGames />} />
-                    <Route path="/promotions" element={<PromotionsPage />} />
-                    <Route path="/profile" element={user ? <ProfilePage /> : <Navigate to="/login" />} />
-                    <Route path="/wallet" element={user ? <WalletPage /> : <Navigate to="/login" />} />
-                    <Route path="/tax" element={user ? <TaxPage /> : <Navigate to="/login" />} />
-                    <Route path="/betting-history" element={user ? <BettingHistoryPage /> : <Navigate to="/login" />} />
-                    <Route path="/responsible-gambling" element={user ? <ResponsibleGamblingPage /> : <Navigate to="/login" />} />
-                    <Route path="/login" element={!user ? <LoginPage /> : <Navigate to="/" />} />
-                    <Route path="/register" element={!user ? <RegisterPage /> : <Navigate to="/" />} />
-                    <Route path="/reset-password" element={<ResetPasswordPage />} />
-                    <Route path="/verify-email/:token" element={<VerifyEmailPage />} />
-                    <Route path="/settings" element={user ? <SettingsPage /> : <Navigate to="/login" />} />
-                    <Route path="/support" element={<SupportPage />} />
-                    <Route path="/terms" element={<TermsPage />} />
-                    <Route path="/privacy" element={<PrivacyPage />} />
-                    <Route path="/responsible" element={<ResponsiblePage />} />
-                    <Route path="*" element={<NotFoundPage />} />
-                  </Routes>
+              <div className="app" data-theme={theme}>
+                <Navigation />
+                <div className="main-content">
+                  <TopBar />
+                  <div className="page-container">
+                    <Routes>
+                      <Route path="/" element={<HomePage />} />
+                      <Route path="/matches" element={<MatchesPage />} />
+                      <Route path="/matches/:matchId" element={<MatchDetailPage />} />
+                      <Route path="/live" element={<LivePage />} />
+                      <Route path="/games" element={<CasinoGames />} />
+                      <Route path="/promotions" element={<PromotionsPage />} />
+                      <Route path="/profile" element={user ? <ProfilePage /> : <Navigate to="/login" />} />
+                      <Route path="/wallet" element={user ? <WalletPage /> : <Navigate to="/login" />} />
+                      <Route path="/tax" element={user ? <TaxPage /> : <Navigate to="/login" />} />
+                      <Route path="/betting-history" element={user ? <BettingHistoryPage /> : <Navigate to="/login" />} />
+                      <Route path="/responsible-gambling" element={user ? <ResponsibleGamblingPage /> : <Navigate to="/login" />} />
+                      <Route path="/login" element={!user ? <LoginPage /> : <Navigate to="/" />} />
+                      <Route path="/register" element={!user ? <RegisterPage /> : <Navigate to="/" />} />
+                      <Route path="/reset-password" element={<ResetPasswordPage />} />
+                      <Route path="/verify-email/:token" element={<VerifyEmailPage />} />
+                      <Route path="/settings" element={user ? <SettingsPage /> : <Navigate to="/login" />} />
+                      <Route path="/support" element={<SupportPage />} />
+                      <Route path="/terms" element={<TermsPage />} />
+                      <Route path="/privacy" element={<PrivacyPage />} />
+                      <Route path="/responsible" element={<ResponsiblePage />} />
+                      <Route path="*" element={<NotFoundPage />} />
+                    </Routes>
+                  </div>
+                  <Footer />
                 </div>
-                <Footer />
+                <BetSlip />
               </div>
-              <BetSlip />
-            </div>
-          </BrowserRouter>
-        </NotificationContext.Provider>
-      </BetSlipContext.Provider>
-    </AuthContext.Provider>
+            </BrowserRouter>
+          </NotificationContext.Provider>
+        </BetSlipContext.Provider>
+      </AuthContext.Provider>
     </LanguageProvider>
   );
 }
@@ -198,14 +175,12 @@ function LoadingScreen() {
       </div>
       <div className="loading-tagline">Smart Bets. Real Wins.</div>
       <div className="loading-spinner"></div>
-      <div className="loading-progress">
-        <div className="progress-bar"></div>
-      </div>
+      <div className="loading-progress"><div className="progress-bar"></div></div>
     </div>
   );
 }
 
-// ==================== NAVIGATION COMPONENT ====================
+// ==================== NAVIGATION ====================
 function Navigation() {
   const { user, logout } = useAuth();
   const { language, t } = useTranslation();
@@ -228,10 +203,7 @@ function Navigation() {
 
   return (
     <>
-      <button className="mobile-menu-toggle" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
-        ☰
-      </button>
-      
+      <button className="mobile-menu-toggle" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>☰</button>
       <nav className={`sidebar ${isMobileMenuOpen ? 'open' : ''}`}>
         <div className="sidebar-header">
           <div className="logo">
@@ -242,7 +214,6 @@ function Navigation() {
             </div>
           </div>
         </div>
-
         <div className="sidebar-nav">
           {navItems.map((item) => (
             <Link
@@ -256,23 +227,16 @@ function Navigation() {
             </Link>
           ))}
         </div>
-
         {user && (
           <div className="sidebar-footer">
             <div className="user-info">
-              <div className="user-avatar">
-                {user.username?.[0]?.toUpperCase() || 'U'}
-              </div>
+              <div className="user-avatar">{user.username?.[0]?.toUpperCase() || 'U'}</div>
               <div className="user-details">
                 <div className="user-name">{user.username}</div>
-                <div className="user-vip">
-                  <span className="vip-badge">VIP {user.vip?.level || 1}</span>
-                </div>
+                <div className="user-vip"><span className="vip-badge">VIP {user.vip?.level || 1}</span></div>
               </div>
             </div>
-            <button className="logout-btn" onClick={logout}>
-              <span>🚪</span> {language === 'am' ? 'ውጣ' : 'Logout'}
-            </button>
+            <button className="logout-btn" onClick={logout}><span>🚪</span> {language === 'am' ? 'ውጣ' : 'Logout'}</button>
           </div>
         )}
       </nav>
@@ -301,9 +265,7 @@ function TopBar() {
   }, [language]);
 
   useEffect(() => {
-    if (user) {
-      fetchNotifications();
-    }
+    if (user) fetchNotifications();
   }, [user]);
 
   const fetchNotifications = async () => {
@@ -311,28 +273,21 @@ function TopBar() {
       const res = await axios.get('/api/notifications?limit=5');
       setNotifications(res.data.notifications);
       setUnreadCount(res.data.unreadCount);
-    } catch (error) {}
+    } catch (e) {}
   };
 
   return (
     <header className="top-bar">
-      <div className="time-display">
-        <span className="icon">🕐</span>
-        <span>{currentTime}</span>
-      </div>
-
+      <div className="time-display"><span className="icon">🕐</span><span>{currentTime}</span></div>
       <div className="search-bar">
         <input type="text" placeholder={t('search_placeholder') || "Search matches, teams, leagues..."} />
         <button className="search-btn">🔍</button>
       </div>
-
       <div className="top-bar-actions">
         <button className="theme-toggle" onClick={() => updateTheme(theme === 'dark' ? 'light' : 'dark')}>
           {theme === 'dark' ? '☀️' : '🌙'}
         </button>
-
         <LanguageSwitcher />
-
         {user ? (
           <>
             <div className="wallet-card" onClick={() => setShowWalletDropdown(!showWalletDropdown)}>
@@ -342,11 +297,7 @@ function TopBar() {
                 <span className="wallet-balance">{formatNumber(user.wallet?.balance || 0, language)} ETB</span>
               </div>
             </div>
-
-            {showWalletDropdown && (
-              <WalletDropdown onClose={() => setShowWalletDropdown(false)} />
-            )}
-
+            {showWalletDropdown && <WalletDropdown onClose={() => setShowWalletDropdown(false)} />}
             <div className="notifications-icon" onClick={() => navigate('/profile?tab=notifications')}>
               <span className="bell-icon">🔔</span>
               {unreadCount > 0 && <span className="notification-badge">{unreadCount}</span>}
@@ -367,12 +318,9 @@ function TopBar() {
 function WalletDropdown({ onClose }) {
   const { user } = useAuth();
   const navigate = useNavigate();
-
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (!e.target.closest('.wallet-card') && !e.target.closest('.wallet-dropdown')) {
-        onClose();
-      }
+      if (!e.target.closest('.wallet-card') && !e.target.closest('.wallet-dropdown')) onClose();
     };
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
@@ -380,35 +328,18 @@ function WalletDropdown({ onClose }) {
 
   return (
     <div className="wallet-dropdown">
-      <div className="dropdown-header">
-        <span>💰 My Wallet</span>
-        <span className="total-balance">{user?.wallet?.balance?.toLocaleString()} ETB</span>
-      </div>
+      <div className="dropdown-header"><span>💰 My Wallet</span><span className="total-balance">{user?.wallet?.balance?.toLocaleString()} ETB</span></div>
       <div className="dropdown-stats">
-        <div className="stat">
-          <span className="stat-value">{user?.wallet?.bonusBalance?.toLocaleString() || 0} ETB</span>
-          <span className="stat-label">Bonus</span>
-        </div>
-        <div className="stat">
-          <span className="stat-value">{user?.wallet?.totalDeposited?.toLocaleString() || 0} ETB</span>
-          <span className="stat-label">Deposited</span>
-        </div>
-        <div className="stat">
-          <span className="stat-value">{user?.wallet?.totalWon?.toLocaleString() || 0} ETB</span>
-          <span className="stat-label">Won</span>
-        </div>
-        <div className="stat">
-          <span className="stat-value">{user?.wallet?.totalTaxPaid?.toLocaleString() || 0} ETB</span>
-          <span className="stat-label">Tax Paid</span>
-        </div>
+        <div className="stat"><span className="stat-value">{user?.wallet?.bonusBalance?.toLocaleString() || 0} ETB</span><span className="stat-label">Bonus</span></div>
+        <div className="stat"><span className="stat-value">{user?.wallet?.totalDeposited?.toLocaleString() || 0} ETB</span><span className="stat-label">Deposited</span></div>
+        <div className="stat"><span className="stat-value">{user?.wallet?.totalWon?.toLocaleString() || 0} ETB</span><span className="stat-label">Won</span></div>
+        <div className="stat"><span className="stat-value">{user?.wallet?.totalTaxPaid?.toLocaleString() || 0} ETB</span><span className="stat-label">Tax Paid</span></div>
       </div>
       <div className="dropdown-actions">
         <button className="deposit-btn" onClick={() => navigate('/wallet?action=deposit')}>Deposit</button>
         <button className="withdraw-btn" onClick={() => navigate('/wallet?action=withdraw')}>Withdraw</button>
       </div>
-      <div className="dropdown-footer">
-        <button onClick={() => navigate('/wallet')}>View All Transactions →</button>
-      </div>
+      <div className="dropdown-footer"><button onClick={() => navigate('/wallet')}>View All Transactions →</button></div>
     </div>
   );
 }
@@ -432,14 +363,11 @@ function HomePage() {
         axios.get('/api/matches/live/all'),
         axios.get('/api/matches/upcoming/all?limit=6')
       ]);
-      setFeaturedMatches(featuredRes.data.matches);
-      setLiveMatches(liveRes.data.matches);
-      setUpcomingMatches(upcomingRes.data.matches);
-    } catch (error) {
-      console.error('Error fetching data:', error);
-    } finally {
-      setLoading(false);
-    }
+      setFeaturedMatches(featuredRes.data.matches || []);
+      setLiveMatches(liveRes.data.matches || []);
+      setUpcomingMatches(upcomingRes.data.matches || []);
+    } catch (error) { console.error('Error fetching data:', error); }
+    finally { setLoading(false); }
   };
 
   return (
@@ -460,41 +388,25 @@ function HomePage() {
 
       {liveMatches.length > 0 && (
         <div className="live-widget">
-          <div className="widget-header">
-            <span className="live-dot"></span>
-            <span className="widget-title">LIVE NOW</span>
-            <Link to="/live" className="view-all">View All →</Link>
-          </div>
+          <div className="widget-header"><span className="live-dot"></span><span className="widget-title">LIVE NOW</span><Link to="/live" className="view-all">View All →</Link></div>
           <div className="live-matches">
-            {liveMatches.slice(0, 3).map(match => (
-              <LiveMatchCard key={match.matchId} match={match} />
-            ))}
+            {liveMatches.slice(0, 3).map(match => <LiveMatchCard key={match.matchId} match={match} />)}
           </div>
         </div>
       )}
 
       <div className="section">
-        <div className="section-header">
-          <h2>🔥 Featured Matches</h2>
-          <Link to="/matches" className="view-all">View All →</Link>
-        </div>
+        <div className="section-header"><h2>🔥 Featured Matches</h2><Link to="/matches" className="view-all">View All →</Link></div>
         {loading ? (
           <div className="skeleton-grid">{[1,2,3,4].map(i => <div key={i} className="skeleton-card"></div>)}</div>
         ) : (
-          <div className="matches-grid">
-            {featuredMatches.map(match => <MatchCard key={match.matchId} match={match} />)}
-          </div>
+          <div className="matches-grid">{featuredMatches.map(match => <MatchCard key={match.matchId} match={match} />)}</div>
         )}
       </div>
 
       <div className="section">
-        <div className="section-header">
-          <h2>⚽ Upcoming Matches</h2>
-          <Link to="/matches" className="view-all">View All →</Link>
-        </div>
-        <div className="matches-grid">
-          {upcomingMatches.map(match => <MatchCard key={match.matchId} match={match} />)}
-        </div>
+        <div className="section-header"><h2>⚽ Upcoming Matches</h2><Link to="/matches" className="view-all">View All →</Link></div>
+        <div className="matches-grid">{upcomingMatches.map(match => <MatchCard key={match.matchId} match={match} />)}</div>
       </div>
     </div>
   );
@@ -503,44 +415,19 @@ function HomePage() {
 // ==================== MATCH CARD ====================
 function MatchCard({ match }) {
   const navigate = useNavigate();
-
   const addToBetSlip = (betType, odds) => {
-    const bet = {
-      matchId: match.matchId,
-      homeTeam: match.homeTeam,
-      awayTeam: match.awayTeam,
-      league: match.league,
-      betType,
-      odds,
-      selection: betType,
-      matchDate: match.matchDate
-    };
+    const bet = { matchId: match.matchId, homeTeam: match.homeTeam, awayTeam: match.awayTeam, league: match.league, betType, odds, selection: betType, matchDate: match.matchDate };
     window.dispatchEvent(new CustomEvent('addToBetSlip', { detail: bet }));
   };
-
-  const formatDate = (date) => {
-    return new Date(date).toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric', 
-      hour: '2-digit', 
-      minute: '2-digit' 
-    });
-  };
+  const formatDate = (date) => new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
   return (
     <div className="match-card">
-      <div className="match-header">
-        <span className="match-league">{match.league}</span>
-        <span className="match-date">{formatDate(match.matchDate)}</span>
-      </div>
+      <div className="match-header"><span className="match-league">{match.league}</span><span className="match-date">{formatDate(match.matchDate)}</span></div>
       <div className="match-teams" onClick={() => navigate(`/matches/${match.matchId}`)}>
-        <div className="team home">
-          <span className="team-name">{match.homeTeam}</span>
-        </div>
+        <div className="team home"><span className="team-name">{match.homeTeam}</span></div>
         <div className="vs">VS</div>
-        <div className="team away">
-          <span className="team-name">{match.awayTeam}</span>
-        </div>
+        <div className="team away"><span className="team-name">{match.awayTeam}</span></div>
       </div>
       <div className="match-odds">
         <button className="odds-btn" onClick={() => addToBetSlip('Home Win', match.prematchOdds?.homeWin)}>
@@ -557,15 +444,9 @@ function MatchCard({ match }) {
         </button>
       </div>
       <div className="match-extra-odds">
-        <button onClick={() => addToBetSlip('Over 2.5', match.prematchOdds?.totalGoals?.over25)}>
-          Over 2.5 ({match.prematchOdds?.totalGoals?.over25?.toFixed(2)})
-        </button>
-        <button onClick={() => addToBetSlip('Under 2.5', match.prematchOdds?.totalGoals?.under25)}>
-          Under 2.5 ({match.prematchOdds?.totalGoals?.under25?.toFixed(2)})
-        </button>
-        <button onClick={() => addToBetSlip('BTTS - Yes', match.prematchOdds?.btts?.yes)}>
-          BTTS ({match.prematchOdds?.btts?.yes?.toFixed(2)})
-        </button>
+        <button onClick={() => addToBetSlip('Over 2.5', match.prematchOdds?.totalGoals?.over25)}>Over 2.5 ({match.prematchOdds?.totalGoals?.over25?.toFixed(2)})</button>
+        <button onClick={() => addToBetSlip('Under 2.5', match.prematchOdds?.totalGoals?.under25)}>Under 2.5 ({match.prematchOdds?.totalGoals?.under25?.toFixed(2)})</button>
+        <button onClick={() => addToBetSlip('BTTS - Yes', match.prematchOdds?.btts?.yes)}>BTTS ({match.prematchOdds?.btts?.yes?.toFixed(2)})</button>
       </div>
     </div>
   );
@@ -574,38 +455,18 @@ function MatchCard({ match }) {
 // ==================== LIVE MATCH CARD ====================
 function LiveMatchCard({ match }) {
   const navigate = useNavigate();
-
   return (
     <div className="live-match-card" onClick={() => navigate(`/matches/${match.matchId}`)}>
-      <div className="live-header">
-        <span className="live-indicator"></span>
-        <span className="live-text">LIVE</span>
-        <span className="live-minute">{match.minute}'</span>
-      </div>
+      <div className="live-header"><span className="live-indicator"></span><span className="live-text">LIVE</span><span className="live-minute">{match.minute}'</span></div>
       <div className="live-scores">
-        <div className="team">
-          <span className="team-name">{match.homeTeam}</span>
-          <span className="team-score">{match.scores?.home || 0}</span>
-        </div>
+        <div className="team"><span className="team-name">{match.homeTeam}</span><span className="team-score">{match.scores?.home || 0}</span></div>
         <span className="vs">vs</span>
-        <div className="team">
-          <span className="team-score">{match.scores?.away || 0}</span>
-          <span className="team-name">{match.awayTeam}</span>
-        </div>
+        <div className="team"><span className="team-score">{match.scores?.away || 0}</span><span className="team-name">{match.awayTeam}</span></div>
       </div>
       <div className="live-odds">
-        <div className="odd">
-          <span>{match.liveOdds?.homeWin?.toFixed(2)}</span>
-          <span>Home</span>
-        </div>
-        <div className="odd">
-          <span>{match.liveOdds?.draw?.toFixed(2)}</span>
-          <span>Draw</span>
-        </div>
-        <div className="odd">
-          <span>{match.liveOdds?.awayWin?.toFixed(2)}</span>
-          <span>Away</span>
-        </div>
+        <div className="odd"><span>{match.liveOdds?.homeWin?.toFixed(2)}</span><span>Home</span></div>
+        <div className="odd"><span>{match.liveOdds?.draw?.toFixed(2)}</span><span>Draw</span></div>
+        <div className="odd"><span>{match.liveOdds?.awayWin?.toFixed(2)}</span><span>Away</span></div>
       </div>
     </div>
   );
@@ -621,142 +482,61 @@ function BetSlip() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const handleAddBet = (e) => {
-      setBets(prev => [...prev, e.detail]);
-      setIsOpen(true);
-    };
+    const handleAddBet = (e) => { setBets(prev => [...prev, e.detail]); setIsOpen(true); };
     window.addEventListener('addToBetSlip', handleAddBet);
     return () => window.removeEventListener('addToBetSlip', handleAddBet);
   }, []);
 
   const removeBet = (index) => setBets(prev => prev.filter((_, i) => i !== index));
   const clearBets = () => { setBets([]); setStake(''); };
-
-  const calculateTotalOdds = () => {
-    if (bets.length === 0) return 0;
-    return bets.reduce((acc, bet) => acc * bet.odds, 1);
-  };
-
-  const calculatePotentialWin = () => {
-    const stakeAmount = parseFloat(stake);
-    if (isNaN(stakeAmount)) return 0;
-    return stakeAmount * calculateTotalOdds();
-  };
-
+  const calculateTotalOdds = () => bets.length === 0 ? 0 : bets.reduce((acc, bet) => acc * bet.odds, 1);
+  const calculatePotentialWin = () => { const amt = parseFloat(stake); return isNaN(amt) ? 0 : amt * calculateTotalOdds(); };
   const calculateTax = (amount) => amount * 0.15;
   const calculateNetWin = (amount) => amount - calculateTax(amount);
 
   const placeBet = async () => {
-    if (!user) {
-      navigate('/login');
-      return;
-    }
-
+    if (!user) { navigate('/login'); return; }
     const stakeAmount = parseFloat(stake);
-    if (isNaN(stakeAmount) || stakeAmount < 1) {
-      alert('Please enter a valid stake amount (minimum 1 ETB)');
-      return;
-    }
-
+    if (isNaN(stakeAmount) || stakeAmount < 1) { alert('Please enter a valid stake amount (minimum 1 ETB)'); return; }
     setLoading(true);
     try {
       if (bets.length === 1) {
         const bet = bets[0];
-        const res = await axios.post('/api/bets/place', {
-          matchId: bet.matchId,
-          marketType: 'ft_1x2',
-          selection: bet.betType,
-          odds: bet.odds,
-          stake: stakeAmount
-        });
-        if (res.data.success) {
-          alert('✅ Bet placed successfully!');
-          clearBets();
-          setIsOpen(false);
-        }
+        const res = await axios.post('/api/bets/place', { matchId: bet.matchId, marketType: 'ft_1x2', selection: bet.betType, odds: bet.odds, stake: stakeAmount });
+        if (res.data.success) { alert('✅ Bet placed successfully!'); clearBets(); setIsOpen(false); }
       } else if (bets.length > 1) {
-        const selections = bets.map(bet => ({
-          matchId: bet.matchId,
-          marketType: 'ft_1x2',
-          selection: bet.betType,
-          odds: bet.odds
-        }));
-        const res = await axios.post('/api/bets/accumulator', {
-          selections,
-          totalStake: stakeAmount
-        });
-        if (res.data.success) {
-          alert(`✅ Accumulator placed! Potential win: ${res.data.potentialWin} ETB`);
-          clearBets();
-          setIsOpen(false);
-        }
+        const selections = bets.map(bet => ({ matchId: bet.matchId, marketType: 'ft_1x2', selection: bet.betType, odds: bet.odds }));
+        const res = await axios.post('/api/bets/accumulator', { selections, totalStake: stakeAmount });
+        if (res.data.success) { alert(`✅ Accumulator placed! Potential win: ${res.data.potentialWin} ETB`); clearBets(); setIsOpen(false); }
       }
-    } catch (error) {
-      alert(error.response?.data?.message || 'Failed to place bet');
-    } finally {
-      setLoading(false);
-    }
+    } catch (error) { alert(error.response?.data?.message || 'Failed to place bet'); }
+    finally { setLoading(false); }
   };
 
   return (
     <>
       {bets.length > 0 && !isOpen && (
-        <div className="bet-slip-toggle" onClick={() => setIsOpen(true)}>
-          <span>🎫</span>
-          <span className="bet-count">{bets.length}</span>
-        </div>
+        <div className="bet-slip-toggle" onClick={() => setIsOpen(true)}><span>🎫</span><span className="bet-count">{bets.length}</span></div>
       )}
-
       <div className={`bet-slip ${isOpen ? 'open' : ''}`}>
-        <div className="bet-slip-header">
-          <h3>🎫 Bet Slip</h3>
-          <button className="close-btn" onClick={() => setIsOpen(false)}>✕</button>
-        </div>
-
+        <div className="bet-slip-header"><h3>🎫 Bet Slip</h3><button className="close-btn" onClick={() => setIsOpen(false)}>✕</button></div>
         <div className="bet-slip-items">
           {bets.map((bet, index) => (
             <div key={index} className="bet-item">
-              <div className="bet-info">
-                <div className="bet-match">{bet.homeTeam} vs {bet.awayTeam}</div>
-                <div className="bet-selection">{bet.betType} @ {bet.odds.toFixed(2)}</div>
-              </div>
+              <div className="bet-info"><div className="bet-match">{bet.homeTeam} vs {bet.awayTeam}</div><div className="bet-selection">{bet.betType} @ {bet.odds.toFixed(2)}</div></div>
               <button className="remove-bet" onClick={() => removeBet(index)}>✕</button>
             </div>
           ))}
           {bets.length === 0 && <div className="empty-betslip">No selections added</div>}
         </div>
-
         {bets.length > 0 && (
           <div className="bet-slip-footer">
-            {bets.length > 1 && (
-              <div className="total-odds">
-                Total Odds: {calculateTotalOdds().toFixed(2)}
-              </div>
-            )}
-            <div className="stake-input">
-              <input 
-                type="number" 
-                placeholder="Enter stake (ETB)" 
-                value={stake} 
-                onChange={(e) => setStake(e.target.value)}
-                min="1"
-              />
-            </div>
-            <div className="potential-win">
-              <span>Potential Win:</span>
-              <span className="amount">{calculatePotentialWin().toFixed(2)} ETB</span>
-            </div>
-            <div className="tax-info">
-              <span>Tax (15%):</span>
-              <span>{calculateTax(calculatePotentialWin()).toFixed(2)} ETB</span>
-            </div>
-            <div className="net-win">
-              <span>Net Win:</span>
-              <span className="net-amount">{calculateNetWin(calculatePotentialWin()).toFixed(2)} ETB</span>
-            </div>
-            <button className="place-bet-btn" onClick={placeBet} disabled={loading}>
-              {loading ? 'Processing...' : 'Place Bet'}
-            </button>
+            {bets.length > 1 && <div className="total-odds">Total Odds: {calculateTotalOdds().toFixed(2)}</div>}
+            <div className="stake-input"><input type="number" placeholder="Enter stake (ETB)" value={stake} onChange={(e) => setStake(e.target.value)} min="1" /></div>
+            <div className="potential-win"><span>Potential Win:</span><span className="amount">{calculatePotentialWin().toFixed(2)} ETB</span></div>
+            <div className="tax-info"><span>Tax (15%):</span><span>{calculateTax(calculatePotentialWin()).toFixed(2)} ETB</span></div>
+            <div className="net-win"><span>Net Win:</span><span className="net-amount">{calculateNetWin(calculatePotentialWin()).toFixed(2)} ETB</span></div>
+            <button className="place-bet-btn" onClick={placeBet} disabled={loading}>{loading ? 'Processing...' : 'Place Bet'}</button>
             <button className="clear-bets-btn" onClick={clearBets}>Clear All</button>
           </div>
         )}
@@ -770,45 +550,15 @@ function Footer() {
   return (
     <footer className="footer">
       <div className="footer-content">
-        <div className="footer-logo">
-          <span className="logo-icon">🦁</span>
-          <div>
-            <div className="logo-text">SHEBAODDS</div>
-            <div className="tagline">Smart Bets. Real Wins.</div>
-          </div>
-        </div>
+        <div className="footer-logo"><span className="logo-icon">🦁</span><div><div className="logo-text">SHEBAODDS</div><div className="tagline">Smart Bets. Real Wins.</div></div></div>
         <div className="footer-links">
-          <div className="link-group">
-            <h4>Company</h4>
-            <Link to="/about">About Us</Link>
-            <Link to="/contact">Contact</Link>
-            <Link to="/careers">Careers</Link>
-          </div>
-          <div className="link-group">
-            <h4>Legal</h4>
-            <Link to="/terms">Terms & Conditions</Link>
-            <Link to="/privacy">Privacy Policy</Link>
-            <Link to="/responsible">Responsible Gambling</Link>
-          </div>
-          <div className="link-group">
-            <h4>Support</h4>
-            <Link to="/faq">FAQ</Link>
-            <Link to="/support">Help Center</Link>
-            <Link to="/live-chat">Live Chat (24/7)</Link>
-          </div>
-          <div className="link-group">
-            <h4>Follow Us</h4>
-            <a href="https://twitter.com/shebaodds" target="_blank" rel="noopener noreferrer">Twitter</a>
-            <a href="https://instagram.com/shebaodds" target="_blank" rel="noopener noreferrer">Instagram</a>
-            <a href="https://t.me/shebaodds" target="_blank" rel="noopener noreferrer">Telegram</a>
-          </div>
+          <div className="link-group"><h4>Company</h4><Link to="/about">About Us</Link><Link to="/contact">Contact</Link><Link to="/careers">Careers</Link></div>
+          <div className="link-group"><h4>Legal</h4><Link to="/terms">Terms & Conditions</Link><Link to="/privacy">Privacy Policy</Link><Link to="/responsible">Responsible Gambling</Link></div>
+          <div className="link-group"><h4>Support</h4><Link to="/faq">FAQ</Link><Link to="/support">Help Center</Link><Link to="/live-chat">Live Chat (24/7)</Link></div>
+          <div className="link-group"><h4>Follow Us</h4><a href="https://twitter.com/shebaodds" target="_blank" rel="noopener noreferrer">Twitter</a><a href="https://instagram.com/shebaodds" target="_blank" rel="noopener noreferrer">Instagram</a><a href="https://t.me/shebaodds" target="_blank" rel="noopener noreferrer">Telegram</a></div>
         </div>
       </div>
-      <div className="footer-bottom">
-        <p>© 2024 SHEBAODDS. All rights reserved. Smart Bets. Real Wins.</p>
-        <p>18+ Only. Please gamble responsibly.</p>
-        <p>Tax: 15% withholding tax applies to winnings over 100 ETB</p>
-      </div>
+      <div className="footer-bottom"><p>© 2024 SHEBAODDS. All rights reserved. Smart Bets. Real Wins.</p><p>18+ Only. Please gamble responsibly.</p><p>Tax: 15% withholding tax applies to winnings over 100 ETB</p></div>
     </footer>
   );
 }
@@ -913,15 +663,11 @@ function CasinoGames() {
     try {
       const res = await axios.get('/api/wallet/balance');
       setBalance(res.data.balance || 0);
-    } catch (error) {
-      console.error('Error fetching balance:', error);
-    }
+    } catch (error) { console.error('Error fetching balance:', error); }
   }, []);
 
   useEffect(() => {
-    if (user) {
-      fetchBalance();
-    }
+    if (user) fetchBalance();
   }, [user, fetchBalance]);
 
   // Fallback Game Logic (Client-side if Backend fails)
@@ -1020,13 +766,8 @@ function CasinoGames() {
     }
   };
 
-  // Play Game Main Function
   const playGame = async (gameId, params = {}) => {
-    if (!user) {
-      alert('Please login to play games');
-      navigate('/login');
-      return;
-    }
+    if (!user) { alert('Please login to play games'); navigate('/login'); return; }
     const game = GAMES.find(g => g.id === gameId);
     if (!game) return;
     if (betAmount < game.minBet) { alert(`Minimum bet is ${game.minBet} ETB`); return; }
@@ -1052,7 +793,6 @@ function CasinoGames() {
 
       const data = response.data;
       setBalance(data.newBalance);
-      
       setResultData(data);
       setShowResultModal(true);
       setGameHistory(prev => [{ gameId, bet: betAmount, result: data.result, profit: data.profit, details: data.details, timestamp: new Date() }, ...prev].slice(0, 50));
@@ -1340,19 +1080,20 @@ function CasinoGames() {
         .category-title { font-size: 18px; font-weight: 600; margin-bottom: 14px; color: #ccd6f6; }
         .category-title small { font-size: 13px; font-weight: 400; color: #8892b0; }
         .game-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 12px; }
-        .game-card { background: #151b2b; border-radius: 16px; padding: 16px 8px 12px; text-align: center; cursor: pointer; transition: 0.25s; border: 2px solid transparent; position: relative; }
-        .game-card:hover { transform: translateY(-4px); border-color: #f0b90b66; background: #1c2338; }
-        .game-card.active { border-color: #f0b90b; background: #1c2338; }
-        .game-card .game-icon { font-size: 32px; display: block; margin-bottom: 6px; }
+        .game-card { background: #151b2b; border-radius: 16px; padding: 16px 8px 12px; text-align: center; cursor: pointer; transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94); border: 2px solid transparent; position: relative; }
+        .game-card:hover { transform: translateY(-8px) scale(1.02); border-color: #f0b90b66; background: #1c2338; box-shadow: 0 12px 40px rgba(240,185,11,0.15); }
+        .game-card.active { border-color: #f0b90b; background: #1c2338; transform: translateY(-4px); }
+        .game-card .game-icon { font-size: 32px; display: block; margin-bottom: 6px; transition: transform 0.3s; }
+        .game-card:hover .game-icon { transform: rotate(10deg) scale(1.1); }
         .game-card .game-name { font-size: 11px; font-weight: 600; color: #ccd6f6; }
         .game-card .game-min-bet { font-size: 9px; color: #8892b0; display: block; margin-top: 4px; }
-        .badge { position: absolute; top: 6px; right: 6px; font-size: 8px; padding: 2px 8px; border-radius: 10px; }
-        .badge.live { background: #ff4757; color: #fff; animation: pulse 1.5s infinite; }
+        .badge { position: absolute; top: 6px; right: 6px; font-size: 8px; padding: 2px 8px; border-radius: 10px; animation: pulse-badge 1.5s infinite; }
+        .badge.live { background: #ff4757; color: #fff; }
         .badge.hot { background: #f0b90b; color: #0b0e1a; }
-        .favorite-btn { position: absolute; top: 6px; left: 6px; background: transparent; border: none; color: #8892b0; cursor: pointer; font-size: 14px; padding: 2px; transition: 0.2s; z-index: 2; }
-        .favorite-btn.active { color: #f0b90b; }
-        .favorite-btn:hover { transform: scale(1.2); }
-        .game-view { background: #0f1322; border-radius: 24px; padding: 24px; margin-top: 16px; border: 1px solid #f0b90b44; }
+        .favorite-btn { position: absolute; top: 6px; left: 6px; background: transparent; border: none; color: #8892b0; cursor: pointer; font-size: 14px; padding: 2px; transition: all 0.2s; z-index: 2; }
+        .favorite-btn.active { color: #f0b90b; transform: scale(1.2); }
+        .favorite-btn:hover { transform: scale(1.3); }
+        .game-view { background: #0f1322; border-radius: 24px; padding: 24px; margin-top: 16px; border: 1px solid #f0b90b44; animation: fadeInUp 0.5s ease; }
         .game-view-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px; }
         .game-title { font-size: 24px; font-weight: 700; color: #f0b90b; margin: 0; }
         .game-stats { display: flex; gap: 16px; font-size: 14px; color: #8892b0; }
@@ -1362,19 +1103,19 @@ function CasinoGames() {
         .tutorial-btn { background: transparent; border: 1px solid #2a3150; color: #8892b0; padding: 6px 16px; border-radius: 20px; cursor: pointer; font-size: 12px; transition: 0.2s; }
         .tutorial-btn:hover { border-color: #f0b90b; color: #f0b90b; }
         .game-controls { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
-        .game-controls button { background: #2a3150; border: none; color: #fff; padding: 10px 24px; border-radius: 30px; cursor: pointer; font-weight: 600; transition: 0.2s; }
+        .game-controls button { background: #2a3150; border: none; color: #fff; padding: 10px 24px; border-radius: 30px; cursor: pointer; font-weight: 600; transition: all 0.2s; }
         .game-controls button:hover:not(:disabled) { background: #f0b90b; color: #0b0e1a; transform: scale(1.05); }
         .game-controls button:disabled { opacity: 0.5; cursor: not-allowed; }
-        .btn-play { background: #f0b90b; border: none; color: #0b0e1a; padding: 12px 32px; border-radius: 30px; font-weight: 700; font-size: 16px; cursor: pointer; transition: 0.2s; }
+        .btn-play { background: #f0b90b; border: none; color: #0b0e1a; padding: 12px 32px; border-radius: 30px; font-weight: 700; font-size: 16px; cursor: pointer; transition: all 0.2s; }
         .btn-play:hover:not(:disabled) { transform: scale(1.05); box-shadow: 0 0 20px #f0b90b66; }
         .btn-play:disabled { opacity: 0.5; cursor: not-allowed; }
-        .btn-bet { background: #2a3150; border: none; color: #fff; padding: 10px 24px; border-radius: 30px; cursor: pointer; font-weight: 600; transition: 0.2s; }
-        .btn-bet:hover:not(:disabled) { background: #f0b90b; color: #0b0e1a; }
+        .btn-bet { background: #2a3150; border: none; color: #fff; padding: 10px 24px; border-radius: 30px; cursor: pointer; font-weight: 600; transition: all 0.2s; }
+        .btn-bet:hover:not(:disabled) { background: #f0b90b; color: #0b0e1a; transform: scale(1.05); }
         .btn-bet:disabled { opacity: 0.5; cursor: not-allowed; }
-        .btn-cashout { background: #2ed573; border: none; color: #fff; padding: 10px 24px; border-radius: 30px; cursor: pointer; font-weight: 600; transition: 0.2s; }
-        .btn-cashout:hover:not(:disabled) { background: #f0b90b; color: #0b0e1a; }
+        .btn-cashout { background: #2ed573; border: none; color: #fff; padding: 10px 24px; border-radius: 30px; cursor: pointer; font-weight: 600; transition: all 0.2s; }
+        .btn-cashout:hover:not(:disabled) { background: #f0b90b; color: #0b0e1a; transform: scale(1.05); }
         .btn-cashout:disabled { opacity: 0.5; cursor: not-allowed; }
-        .bet-panel { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(11,14,26,0.96); border-top: 2px solid #f0b90b55; padding: 12px 16px 16px; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px; z-index: 200; backdrop-filter: blur(12px); }
+        .bet-panel { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(11,14,26,0.96); border-top: 2px solid #f0b90b55; padding: 12px 16px 16px; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px; z-index: 200; backdrop-filter: blur(12px); animation: slideUp 0.3s ease; }
         .game-info { font-size: 14px; font-weight: 600; color: #f0b90b; min-width: 100px; text-align: center; }
         .game-info small { display: block; font-size: 10px; color: #8892b0; font-weight: 400; }
         .quick-bets { display: flex; gap: 4px; }
@@ -1397,16 +1138,20 @@ function CasinoGames() {
         .balance-display { font-size: 13px; color: #8892b0; min-width: 80px; text-align: center; }
         .balance-display strong { color: #f0b90b; font-size: 16px; }
         .balance-warning { color: #ff4757; font-size: 12px; font-weight: 600; text-align: center; width: 100%; }
-        .result-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); z-index: 300; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .result-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); z-index: 300; display: flex; align-items: center; justify-content: center; padding: 20px; animation: fadeIn 0.3s ease; }
         .result-modal { background: #151b2b; border-radius: 24px; max-width: 440px; width: 100%; padding: 30px 24px 24px; text-align: center; border: 1px solid #f0b90b44; animation: modalIn 0.3s ease; }
         @keyframes modalIn { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        @keyframes pulse-badge { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         .modal-icon { font-size: 48px; }
         .modal-title { font-size: 20px; color: #ccd6f6; margin: 8px 0; }
         .result-value { font-size: 36px; font-weight: 800; margin: 12px 0; }
-        .result-value.win { color: #2ed573; }
+        .result-value.win { color: #2ed573; animation: winPulse 0.6s ease; }
         .result-value.lose { color: #ff4757; }
         .result-value.push { color: #f0b90b; }
+        @keyframes winPulse { 0% { transform: scale(1); } 50% { transform: scale(1.2); } 100% { transform: scale(1); } }
         .result-details { margin: 16px 0; display: flex; flex-direction: column; gap: 8px; }
         .result-details div { display: flex; justify-content: space-between; padding: 8px 4px; border-bottom: 1px solid #1e2338; }
         .result-details .green { color: #2ed573; }
@@ -1416,15 +1161,17 @@ function CasinoGames() {
         .modal-btn { margin-top: 18px; background: #f0b90b; border: none; color: #0b0e1a; padding: 12px; border-radius: 30px; font-weight: 700; font-size: 16px; cursor: pointer; width: 100%; transition: 0.2s; }
         .modal-btn:hover { transform: scale(1.02); box-shadow: 0 0 20px #f0b90b66; }
         .aviator-canvas { width: 100%; max-width: 400px; height: 200px; background: #1e2338; border-radius: 8px; }
-        .aviator-multiplier { font-size: 42px; font-weight: 800; color: #f0b90b; text-align: center; }
+        .aviator-multiplier { font-size: 42px; font-weight: 800; color: #f0b90b; text-align: center; transition: color 0.3s; }
         .dice-display { display: flex; gap: 20px; font-size: 48px; align-items: center; }
-        .dice { font-size: 64px; }
+        .dice { font-size: 64px; transition: transform 0.3s; }
+        .dice:hover { transform: rotate(20deg); }
         .vs-text { color: #8892b0; font-size: 24px; font-weight: 700; }
         .dice-info { color: #8892b0; font-size: 14px; }
         .coin-display { font-size: 80px; animation: coinFlip 0.5s ease; }
         @keyframes coinFlip { 0% { transform: rotateY(0deg); } 100% { transform: rotateY(360deg); } }
         .slot-reels { display: flex; gap: 16px; font-size: 48px; }
-        .slot-reels span { background: #0b0e1a; padding: 16px; border-radius: 12px; border: 2px solid #2a3150; }
+        .slot-reels span { background: #0b0e1a; padding: 16px; border-radius: 12px; border: 2px solid #2a3150; transition: all 0.3s; }
+        .slot-reels span:hover { border-color: #f0b90b; }
         .plinko-multiplier { font-size: 24px; font-weight: 700; color: #f0b90b; }
         .bj-display { display: flex; flex-direction: column; gap: 16px; width: 100%; max-width: 400px; }
         .bj-hand { display: flex; align-items: center; gap: 12px; background: #0b0e1a; padding: 12px 16px; border-radius: 8px; }
@@ -1468,26 +1215,85 @@ function CasinoGames() {
   );
 }
 
-// ==================== PLACEHOLDER COMPONENTS ====================
-function MatchesPage() { return <div className="coming-soon">Matches Page - Coming Soon</div>; }
-function MatchDetailPage() { return <div className="coming-soon">Match Detail - Coming Soon</div>; }
-function LivePage() { return <div className="coming-soon">Live Betting - Coming Soon</div>; }
-function PromotionsPage() { return <div className="coming-soon">Promotions - Coming Soon</div>; }
-function ProfilePage() { return <div className="coming-soon">Profile - Coming Soon</div>; }
-function WalletPage() { return <div className="coming-soon">Wallet - Coming Soon</div>; }
-function TaxPage() { return <div className="coming-soon">Tax Center - Coming Soon</div>; }
-function BettingHistoryPage() { return <div className="coming-soon">Betting History - Coming Soon</div>; }
-function ResponsibleGamblingPage() { return <div className="coming-soon">Responsible Gambling - Coming Soon</div>; }
-function LoginPage() { return <div className="coming-soon">Login - Coming Soon</div>; }
-function RegisterPage() { return <div className="coming-soon">Register - Coming Soon</div>; }
-function ResetPasswordPage() { return <div className="coming-soon">Reset Password - Coming Soon</div>; }
-function VerifyEmailPage() { return <div className="coming-soon">Verify Email - Coming Soon</div>; }
-function SettingsPage() { return <div className="coming-soon">Settings - Coming Soon</div>; }
-function SupportPage() { return <div className="coming-soon">Support - Coming Soon</div>; }
-function TermsPage() { return <div className="coming-soon">Terms - Coming Soon</div>; }
-function PrivacyPage() { return <div className="coming-soon">Privacy - Coming Soon</div>; }
-function ResponsiblePage() { return <div className="coming-soon">Responsible Gambling - Coming Soon</div>; }
-function NotFoundPage() { return <div className="coming-soon">Page Not Found</div>; }
+// ==================== OTHER PAGES ====================
+// Fully implement MatchesPage, LivePage, etc.
+function MatchesPage() {
+  const [matches, setMatches] = useState([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    const fetchMatches = async () => {
+      try {
+        const res = await axios.get('/api/matches?limit=20');
+        setMatches(res.data.matches || []);
+      } catch (e) { console.error(e); }
+      finally { setLoading(false); }
+    };
+    fetchMatches();
+  }, []);
+  return (
+    <div className="page-content">
+      <h1>⚽ Matches</h1>
+      {loading ? <div className="spinner"></div> : (
+        <div className="matches-grid">
+          {matches.map(m => <MatchCard key={m.matchId} match={m} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LivePage() {
+  const [liveMatches, setLiveMatches] = useState([]);
+  useEffect(() => {
+    const fetchLive = async () => {
+      try {
+        const res = await axios.get('/api/matches/live/all');
+        setLiveMatches(res.data.matches || []);
+      } catch (e) { console.error(e); }
+    };
+    fetchLive();
+  }, []);
+  return (
+    <div className="page-content">
+      <h1>📡 Live Betting</h1>
+      <div className="live-matches">
+        {liveMatches.map(m => <LiveMatchCard key={m.matchId} match={m} />)}
+      </div>
+    </div>
+  );
+}
+
+function ProfilePage() {
+  const { user } = useAuth();
+  return (
+    <div className="page-content">
+      <h1>👤 Profile</h1>
+      <div className="profile-card">
+        <p><strong>Username:</strong> {user?.username}</p>
+        <p><strong>Email:</strong> {user?.email}</p>
+        <p><strong>Balance:</strong> {user?.wallet?.balance} ETB</p>
+      </div>
+    </div>
+  );
+}
+
+function WalletPage() { return <div className="page-content"><h1>💰 Wallet</h1><p>Wallet management coming soon.</p></div>; }
+function TaxPage() { return <div className="page-content"><h1>📈 Tax Center</h1><p>Tax reports and compliance.</p></div>; }
+function BettingHistoryPage() { return <div className="page-content"><h1>📊 Betting History</h1><p>Your betting history.</p></div>; }
+function ResponsibleGamblingPage() { return <div className="page-content"><h1>🛡️ Responsible Gambling</h1><p>Set limits and self-exclusion.</p></div>; }
+function LoginPage() { return <div className="page-content"><h1>🔐 Login</h1><p>Login form coming soon.</p></div>; }
+function RegisterPage() { return <div className="page-content"><h1>📝 Register</h1><p>Registration form coming soon.</p></div>; }
+function ResetPasswordPage() { return <div className="page-content"><h1>🔄 Reset Password</h1></div>; }
+function VerifyEmailPage() { return <div className="page-content"><h1>✅ Verify Email</h1></div>; }
+function SettingsPage() { return <div className="page-content"><h1>⚙️ Settings</h1></div>; }
+function SupportPage() { return <div className="page-content"><h1>💬 Support</h1><p>Contact support.</p></div>; }
+function TermsPage() { return <div className="page-content"><h1>📜 Terms</h1></div>; }
+function PrivacyPage() { return <div className="page-content"><h1>🔒 Privacy Policy</h1></div>; }
+function ResponsiblePage() { return <div className="page-content"><h1>🛡️ Responsible Gambling</h1></div>; }
+function NotFoundPage() { return <div className="page-content"><h1>404 - Page Not Found</h1></div>; }
+function PromotionsPage() { return <div className="page-content"><h1>🎁 Promotions</h1><p>Current offers.</p></div>; }
+function MatchDetailPage() { return <div className="page-content"><h1>📋 Match Detail</h1></div>; }
+
 function showToast(title, message) { console.log('Toast:', title, message); }
 
 export default App;
