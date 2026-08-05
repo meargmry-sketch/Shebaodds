@@ -1,8 +1,5 @@
-// App.jsx – Main entry point
-// Uses existing components: SportsbookHeader, BetSlip, LiveUpcomingMatches, LanguageContext
-// Adds bottom navigation and removes the old sidebar.
-
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+// App.jsx – Main entry with authentication and protected routes
+import React, { lazy, Suspense } from 'react';
 import {
   BrowserRouter,
   Routes,
@@ -10,27 +7,17 @@ import {
   Navigate,
   Link,
   useLocation,
-  useNavigate
 } from 'react-router-dom';
-
-// ----- Existing components (from your codebase) -----
+import { AuthProvider, useAuth } from './contexts/AuthContext'; // adjust path to your actual AuthContext
+import { LanguageProvider, useTranslation } from './LanguageContext';
 import SportsbookHeader from './SportsbookHeader';
 import BetSlip from './BetSlip';
-import LiveUpcomingMatches from './LiveUpcomingMatches'; // will be used on Home page
-import { LanguageProvider, useTranslation, formatNumber, formatDate } from './LanguageContext';
-
-// ----- Styles (must be present) -----
+import LoginPage from './LoginPage';
+import RegisterPage from './RegisterPage';
 import './global.css';
 import './theme.css';
 
-// ----- Contexts (if you have them in separate files, import them; otherwise define them here) -----
-// Assuming you already have AuthContext, BetSlipContext, NotificationContext.
-// If not, you can keep the ones from your previous code.
-// For now, we'll import them from your existing files (adjust paths if needed).
-// If they don't exist, we'll define them inline.
-import { AuthContext, BetSlipContext, NotificationContext } from './contexts'; // adjust path
-
-// ----- Lazy load page components (we'll create them later) -----
+// Lazy load protected pages
 const HomeScreen = lazy(() => import('./HomeScreen'));
 const LiveScreen = lazy(() => import('./LiveScreen'));
 const CasinoScreen = lazy(() => import('./CasinoScreen'));
@@ -40,39 +27,28 @@ const WalletScreen = lazy(() => import('./WalletScreen'));
 const PromotionsScreen = lazy(() => import('./PromotionsScreen'));
 const SupportScreen = lazy(() => import('./SupportScreen'));
 
-// ----- Fallback for lazy loading -----
 const LoadingFallback = () => <div className="loading-spinner">Loading...</div>;
 
 // ==================== MAIN APP ====================
 function App() {
-  // Auth state – you already have this in your existing App.
-  // We'll keep it as is; for now we just wrap the router.
-  // We'll reuse your existing context providers.
-  // Assuming AuthContext etc. are defined in separate files.
-  // If not, we can define them here.
-
   return (
     <LanguageProvider>
-      {/* Your existing contexts */}
-      <AuthContext.Provider value={{ user: null, login: () => {}, logout: () => {} /* etc. */ }}>
-        <BetSlipContext.Provider value={{ bets: [], addBet: () => {}, clearBets: () => {} }}>
-          <NotificationContext.Provider value={{ notifications: [], markRead: () => {} }}>
-            <BrowserRouter>
-              <AppLayout />
-            </BrowserRouter>
-          </NotificationContext.Provider>
-        </BetSlipContext.Provider>
-      </AuthContext.Provider>
+      <AuthProvider>
+        <BrowserRouter>
+          <AppLayout />
+        </BrowserRouter>
+      </AuthProvider>
     </LanguageProvider>
   );
 }
 
-// ==================== LAYOUT WITH BOTTOM NAVIGATION ====================
+// ==================== LAYOUT WITH AUTH AWARENESS ====================
 function AppLayout() {
+  const { user, logout } = useAuth(); // get user and logout from context
   const location = useLocation();
   const { t } = useTranslation();
 
-  // Bottom navigation items
+  // Bottom navigation items (only shown when logged in)
   const navItems = [
     { path: '/', label: 'Sportsbook', icon: '🏠' },
     { path: '/my-bets', label: 'My Bets', icon: '📋' },
@@ -81,12 +57,29 @@ function AppLayout() {
     { path: '/support', label: 'Support', icon: '❓' },
   ];
 
+  // If user is not logged in, only show auth routes
+  if (!user) {
+    return (
+      <div className="app-container auth-only">
+        <main className="main-content">
+          <Suspense fallback={<LoadingFallback />}>
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
+              <Route path="*" element={<Navigate to="/login" replace />} />
+            </Routes>
+          </Suspense>
+        </main>
+      </div>
+    );
+  }
+
+  // Logged-in layout
   return (
     <div className="app-container">
-      {/* Top Header – your existing SportsbookHeader */}
-      <SportsbookHeader />
+      {/* Top Header with logout button */}
+      <SportsbookHeader onLogout={logout} />
 
-      {/* Main content area – renders current route */}
       <main className="main-content">
         <Suspense fallback={<LoadingFallback />}>
           <Routes>
@@ -98,13 +91,14 @@ function AppLayout() {
             <Route path="/wallet" element={<WalletScreen />} />
             <Route path="/promotions" element={<PromotionsScreen />} />
             <Route path="/support" element={<SupportScreen />} />
-            {/* Fallback – redirect to home */}
+            <Route path="/login" element={<Navigate to="/" replace />} />
+            <Route path="/register" element={<Navigate to="/" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>
       </main>
 
-      {/* Bottom Navigation – new component */}
+      {/* Bottom Navigation */}
       <nav className="bottom-nav">
         {navItems.map((item) => (
           <Link
@@ -118,7 +112,7 @@ function AppLayout() {
         ))}
       </nav>
 
-      {/* Bet Slip – your existing floating component */}
+      {/* Bet Slip – floating component */}
       <BetSlip />
     </div>
   );
