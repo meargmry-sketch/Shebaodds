@@ -2,12 +2,12 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from './contexts'; // adjust path if needed
 import { useTranslation } from './LanguageContext';
-import { User, Shield, Bell, Settings, LogOut, ChevronRight, Award, Wallet, Clock } from 'lucide-react';
+import { User, Shield, Bell, Settings, LogOut, ChevronRight, Award, Wallet, Clock, HelpCircle } from 'lucide-react';
 
 export default function ProfileScreen() {
   const { user, logout, theme, toggleTheme } = useAuth?.() || {};
   const { t, language, setLanguage } = useTranslation?.() || { t: (key) => key, language: 'en', setLanguage: () => {} };
-  
+
   const [activeTab, setActiveTab] = useState('profile');
   const [loading, setLoading] = useState(false);
 
@@ -17,7 +17,7 @@ export default function ProfileScreen() {
     email: user?.email || 'player@example.com',
     vipLevel: user?.vip?.level || 1,
     joinedDate: user?.createdAt || '2024-01-15',
-    balance: user?.wallet?.balance || 00.00,
+    balance: user?.wallet?.balance || 0.00,
     bonusBalance: user?.wallet?.bonusBalance || 500.00,
     totalDeposited: user?.wallet?.totalDeposited || 12500.00,
     totalWon: user?.wallet?.totalWon || 8750.00,
@@ -94,6 +94,11 @@ export default function ProfileScreen() {
               <button className="action-btn" onClick={() => window.location.href = '/betting-history'}>
                 <Clock className="h-4 w-4" />
                 Betting History
+              </button>
+              {/* NEW: Support Center */}
+              <button className="action-btn" onClick={() => window.location.href = '/support'}>
+                <HelpCircle className="h-4 w-4" />
+                Support Center
               </button>
             </div>
           </div>
