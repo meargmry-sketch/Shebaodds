@@ -5,7 +5,6 @@ import axios from 'axios';
 const storage = window.localStorage;
 
 const { BiometricAuthHelper } = NativeModules;
-
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
