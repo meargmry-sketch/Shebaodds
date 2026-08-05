@@ -1,4 +1,4 @@
-// App.jsx – Main entry with authentication and protected routes
+// App.jsx – Main entry with authentication, protected routes, and Calendar nav
 import React, { lazy, Suspense } from 'react';
 import {
   BrowserRouter,
@@ -8,7 +8,7 @@ import {
   Link,
   useLocation,
 } from 'react-router-dom';
-import { AuthProvider, useAuth } from './contexts/AuthContext'; // adjust path to your actual AuthContext
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LanguageProvider, useTranslation } from './LanguageContext';
 import SportsbookHeader from './SportsbookHeader';
 import BetSlip from './BetSlip';
@@ -26,6 +26,7 @@ const MyBetsScreen = lazy(() => import('./MyBetsScreen'));
 const WalletScreen = lazy(() => import('./WalletScreen'));
 const PromotionsScreen = lazy(() => import('./PromotionsScreen'));
 const SupportScreen = lazy(() => import('./SupportScreen'));
+const CalendarScreen = lazy(() => import('./CalendarScreen')); // NEW
 
 const LoadingFallback = () => <div className="loading-spinner">Loading...</div>;
 
@@ -44,17 +45,17 @@ function App() {
 
 // ==================== LAYOUT WITH AUTH AWARENESS ====================
 function AppLayout() {
-  const { user, logout } = useAuth(); // get user and logout from context
+  const { user, logout } = useAuth();
   const location = useLocation();
   const { t } = useTranslation();
 
-  // Bottom navigation items (only shown when logged in)
+  // Bottom navigation items – Calendar added, Support moved to Profile
   const navItems = [
     { path: '/', label: 'Sportsbook', icon: '🏠' },
     { path: '/my-bets', label: 'My Bets', icon: '📋' },
     { path: '/wallet', label: 'Wallet', icon: '💰' },
     { path: '/promotions', label: 'Promotions', icon: '🎁' },
-    { path: '/support', label: 'Support', icon: '❓' },
+    { path: '/calendar', label: 'Calendar', icon: '📅' }, // NEW
   ];
 
   // If user is not logged in, only show auth routes
@@ -77,7 +78,6 @@ function AppLayout() {
   // Logged-in layout
   return (
     <div className="app-container">
-      {/* Top Header with logout button */}
       <SportsbookHeader onLogout={logout} />
 
       <main className="main-content">
@@ -90,7 +90,8 @@ function AppLayout() {
             <Route path="/my-bets" element={<MyBetsScreen />} />
             <Route path="/wallet" element={<WalletScreen />} />
             <Route path="/promotions" element={<PromotionsScreen />} />
-            <Route path="/support" element={<SupportScreen />} />
+            <Route path="/support" element={<SupportScreen />} /> {/* kept for direct access */}
+            <Route path="/calendar" element={<CalendarScreen />} /> {/* NEW */}
             <Route path="/login" element={<Navigate to="/" replace />} />
             <Route path="/register" element={<Navigate to="/" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />
@@ -112,7 +113,6 @@ function AppLayout() {
         ))}
       </nav>
 
-      {/* Bet Slip – floating component */}
       <BetSlip />
     </div>
   );
