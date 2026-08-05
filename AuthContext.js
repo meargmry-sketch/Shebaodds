@@ -22,8 +22,8 @@ export const AuthProvider = ({ children }) => {
 
   const checkAuth = async () => {
     try {
-      const storedToken = await AsyncStorage.getItem('shebaodds_token');
-      const storedUser = await AsyncStorage.getItem('shebaodds_user');
+      const storedToken = storage.getItem('shebaodds_token');
+      const storedUser = await storage.getItem('shebaodds_user');
       if (storedToken && storedUser) {
         setToken(storedToken);
         setUser(JSON.parse(storedUser));
@@ -67,8 +67,8 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await axios.post('/api/auth/register', userData);
       const { token, user } = response.data;
-      await AsyncStorage.setItem('shebaodds_token', token);
-      await AsyncStorage.setItem('shebaodds_user', JSON.stringify(user));
+      storage.setItem('shebaodds_token', token);
+      storage.setItemm('shebaodds_user', JSON.stringify(user));
       setToken(token);
       setUser(user);
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
@@ -82,8 +82,8 @@ export const AuthProvider = ({ children }) => {
     try {
       await axios.post('/api/auth/logout');
     } catch (error) {}
-    await AsyncStorage.removeItem('shebaodds_token');
-    await AsyncStorage.removeItem('shebaodds_user');
+    storage.removeItem('shebaodds_token');
+    storage.removeItem('shebaodds_user');
     delete axios.defaults.headers.common['Authorization'];
     setToken(null);
     setUser(null);
@@ -119,3 +119,6 @@ export const AuthProvider = ({ children }) => {
 };
 
 export const useAuth = () => useContext(AuthContext);
+import { NativeModules } from 'react-native';
+
+const { BiometricAuthHelper } = NativeModules;
