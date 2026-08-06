@@ -22,7 +22,7 @@ const HomeScreen = lazy(() => import('./HomeScreen'));
 const Livescreen = lazy(() => import('./Livescreen'));
 const Casinoscreen = lazy(() => import('./Casinoscreen'));
 const Profilescreen = lazy(() => import('./Profilescreen'));
-const MyBetsscreen = lazy(() => import('./MyBetsscreen'));
+const MyBetsScreen = lazy(() => import('./MyBetsScreen'));
 const Walletscreen = lazy(() => import('./Walletscreen'));
 const Promotionsscreen = lazy(() => import('./Promotionsscreen'));
 const Supportscreen = lazy(() => import('./Supportscreen'));
