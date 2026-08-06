@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import LiveUpcomingMatches from "./LiveUpcomingMatches";
-import { useAuth } from "./contexts/AuthContext";
+import { useAuth } from "./AuthContext";
 import { useTranslation } from "./LanguageContext";
 
 export default function HomeScreen() {
