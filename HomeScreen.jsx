@@ -14,7 +14,7 @@ export default function HomeScreen() {
   useEffect(() => {
     if (user) {
       // Example: fetch from API
-      setBalance(00.00); // hardcoded for demo
+      setBalance(0.0); // hardcoded for demo
     }
   }, [user]);
 
