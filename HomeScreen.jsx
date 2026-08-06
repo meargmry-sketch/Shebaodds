@@ -11,12 +11,12 @@ export default function HomeScreen() {
   const [activeCategory, setActiveCategory] = useState('all');
 
   // Fetch balance (simulated – replace with real data)
-  useEffect(() => {
-    if (user) {
-      // Example: fetch from API
-      setBalance(0.0); // hardcoded for demo
-    }
-  }, [user]);
+useEffect(() => {
+  if (user) {
+    // Example: fetch from API
+    setBalance(0);
+  }
+}, [user]);
 
   // Categories
   const categories = [
