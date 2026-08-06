@@ -18,15 +18,15 @@ import './global.css';
 import './theme.css';
 
 // Lazy load protected pages
-const HomeScreen = lazy(() => import('./Homescreen'));
-const LiveScreen = lazy(() => import('./Livescreen'));
-const CasinoScreen = lazy(() => import('./Casinoscreen'));
-const ProfileScreen = lazy(() => import('./Profilescreen'));
-const MyBetsScreen = lazy(() => import('./MyBetsscreen'));
-const WalletScreen = lazy(() => import('./Walletscreen'));
-const PromotionsScreen = lazy(() => import('./PromotionsScreen'));
-const SupportScreen = lazy(() => import('./Supportscreen'));
-const CalendarScreen = lazy(() => import('./CalendarScreen')); // NEW
+const Homescreen = lazy(() => import('./Homescreen'));
+const Livescreen = lazy(() => import('./Livescreen'));
+const Casinoscreen = lazy(() => import('./Casinoscreen'));
+const Profilescreen = lazy(() => import('./Profilescreen'));
+const MyBetsscreen = lazy(() => import('./MyBetsscreen'));
+const Walletscreen = lazy(() => import('./Walletscreen'));
+const Promotionsscreen = lazy(() => import('./Promotionsscreen'));
+const Supportscreen = lazy(() => import('./Supportscreen'));
+const Calendarscreen = lazy(() => import('./Calendarscreen')); // NEW
 
 const LoadingFallback = () => <div className="loading-spinner">Loading...</div>;
 
