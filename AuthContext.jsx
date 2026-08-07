@@ -1,15 +1,16 @@
+// contexts/AuthContext.jsx
+
 import React, {
   createContext,
   useContext,
   useEffect,
   useState,
-} from "react";
-import axios from "axios";
+} from 'react';
 
 const AuthContext = createContext(null);
 
-const TOKEN_KEY = "shebaodds_token";
-const USER_KEY = "shebaodds_user";
+const TOKEN_KEY = 'shebaodds_token';
+const USER_KEY = 'shebaodds_user';
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -17,163 +18,90 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    checkAuth();
-  }, []);
-
-  const checkAuth = () => {
     try {
       const storedToken = localStorage.getItem(TOKEN_KEY);
       const storedUser = localStorage.getItem(USER_KEY);
 
-      if (storedToken && storedUser) {
-        const parsedUser = JSON.parse(storedUser);
-
+      if (storedToken) {
         setToken(storedToken);
-        setUser(parsedUser);
+      }
 
-        axios.defaults.headers.common.Authorization =
-          `Bearer ${storedToken}`;
+      if (storedUser) {
+        setUser(JSON.parse(storedUser));
       }
     } catch (error) {
-      console.error("Auth check error:", error);
+      console.error('Failed to restore authentication:', error);
 
       localStorage.removeItem(TOKEN_KEY);
       localStorage.removeItem(USER_KEY);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   const login = async (email, password) => {
-    try {
-      const response = await axios.post(
-        "/api/auth/login",
-        {
-          email,
-          password,
-        }
-      );
-
-      const responseToken = response.data?.token;
-      const responseUser = response.data?.user;
-
-      if (!responseToken || !responseUser) {
-        return {
-          success: false,
-          message: "Invalid server response.",
-        };
-      }
-
-      localStorage.setItem(
-        TOKEN_KEY,
-        responseToken
-      );
-
-      localStorage.setItem(
-        USER_KEY,
-        JSON.stringify(responseUser)
-      );
-
-      setToken(responseToken);
-      setUser(responseUser);
-
-      axios.defaults.headers.common.Authorization =
-        `Bearer ${responseToken}`;
-
-      return {
-        success: true,
-        user: responseUser,
-      };
-    } catch (error) {
+    if (!email || !password) {
       return {
         success: false,
-        message:
-          error?.response?.data?.message ||
-          "Login failed.",
+        message: 'Email and password are required.',
       };
     }
+
+    /*
+     * Temporary frontend authentication.
+     *
+     * Replace this section with your real API request
+     * when the backend authentication endpoint is ready.
+     */
+
+    const fakeUser = {
+      id: 'USR001',
+      email,
+      username: email.split('@')[0],
+      role: 'Player',
+      balance: 0,
+      biometricEnabled: false,
+    };
+
+    const fakeToken = `demo-token-${Date.now()}`;
+
+    localStorage.setItem(
+      TOKEN_KEY,
+      fakeToken
+    );
+
+    localStorage.setItem(
+      USER_KEY,
+      JSON.stringify(fakeUser)
+    );
+
+    setToken(fakeToken);
+    setUser(fakeUser);
+
+    return {
+      success: true,
+      user: fakeUser,
+      token: fakeToken,
+    };
   };
 
-  const register = async (userData) => {
-    try {
-      const response = await axios.post(
-        "/api/auth/register",
-        userData
-      );
-
-      const responseToken = response.data?.token;
-      const responseUser = response.data?.user;
-
-      if (!responseToken || !responseUser) {
-        return {
-          success: false,
-          message: "Invalid server response.",
-        };
-      }
-
-      localStorage.setItem(
-        TOKEN_KEY,
-        responseToken
-      );
-
-      localStorage.setItem(
-        USER_KEY,
-        JSON.stringify(responseUser)
-      );
-
-      setToken(responseToken);
-      setUser(responseUser);
-
-      axios.defaults.headers.common.Authorization =
-        `Bearer ${responseToken}`;
-
-      return {
-        success: true,
-        user: responseUser,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        message:
-          error?.response?.data?.message ||
-          "Registration failed.",
-      };
-    }
-  };
-
-  const logout = async () => {
-    try {
-      await axios.post("/api/auth/logout");
-    } catch (error) {
-      console.warn("Logout request failed.");
-    }
-
+  const logout = () => {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
-
-    delete axios.defaults.headers.common.Authorization;
 
     setToken(null);
     setUser(null);
   };
 
-  const updateBiometric = async (enabled) => {
-    if (!user) {
-      return {
-        success: false,
-        message: "No authenticated user.",
-      };
-    }
-
-    try {
-      await axios.patch(
-        "/api/users/biometric",
-        { enabled }
-      );
+  const updateUser = (updates) => {
+    setUser((currentUser) => {
+      if (!currentUser) {
+        return currentUser;
+      }
 
       const updatedUser = {
-        ...user,
-        biometricEnabled: enabled,
+        ...currentUser,
+        ...updates,
       };
 
       localStorage.setItem(
@@ -181,30 +109,18 @@ export function AuthProvider({ children }) {
         JSON.stringify(updatedUser)
       );
 
-      setUser(updatedUser);
-
-      return {
-        success: true,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        message:
-          error?.response?.data?.message ||
-          "Update failed.",
-      };
-    }
+      return updatedUser;
+    });
   };
 
   const value = {
     user,
     token,
     loading,
+    isAuthenticated: Boolean(token && user),
     login,
-    register,
     logout,
-    updateBiometric,
-    setUser,
+    updateUser,
   };
 
   return (
@@ -215,5 +131,15 @@ export function AuthProvider({ children }) {
 }
 
 export function useAuth() {
-  return useContext(AuthContext);
+  const context = useContext(AuthContext);
+
+  if (!context) {
+    throw new Error(
+      'useAuth must be used inside AuthProvider'
+    );
+  }
+
+  return context;
 }
+
+export default AuthContext;
