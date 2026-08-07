@@ -1,6 +1,6 @@
 // SportsbookHeader.jsx – Pure top header with user info and logout
 import React, { useState } from 'react';
-import { useAuth } from "./contexts/AuthContext";
+import { useAuth } from "./Contexts.jsx";
 import { useTranslation } from './LanguageContext';
 import { Link } from 'react-router-dom';
 import { User, Wallet, Globe, ChevronDown, Bell, Menu, X, LogOut } from 'lucide-react';
