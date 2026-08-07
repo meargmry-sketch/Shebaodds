@@ -19,7 +19,7 @@ import './theme.css';
 
 // Lazy load protected pages
 const HomeScreen = lazy(() => import("./HomeScreen"));
-const LiveScreen = lazy(() => import("./LiveScreen"));
+const Livescreen = lazy(() => import("./Livescreen"));
 const CasinoScreen = lazy(() => import("./CasinoScreen"));
 const ProfileScreen = lazy(() => import("./ProfileScreen"));
 const MyBetsScreen = lazy(() => import("./MyBetsScreen"));
