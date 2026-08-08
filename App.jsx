@@ -1,5 +1,4 @@
-// App.jsx – Main entry with authentication, protected routes, and Calendar nav
-import React, { lazy, Suspense } from 'react';
+import React, { lazy, Suspense } from "react";
 import {
   BrowserRouter,
   Routes,
@@ -7,17 +6,25 @@ import {
   Navigate,
   Link,
   useLocation,
-} from 'react-router-dom';
-import { AuthProvider, useAuth } from "./AuthContext.jsx";
-import { LanguageProvider, useTranslation } from './LanguageContext';
-import SportsbookHeader from './SportsbookHeader';
-import BetSlip from './BetSlip';
-import LoginPage from './LoginPage';
-import RegisterPage from './RegisterPage';
-import './global.css';
-import './theme.css';
+} from "react-router-dom";
 
-// Lazy load protected pages
+import { AuthProvider, useAuth } from "./Contexts.jsx";
+import { LanguageProvider, useTranslation } from "./LanguageContext";
+
+import SportsbookHeader from "./SportsbookHeader";
+import BetSlip from "./BetSlip";
+
+import LoginPage from "./LoginPage";
+import RegisterPage from "./RegisterPage";
+
+import "./global.css";
+import "./theme.css";
+
+
+// ======================================================
+// LAZY LOADED SCREENS
+// ======================================================
+
 const HomeScreen = lazy(() => import("./HomeScreen"));
 const LiveScreen = lazy(() => import("./LiveScreen"));
 const CasinoScreen = lazy(() => import("./CasinoScreen"));
@@ -28,10 +35,25 @@ const PromotionsScreen = lazy(() => import("./PromotionsScreen"));
 const SupportScreen = lazy(() => import("./SupportScreen"));
 const CalendarScreen = lazy(() => import("./CalendarScreen"));
 
-const LoadingFallback = () => <div className="loading-spinner">Loading...</div>;
 
-// ==================== MAIN APP ====================
-function App() {
+// ======================================================
+// LOADING SCREEN
+// ======================================================
+
+function LoadingFallback() {
+  return (
+    <div className="loading-spinner">
+      Loading...
+    </div>
+  );
+}
+
+
+// ======================================================
+// MAIN APP
+// ======================================================
+
+export default function App() {
   return (
     <LanguageProvider>
       <AuthProvider>
@@ -43,79 +65,274 @@ function App() {
   );
 }
 
-// ==================== LAYOUT WITH AUTH AWARENESS ====================
+
+// ======================================================
+// APP LAYOUT
+// ======================================================
+
 function AppLayout() {
-  const { user, logout } = useAuth();
+  const { user, logout, loading } = useAuth();
   const location = useLocation();
   const { t } = useTranslation();
 
-  // Bottom navigation items – Calendar added, Support moved to Profile
-  const navItems = [
-    { path: '/', label: 'Sportsbook', icon: '🏠' },
-    { path: '/my-bets', label: 'My Bets', icon: '📋' },
-    { path: '/wallet', label: 'Wallet', icon: '💰' },
-    { path: '/promotions', label: 'Promotions', icon: '🎁' },
-    { path: '/calendar', label: 'Calendar', icon: '📅' }, // NEW
-  ];
+  // Wait until authentication is checked
+  if (loading) {
+    return <LoadingFallback />;
+  }
 
-  // If user is not logged in, only show auth routes
+
+  // ====================================================
+  // NOT LOGGED IN
+  // ====================================================
+
   if (!user) {
     return (
       <div className="app-container auth-only">
+
         <main className="main-content">
+
           <Suspense fallback={<LoadingFallback />}>
+
             <Routes>
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/register" element={<RegisterPage />} />
-              <Route path="*" element={<Navigate to="/login" replace />} />
+
+              <Route
+                path="/login"
+                element={<LoginPage />}
+              />
+
+              <Route
+                path="/register"
+                element={<RegisterPage />}
+              />
+
+              <Route
+                path="*"
+                element={
+                  <Navigate
+                    to="/login"
+                    replace
+                  />
+                }
+              />
+
             </Routes>
+
           </Suspense>
+
         </main>
+
       </div>
     );
   }
 
-  // Logged-in layout
+
+  // ====================================================
+  // BOTTOM NAVIGATION
+  // ====================================================
+
+  const navItems = [
+    {
+      path: "/",
+      label: "Sportsbook",
+      icon: "🏠",
+    },
+    {
+      path: "/my-bets",
+      label: "My Bets",
+      icon: "📋",
+    },
+    {
+      path: "/wallet",
+      label: "Wallet",
+      icon: "💰",
+    },
+    {
+      path: "/promotions",
+      label: "Promotions",
+      icon: "🎁",
+    },
+    {
+      path: "/calendar",
+      label: "Calendar",
+      icon: "📅",
+    },
+  ];
+
+
+  // ====================================================
+  // LOGGED IN LAYOUT
+  // ====================================================
+
   return (
     <div className="app-container">
-      <SportsbookHeader onLogout={logout} />
+
+      {/* HEADER */}
+
+      <SportsbookHeader
+        onLogout={logout}
+      />
+
+
+      {/* MAIN CONTENT */}
 
       <main className="main-content">
+
         <Suspense fallback={<LoadingFallback />}>
+
           <Routes>
-            <Route path="/" element={<HomeScreen />} />
-            <Route path="/live" element={<LiveScreen />} />
-            <Route path="/casino" element={<CasinoScreen />} />
-            <Route path="/profile" element={<ProfileScreen />} />
-            <Route path="/my-bets" element={<MyBetsScreen />} />
-            <Route path="/wallet" element={<WalletScreen />} />
-            <Route path="/promotions" element={<PromotionsScreen />} />
-            <Route path="/support" element={<SupportScreen />} /> {/* kept for direct access */}
-            <Route path="/calendar" element={<CalendarScreen />} /> {/* NEW */}
-            <Route path="/login" element={<Navigate to="/" replace />} />
-            <Route path="/register" element={<Navigate to="/" replace />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
+
+            {/* HOME */}
+
+            <Route
+              path="/"
+              element={<HomeScreen />}
+            />
+
+
+            {/* SPORTS */}
+
+            <Route
+              path="/live"
+              element={<LiveScreen />}
+            />
+
+
+            {/* CASINO */}
+
+            <Route
+              path="/casino"
+              element={<CasinoScreen />}
+            />
+
+
+            {/* PROFILE */}
+
+            <Route
+              path="/profile"
+              element={<ProfileScreen />}
+            />
+
+
+            {/* MY BETS */}
+
+            <Route
+              path="/my-bets"
+              element={<MyBetsScreen />}
+            />
+
+
+            {/* WALLET */}
+
+            <Route
+              path="/wallet"
+              element={<WalletScreen />}
+            />
+
+
+            {/* PROMOTIONS */}
+
+            <Route
+              path="/promotions"
+              element={<PromotionsScreen />}
+            />
+
+
+            {/* SUPPORT */}
+
+            <Route
+              path="/support"
+              element={<SupportScreen />}
+            />
+
+
+            {/* ETHIOPIAN CALENDAR */}
+
+            <Route
+              path="/calendar"
+              element={<CalendarScreen />}
+            />
+
+
+            {/* AUTH ROUTES WHEN ALREADY LOGGED IN */}
+
+            <Route
+              path="/login"
+              element={
+                <Navigate
+                  to="/"
+                  replace
+                />
+              }
+            />
+
+            <Route
+              path="/register"
+              element={
+                <Navigate
+                  to="/"
+                  replace
+                />
+              }
+            />
+
+
+            {/* UNKNOWN PAGE */}
+
+            <Route
+              path="*"
+              element={
+                <Navigate
+                  to="/"
+                  replace
+                />
+              }
+            />
+
           </Routes>
+
         </Suspense>
+
       </main>
 
-      {/* Bottom Navigation */}
+
+      {/* BOTTOM NAVIGATION */}
+
       <nav className="bottom-nav">
-        {navItems.map((item) => (
-          <Link
-            key={item.path}
-            to={item.path}
-            className={`nav-item ${location.pathname === item.path ? 'active' : ''}`}
-          >
-            <span className="nav-icon">{item.icon}</span>
-            <span className="nav-label">{t(item.label) || item.label}</span>
-          </Link>
-        ))}
+
+        {navItems.map((item) => {
+
+          const active =
+            location.pathname === item.path;
+
+          return (
+            <Link
+              key={item.path}
+              to={item.path}
+              className={
+                `nav-item ${active ? "active" : ""}`
+              }
+            >
+
+              <span className="nav-icon">
+                {item.icon}
+              </span>
+
+              <span className="nav-label">
+                {t(item.label) || item.label}
+              </span>
+
+            </Link>
+          );
+
+        })}
+
       </nav>
 
+
+      {/* BET SLIP */}
+
       <BetSlip />
+
     </div>
   );
 }
-
-export default App;
