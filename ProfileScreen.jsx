@@ -1,6 +1,6 @@
 // ProfileScreen.jsx – User profile, settings, and responsible gambling
 import React, { useState, useEffect } from 'react';
-import { useAuth } from './contexts'; // adjust path if needed
+import { useAuth } from './AuthContext.jsx'; // adjust path if needed
 import { useTranslation } from './LanguageContext';
 import { User, Shield, Bell, Settings, LogOut, ChevronRight, Award, Wallet, Clock, HelpCircle } from 'lucide-react';
 
