@@ -1,4 +1,9 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState
+} from "react";
 
 const AuthContext = createContext(null);
 
@@ -21,11 +26,12 @@ export function AuthProvider({ children }) {
       }
     } catch (error) {
       console.error("Auth loading error:", error);
+
       localStorage.removeItem("shebaodds_token");
       localStorage.removeItem("shebaodds_user");
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   }, []);
 
   const login = (userData, userToken) => {
@@ -33,7 +39,10 @@ export function AuthProvider({ children }) {
     setToken(userToken);
 
     if (userToken) {
-      localStorage.setItem("shebaodds_token", userToken);
+      localStorage.setItem(
+        "shebaodds_token",
+        userToken
+      );
     }
 
     if (userData) {
@@ -60,7 +69,7 @@ export function AuthProvider({ children }) {
         loading,
         login,
         logout,
-        isAuthenticated: Boolean(token),
+        isAuthenticated: Boolean(token)
       }}
     >
       {children}
