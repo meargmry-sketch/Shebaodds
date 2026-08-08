@@ -1,6 +1,6 @@
 // CalendarScreen.jsx
 import React, { useState, useEffect } from 'react';
-import EthiopianCalendar from "./components/EthiopianCalendar.jsx";
+import EthiopianCalendar from "./EthiopianCalendar.jsx";
 import { useTranslation } from '../LanguageContext';
 import { toEthiopian } from '../utils/ethiopianCalendar';
 import axios from 'axios';
