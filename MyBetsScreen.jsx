@@ -1,6 +1,6 @@
 // MyBetsScreen.jsx – Betting history and active bets
 import React, { useState, useEffect } from 'react';
-import { useAuth } from './contexts';
+import { useAuth } from './AuthContext.jsx';
 import { useTranslation } from './LanguageContext';
 import { Filter, Calendar, ChevronDown, TrendingUp, TrendingDown, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 
