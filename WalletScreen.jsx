@@ -1,6 +1,6 @@
 // WalletScreen.jsx – Wallet management: balance, deposit, withdraw, transactions
 import React, { useState, useEffect } from 'react';
-import { useAuth } from './contexts';
+import { useAuth } from './AuthContext.jsx';
 import { useTranslation } from './LanguageContext';
 import { 
   Wallet, ArrowUpRight, ArrowDownLeft, Clock, 
