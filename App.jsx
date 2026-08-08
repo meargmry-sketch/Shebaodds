@@ -8,7 +8,7 @@ import {
   useLocation,
 } from "react-router-dom";
 
-import { AuthProvider, useAuth } from "./Contexts.jsx";
+import { AuthProvider, useAuth } from "./AuthContext.jsx";
 import { LanguageProvider, useTranslation } from "./LanguageContext";
 
 import SportsbookHeader from "./SportsbookHeader";
