@@ -1,6 +1,6 @@
 // PromotionsScreen.jsx – Promotions and bonuses
 import React, { useState, useEffect } from 'react';
-import { useAuth } from './contexts';
+import { useAuth } from './AuthContext.jsx';
 import { useTranslation } from './LanguageContext';
 import { Gift, Percent, Clock, ChevronRight, Sparkles, Fire, Star, Award, Zap, CheckCircle, XCircle } from 'lucide-react';
 
