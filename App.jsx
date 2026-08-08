@@ -14,6 +14,7 @@ import { LanguageProvider, useTranslation } from "./LanguageContext";
 import SportsbookHeader from "./SportsbookHeader";
 import BetSlip from "./BetSlip";
 
+import AdminLayout from "./AdminLayout.jsx";
 import LoginPage from "./LoginPage";
 import RegisterPage from "./RegisterPage";
 
