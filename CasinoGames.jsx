@@ -1,6 +1,6 @@
 // CasinoGames.jsx – 51+ games with live play, favorites, history
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useAuth } from './contexts';
+import { useAuth } from './AuthContext.jsx';
 import { useTranslation } from './LanguageContext';
 import axios from 'axios';
 
