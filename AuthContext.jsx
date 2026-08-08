@@ -1,16 +1,6 @@
-// contexts/AuthContext.jsx
-
-import React, {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-} from 'react';
+import React, { createContext, useContext, useEffect, useState } from "react";
 
 const AuthContext = createContext(null);
-
-const TOKEN_KEY = 'shebaodds_token';
-const USER_KEY = 'shebaodds_user';
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -19,127 +9,67 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     try {
-      const storedToken = localStorage.getItem(TOKEN_KEY);
-      const storedUser = localStorage.getItem(USER_KEY);
+      const savedToken = localStorage.getItem("shebaodds_token");
+      const savedUser = localStorage.getItem("shebaodds_user");
 
-      if (storedToken) {
-        setToken(storedToken);
+      if (savedToken) {
+        setToken(savedToken);
       }
 
-      if (storedUser) {
-        setUser(JSON.parse(storedUser));
+      if (savedUser) {
+        setUser(JSON.parse(savedUser));
       }
     } catch (error) {
-      console.error('Failed to restore authentication:', error);
-
-      localStorage.removeItem(TOKEN_KEY);
-      localStorage.removeItem(USER_KEY);
-    } finally {
-      setLoading(false);
+      console.error("Auth loading error:", error);
+      localStorage.removeItem("shebaodds_token");
+      localStorage.removeItem("shebaodds_user");
     }
+
+    setLoading(false);
   }, []);
 
-  const login = async (email, password) => {
-    if (!email || !password) {
-      return {
-        success: false,
-        message: 'Email and password are required.',
-      };
+  const login = (userData, userToken) => {
+    setUser(userData);
+    setToken(userToken);
+
+    if (userToken) {
+      localStorage.setItem("shebaodds_token", userToken);
     }
 
-    /*
-     * Temporary frontend authentication.
-     *
-     * Replace this section with your real API request
-     * when the backend authentication endpoint is ready.
-     */
-
-    const fakeUser = {
-      id: 'USR001',
-      email,
-      username: email.split('@')[0],
-      role: 'Player',
-      balance: 0,
-      biometricEnabled: false,
-    };
-
-    const fakeToken = `demo-token-${Date.now()}`;
-
-    localStorage.setItem(
-      TOKEN_KEY,
-      fakeToken
-    );
-
-    localStorage.setItem(
-      USER_KEY,
-      JSON.stringify(fakeUser)
-    );
-
-    setToken(fakeToken);
-    setUser(fakeUser);
-
-    return {
-      success: true,
-      user: fakeUser,
-      token: fakeToken,
-    };
+    if (userData) {
+      localStorage.setItem(
+        "shebaodds_user",
+        JSON.stringify(userData)
+      );
+    }
   };
 
   const logout = () => {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
-
-    setToken(null);
     setUser(null);
-  };
+    setToken(null);
 
-  const updateUser = (updates) => {
-    setUser((currentUser) => {
-      if (!currentUser) {
-        return currentUser;
-      }
-
-      const updatedUser = {
-        ...currentUser,
-        ...updates,
-      };
-
-      localStorage.setItem(
-        USER_KEY,
-        JSON.stringify(updatedUser)
-      );
-
-      return updatedUser;
-    });
-  };
-
-  const value = {
-    user,
-    token,
-    loading,
-    isAuthenticated: Boolean(token && user),
-    login,
-    logout,
-    updateUser,
+    localStorage.removeItem("shebaodds_token");
+    localStorage.removeItem("shebaodds_user");
   };
 
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider
+      value={{
+        user,
+        token,
+        loading,
+        login,
+        logout,
+        isAuthenticated: Boolean(token),
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext);
-
-  if (!context) {
-    throw new Error(
-      'useAuth must be used inside AuthProvider'
-    );
-  }
-
-  return context;
+  return useContext(AuthContext);
 }
 
 export default AuthContext;
