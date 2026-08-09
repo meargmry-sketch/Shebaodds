@@ -1,37 +1,52 @@
 /* =========================================================
    SHEBAODDS GLOBAL CSS
-   Main layout + responsive design
    ========================================================= */
 
-* {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-html,
-body,
-#root {
-  width: 100%;
-  min-height: 100%;
 }
 
 html {
-  scroll-behavior: smooth;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-height: 100%;
+  background: #050b18;
 }
 
 body {
-  font-family: Arial, Helvetica, sans-serif;
+  margin: 0;
+  padding: 0;
+  min-width: 320px;
+  min-height: 100vh;
+
   background: #050b18;
   color: #ffffff;
-  overflow-x: hidden;
+
+  font-family:
+    Inter,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+  width: 100%;
 }
 
 button,
 input,
 select,
 textarea {
-  font-family: inherit;
+  font: inherit;
 }
 
 button {
@@ -42,48 +57,30 @@ a {
   color: inherit;
 }
 
+img {
+  max-width: 100%;
+  display: block;
+}
+
 /* =========================================================
    APP
    ========================================================= */
 
 .app-container {
   min-height: 100vh;
+  width: 100%;
   background: #050b18;
   color: #ffffff;
 }
-
-/* =========================================================
-   MAIN CONTENT
-   ========================================================= */
 
 .main-content {
   min-height: 100vh;
-  margin-left: 260px;
-  padding: 24px;
-  padding-bottom: 100px;
-  background: #050b18;
+  width: 100%;
+  padding-bottom: 90px;
 }
 
 .auth-only .main-content {
-  margin-left: 0;
-  padding: 0;
-}
-
-/* =========================================================
-   PAGE CONTAINER
-   ========================================================= */
-
-.page-container {
-  width: 100%;
-  max-width: 1400px;
-  margin: 0 auto;
-}
-
-.page-title {
-  color: #ffffff;
-  font-size: 28px;
-  font-weight: 800;
-  margin-bottom: 24px;
+  padding-bottom: 0;
 }
 
 /* =========================================================
@@ -91,29 +88,15 @@ a {
    ========================================================= */
 
 .loading-spinner {
-  min-height: 300px;
+  min-height: 50vh;
+
   display: flex;
   align-items: center;
   justify-content: center;
+
   color: #ffd700;
   font-size: 16px;
   font-weight: 700;
-}
-
-/* =========================================================
-   BUTTONS
-   ========================================================= */
-
-button {
-  border: 0;
-  outline: none;
-}
-
-button:focus-visible,
-a:focus-visible,
-input:focus-visible {
-  outline: 2px solid #ffd700;
-  outline-offset: 2px;
 }
 
 /* =========================================================
@@ -122,49 +105,49 @@ input:focus-visible {
 
 .bottom-nav {
   position: fixed;
-  left: 260px;
+
+  left: 0;
   right: 0;
   bottom: 0;
-  height: 72px;
+
+  height: 70px;
 
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
+  justify-content: space-around;
 
-  background: rgba(11, 15, 25, 0.98);
+  background: rgba(11, 15, 25, 0.97);
+
   border-top: 1px solid #1e293b;
 
-  z-index: 80;
   backdrop-filter: blur(12px);
+
+  z-index: 80;
 }
 
 .bottom-nav .nav-item {
-  min-width: 100px;
-  height: 58px;
+  flex: 1;
 
   display: flex;
   flex-direction: column;
+
   align-items: center;
   justify-content: center;
 
   gap: 4px;
 
+  padding: 8px 4px;
+
   color: #94a3b8;
+
   text-decoration: none;
 
-  border-radius: 10px;
   transition: 0.2s ease;
 }
 
-.bottom-nav .nav-item:hover {
-  color: #ffd700;
-  background: #111625;
-}
-
+.bottom-nav .nav-item:hover,
 .bottom-nav .nav-item.active {
   color: #ffd700;
-  background: #111625;
 }
 
 .nav-icon {
@@ -173,45 +156,90 @@ input:focus-visible {
 }
 
 .nav-label {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
 }
 
 /* =========================================================
-   CARDS
+   CALENDAR SCREEN
    ========================================================= */
 
-.card {
-  background: #111625;
-  border: 1px solid #1e293b;
-  border-radius: 12px;
-  padding: 20px;
+.calendar-screen {
+  width: 100%;
+  max-width: 1200px;
+
+  margin: 0 auto;
+
+  padding: 24px;
+}
+
+.page-title {
+  margin: 0 0 20px;
+
+  color: #ffffff;
+
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.selected-matches h2 {
+  margin-top: 0;
+
+  color: #ffffff;
+
+  font-size: 18px;
 }
 
 /* =========================================================
-   FORMS
+   MOBILE
    ========================================================= */
 
-input,
-select,
-textarea {
-  background: #0b0f19;
-  color: #ffffff;
-  border: 1px solid #1e293b;
-  border-radius: 8px;
-  padding: 10px 12px;
-  outline: none;
+@media (max-width: 768px) {
+  .main-content {
+    padding-bottom: 78px;
+  }
+
+  .calendar-screen {
+    padding: 16px;
+  }
+
+  .page-title {
+    font-size: 20px;
+  }
+
+  .bottom-nav {
+    height: 64px;
+  }
+
+  .nav-icon {
+    font-size: 18px;
+  }
+
+  .nav-label {
+    font-size: 9px;
+  }
 }
 
-input::placeholder,
-textarea::placeholder {
-  color: #64748b;
-}
+/* =========================================================
+   SMALL PHONES
+   ========================================================= */
 
-input:focus,
-select:focus,
-textarea:focus {
-  border-color: #ffd700;
+@media (max-width: 480px) {
+  .calendar-screen {
+    padding: 12px;
+  }
+
+  .bottom-nav .nav-item {
+    padding: 6px 2px;
+  }
+
+  .nav-icon {
+    font-size: 17px;
+  }
+
+  .nav-label {
+    font-size: 8px;
+  }
 }
 
 /* =========================================================
@@ -224,7 +252,7 @@ textarea:focus {
 }
 
 ::-webkit-scrollbar-track {
-  background: #050b18;
+  background: #0b0e1a;
 }
 
 ::-webkit-scrollbar-thumb {
@@ -243,173 +271,4 @@ textarea:focus {
 ::selection {
   background: #ffd700;
   color: #050b18;
-}
-
-/* =========================================================
-   ETHIOPIAN CALENDAR
-   ========================================================= */
-
-.calendar-screen {
-  width: 100%;
-  max-width: 1100px;
-  margin: 0 auto;
-}
-
-.calendar-screen .page-title {
-  margin-bottom: 20px;
-}
-
-.ethiopian-calendar {
-  width: 100%;
-}
-
-.selected-matches {
-  margin-top: 20px;
-}
-
-/* =========================================================
-   MATCH LIST
-   ========================================================= */
-
-.matches-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-
-.match-item {
-  min-height: 48px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 15px;
-}
-
-.match-item .teams {
-  font-weight: 600;
-}
-
-/* =========================================================
-   MOBILE
-   ========================================================= */
-
-@media (max-width: 991px) {
-
-  .main-content {
-    margin-left: 0;
-    padding: 18px;
-    padding-top: 70px;
-    padding-bottom: 90px;
-  }
-
-  .bottom-nav {
-    left: 0;
-    height: 68px;
-    padding: 4px 6px;
-    gap: 2px;
-  }
-
-  .bottom-nav .nav-item {
-    flex: 1;
-    min-width: 0;
-    max-width: 110px;
-  }
-
-  .nav-icon {
-    font-size: 19px;
-  }
-
-  .nav-label {
-    font-size: 10px;
-  }
-
-  .page-title {
-    font-size: 24px;
-  }
-}
-
-/* =========================================================
-   SMALL PHONES
-   ========================================================= */
-
-@media (max-width: 600px) {
-
-  .main-content {
-    padding-left: 12px;
-    padding-right: 12px;
-    padding-top: 65px;
-    padding-bottom: 85px;
-  }
-
-  .page-title {
-    font-size: 21px;
-    margin-bottom: 16px;
-  }
-
-  .card {
-    padding: 14px;
-  }
-
-  .bottom-nav {
-    height: 64px;
-  }
-
-  .bottom-nav .nav-item {
-    height: 54px;
-  }
-
-  .nav-icon {
-    font-size: 17px;
-  }
-
-  .nav-label {
-    font-size: 9px;
-  }
-
-  .calendar-grid {
-    gap: 4px;
-  }
-
-  .calendar-day {
-    border-radius: 6px;
-  }
-
-  .calendar-day .day-number {
-    font-size: 12px;
-  }
-
-  .calendar-day .match-indicator {
-    font-size: 7px;
-  }
-
-  .selected-matches {
-    padding: 12px;
-  }
-
-  .match-item {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-    padding: 10px 0 !important;
-  }
-}
-
-/* =========================================================
-   VERY SMALL PHONES
-   ========================================================= */
-
-@media (max-width: 380px) {
-
-  .main-content {
-    padding-left: 8px;
-    padding-right: 8px;
-  }
-
-  .nav-label {
-    font-size: 8px;
-  }
-
-  .nav-icon {
-    font-size: 16px;
-  }
 }
