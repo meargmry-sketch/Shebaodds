@@ -39,10 +39,7 @@ export function AuthProvider({ children }) {
     setToken(userToken);
 
     if (userToken) {
-      localStorage.setItem(
-        "shebaodds_token",
-        userToken
-      );
+      localStorage.setItem("shebaodds_token", userToken);
     }
 
     if (userData) {
@@ -69,7 +66,7 @@ export function AuthProvider({ children }) {
         loading,
         login,
         logout,
-        isAuthenticated: Boolean(token)
+        isAuthenticated: !!token,
       }}
     >
       {children}
