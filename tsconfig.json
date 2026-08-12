@@ -3,21 +3,49 @@
     "target": "ES2022",
     "module": "CommonJS",
     "moduleResolution": "Node",
+
     "rootDir": ".",
     "outDir": "dist",
+
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
+
     "strict": false,
+    "noImplicitAny": false,
+    "noImplicitThis": false,
+    "strictNullChecks": false,
+    "strictFunctionTypes": false,
+    "strictBindCallApply": false,
+    "strictPropertyInitialization": false,
+    "useUnknownInCatchVariables": false,
+
     "skipLibCheck": true,
+
     "resolveJsonModule": true,
     "sourceMap": true,
-    "forceConsistentCasingInFileNames": true
+
+    "forceConsistentCasingInFileNames": false,
+
+    "noEmitOnError": false
   },
+
   "include": [
-    "**/*.ts"
+    "server.ts",
+    "*.ts",
+    "routes/**/*.ts",
+    "services/**/*.ts",
+    "controllers/**/*.ts",
+    "models/**/*.ts",
+    "middleware/**/*.ts",
+    "config/**/*.ts",
+    "utils/**/*.ts"
   ],
+
   "exclude": [
     "node_modules",
-    "dist"
+    "dist",
+    "frontend",
+    "client",
+    "public"
   ]
 }
