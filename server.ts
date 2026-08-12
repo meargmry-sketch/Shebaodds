@@ -203,4 +203,53 @@ app.use(
       error: 'Internal Server Error',
       message:
         err?.message ||
-        '
+        'An unexpected server error occurred'
+    });
+  }
+);
+
+/*
+|--------------------------------------------------------------------------
+| Start Server
+|--------------------------------------------------------------------------
+*/
+
+async function startServer(): Promise<void> {
+  try {
+    console.log('--------------------------------------------------');
+    console.log('🚀 Starting ShebaOdds backend...');
+    console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`🔌 Port: ${PORT}`);
+    console.log(`🔗 API Version: ${API_VERSION}`);
+    console.log('--------------------------------------------------');
+
+    /*
+     * Initialize database and application services.
+     */
+    await bootstrapAppEngine();
+
+    /*
+     * Start HTTP server.
+     */
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log('============================================================');
+      console.log('⚡ SHEBAODDS BACKEND IS RUNNING');
+      console.log(`🌐 Port: ${PORT}`);
+      console.log(`🔗 API: /api/${API_VERSION}`);
+      console.log(`❤️ Health: /health`);
+      console.log('============================================================');
+    });
+  } catch (error) {
+    console.error(
+      '💥 [SERVER FATAL STARTUP FAILURE]'
+    );
+
+    console.error(error);
+
+    process.exit(1);
+  }
+}
+
+startServer();
+
+export default app;
