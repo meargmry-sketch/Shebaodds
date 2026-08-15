@@ -1,15 +1,24 @@
 {
+  "$schema": "https://json.schemastore.org/swcrc",
   "jsc": {
+    "target": "es2022",
     "parser": {
       "syntax": "typescript",
-      "tsx": false,
+      "tsx": true,
       "decorators": true,
       "dynamicImport": true
     },
-    "target": "es2022"
+    "transform": {
+      "react": {
+        "runtime": "classic",
+        "development": false,
+        "useBuiltins": false
+      }
+    }
   },
   "module": {
     "type": "commonjs"
   },
-  "sourceMaps": true
+  "sourceMaps": false,
+  "minify": false
 }
