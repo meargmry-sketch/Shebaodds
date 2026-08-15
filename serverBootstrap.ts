@@ -1,14 +1,28 @@
+// ============================================
+// SHEBAODDS - APPLICATION BOOTSTRAP
+// ============================================
+
 import mongoose from 'mongoose';
 import * as dotenv from 'dotenv';
 
-// Load environment variables
 dotenv.config();
 
-/**
- * List of absolutely required environment variables for the ShebaOdds Enterprise Server
- */
+// ============================================
+// REQUIRED ENVIRONMENT VARIABLES
+// ============================================
+
 const REQUIRED_ENV_VARIABLES = [
   'MONGODB_URI',
+  'JWT_SECRET',
+  'JWT_REFRESH_SECRET',
+  'BIOMETRIC_ENCRYPTION_KEY'
+];
+
+// ============================================
+// OPTIONAL ENVIRONMENT VARIABLES
+// ============================================
+
+const OPTIONAL_ENV_VARIABLES = [
   'TAX_RATE',
   'WELCOME_BONUS',
   'TELE_BIRR_API_KEY',
@@ -16,122 +30,172 @@ const REQUIRED_ENV_VARIABLES = [
   'CBE_API_KEY',
   'CHAPA_API_KEY',
   'SPORTS_DATA_API_KEY',
-  'BIOMETRIC_ENCRYPTION_KEY',
-  'REDIS_HOST'
+  'REDIS_HOST',
+  'REDIS_PORT'
 ];
 
-/**
- * Step 1: Check Injected Key Environment Mappings & Fail Fast Guard
- */
-function verifyEnvironmentMappings(): void {
-  console.log('🔄 [BOOTSTRAP] Step 1: Checking injected key environment mappings...');
-  
-  // Dynamic fallbacks for enterprise environment compatibility
-  if (!process.env.WELCOME_BONUS && process.env.WELCOME_BONUS_AMOUNT) {
-    process.env.WELCOME_BONUS = process.env.WELCOME_BONUS_AMOUNT;
-  }
-  if (!process.env.BIOMETRIC_ENCRYPTION_KEY && process.env.ENCRYPTION_KEY) {
-    process.env.BIOMETRIC_ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
-  }
-  if (!process.env.REDIS_HOST) {
-    process.env.REDIS_HOST = '127.0.0.1';
-  }
-  
-  const missingVars: string[] = [];
-  
+// ============================================
+// CHECK ENVIRONMENT
+// ============================================
+
+function verifyEnvironment(): void {
+  console.log('🔄 [BOOTSTRAP] Checking environment configuration...');
+
+  const missing: string[] = [];
+
   for (const variable of REQUIRED_ENV_VARIABLES) {
-    if (!process.env[variable] || process.env[variable]?.includes('change_this') || process.env[variable]?.includes('your_')) {
-      missingVars.push(variable);
+    const value = process.env[variable];
+
+    if (
+      !value ||
+      value.trim() === '' ||
+      value.includes('change_this') ||
+      value.includes('your_')
+    ) {
+      missing.push(variable);
     }
   }
 
-  if (missingVars.length > 0) {
-    console.error('❌ [BOOTSTRAP CRITICAL ERROR] Missing or unconfigured required environment variables:');
-    missingVars.forEach(v => console.error(`   - ${v}`));
-    if (process.env.NODE_ENV === 'production') {
-      console.error('💥 Fail Fast Guard Triggered: Terminating server initialization process.');
-      process.exit(1);
-    } else {
-      console.warn('⚠️ [BOOTSTRAP WARNING] Running in non-production mode. Bypassing Fail Fast Guard...');
+  if (missing.length > 0) {
+    console.error('');
+    console.error(
+      '❌ [BOOTSTRAP CRITICAL ERROR] Required environment variables are missing:'
+    );
+
+    missing.forEach(variable => {
+      console.error(`   - ${variable}`);
+    });
+
+    console.error('');
+    console.error(
+      '💥 Server startup cancelled because required configuration is missing.'
+    );
+
+    throw new Error(
+      `Missing required environment variables: ${missing.join(', ')}`
+    );
+  }
+
+  console.log('✅ Required environment variables configured.');
+
+  // ============================================
+  // OPTIONAL VARIABLES
+  // ============================================
+
+  const missingOptional: string[] = [];
+
+  for (const variable of OPTIONAL_ENV_VARIABLES) {
+    if (!process.env[variable]) {
+      missingOptional.push(variable);
     }
   }
 
-  console.log('✅ [BOOTSTRAP] Environment configuration mappings validated.');
+  if (missingOptional.length > 0) {
+    console.warn('');
+    console.warn(
+      '⚠️ [BOOTSTRAP] Optional environment variables not configured:'
+    );
+
+    missingOptional.forEach(variable => {
+      console.warn(`   - ${variable}`);
+    });
+
+    console.warn(
+      'Some payment, Redis, sports, or bonus features may be unavailable.'
+    );
+  }
+
+  // ============================================
+  // DEFAULT VALUES
+  // ============================================
+
+  if (!process.env.TAX_RATE) {
+    process.env.TAX_RATE = '0.15';
+  }
+
+  if (!process.env.WELCOME_BONUS) {
+    process.env.WELCOME_BONUS = '100';
+  }
+
+  console.log('✅ Environment configuration validated.');
 }
 
-/**
- * Step 2: Mongoose Connection and ACID Replica Set Check
- */
-async function connectAndValidateReplicaSet(): Promise<void> {
-  const mongoUri = process.env.MONGODB_URI as string;
-  console.log('🔄 [BOOTSTRAP] Step 2: Initiating Mongoose cluster connection check...');
-  
+// ============================================
+// MONGODB CONNECTION
+// ============================================
+
+async function connectDatabase(): Promise<void> {
+  const mongoUri = process.env.MONGODB_URI;
+
+  if (!mongoUri) {
+    throw new Error('MONGODB_URI is not configured');
+  }
+
+  console.log('🔄 [BOOTSTRAP] Connecting to MongoDB...');
+
   try {
-    // Attempt database connection
-    await mongoose.connect(mongoUri);
-    console.log('✅ [BOOTSTRAP] MongoDB connection established successfully.');
+    await mongoose.connect(mongoUri, {
+      serverSelectionTimeoutMS: 10000
+    });
 
-    // Validate if the connected database is running as an ACID-compliant Replica Set
-    const adminDb = mongoose.connection.db.admin();
-    const status = await adminDb.command({ replSetGetStatus: 1 }).catch(() => null);
+    console.log('✅ [BOOTSTRAP] MongoDB connected successfully.');
 
-    if (!status || !status.ok) {
-      // In MongoDB, transactions require a replica set. Sharded clusters or standalone instances without replSet will fail ACID transactions.
-      console.warn('⚠️ [BOOTSTRAP WARN] "replSetGetStatus" command was not recognized or returned not OK.');
-      
-      // Secondary check: examine the connection string for replicaSet parameters
-      const hasReplicaSetParam = mongoUri.includes('replicaSet=') || mongoUri.includes('replicaSet');
-      
-      if (!hasReplicaSetParam) {
-        console.error('❌ [BOOTSTRAP CRITICAL ERROR] MongoDB is not running as an ACID-compliant Replica Set!');
-        console.error('👉 Transactions (required for multi-wallet ledger and real-time casino turns) will fail on standalone MongoDB deployments.');
-        
-        if (process.env.NODE_ENV === 'production') {
-          console.error('💥 Standalone Guard Triggered: Terminating server initialization process.');
-          // Terminate database connection
-          await mongoose.disconnect();
-          process.exit(1);
-        } else {
-          console.warn('⚠️ [BOOTSTRAP WARNING] Running in non-production mode. Bypassing Standalone Guard...');
-        }
-      } else {
-        console.log('ℹ️ [BOOTSTRAP] Replica Set connection parameter detected in MONGODB_URI.');
-      }
-    } else {
-      console.log(`✅ [BOOTSTRAP] Verified MongoDB ACID Replica Set: "${status.set}" with ${status.members.length} member(s).`);
+    if (mongoose.connection.db) {
+      console.log(
+        `📦 [BOOTSTRAP] Database: ${mongoose.connection.db.databaseName}`
+      );
     }
 
   } catch (error: any) {
-    console.error('❌ [BOOTSTRAP CRITICAL ERROR] Database connection check failed:', error.message || error);
-    if (process.env.NODE_ENV === 'production') {
-      process.exit(1);
-    } else {
-      console.warn('⚠️ [BOOTSTRAP WARNING] Connection failed. Bypassing Database Connection Guard for development mock server stability...');
-    }
+    console.error(
+      '❌ [BOOTSTRAP] MongoDB connection failed:',
+      error.message || error
+    );
+
+    throw error;
   }
 }
 
-/**
- * Main App Engine Server Bootstrapper
- */
+// ============================================
+// MAIN BOOTSTRAP
+// ============================================
+
 export async function bootstrapAppEngine(): Promise<void> {
-  console.log('🚀 [BOOTSTRAP] Booting ShebaOdds App Engine Server Initialization...');
-  console.log('----------------------------------------------------------------------');
 
-  // Step 1: Environment Guard Check
-  verifyEnvironmentMappings();
+  console.log('');
+  console.log('============================================');
+  console.log('🚀 SHEBAODDS APP ENGINE');
+  console.log('============================================');
 
-  // Step 2: Database Connection & Transaction capabilities check
-  await connectAndValidateReplicaSet();
+  // Step 1
+  verifyEnvironment();
 
-  console.log('----------------------------------------------------------------------');
-  console.log('⚡ [BOOTSTRAP SUCCESS] Server validated. Igniting Live Sportsbook and Casino Services...');
+  // Step 2
+  await connectDatabase();
+
+  console.log('');
+  console.log('============================================');
+  console.log('✅ SHEBAODDS BOOTSTRAP COMPLETE');
+  console.log('============================================');
+  console.log('');
 }
 
-// Auto-run if executed directly as a script
+// ============================================
+// DIRECT EXECUTION
+// ============================================
+
 if (require.main === module) {
-  bootstrapAppEngine().catch(err => {
-    console.error('💥 [BOOTSTRAP PANIC] Unexpected server engine crash:', err);
-    process.exit(1);
-  });
+
+  bootstrapAppEngine()
+    .then(() => {
+      console.log('🚀 Server initialization completed.');
+    })
+    .catch((error) => {
+
+      console.error('');
+      console.error('💥 [BOOTSTRAP PANIC]');
+      console.error(error);
+
+      process.exit(1);
+    });
 }
