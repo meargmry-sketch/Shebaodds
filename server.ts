@@ -1,25 +1,10 @@
-import express, {
-  Request,
-  Response,
-  NextFunction
-} from 'express';
-
+import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
 import dotenv from 'dotenv';
-import fs from 'fs';
-import path from 'path';
 
-import { bootstrapAppEngine } from './serverBootstrap';
-
-import gatewayRouter from './expressApiGateway';
-import authRouter from './authRoutes';
-import walletRouter from './walletRoutes';
-import bettingRouter from './bettingRoutes';
-import matchesRouter from './matchesRoutes';
-import adminRouter from './adminRoutes';
-import biometricRouter from './biometricRoutes';
+import { bootstrapAppEngine } from './bootstrap';
 
 dotenv.config();
 
@@ -27,349 +12,79 @@ const app = express();
 
 const PORT = Number(process.env.PORT) || 5000;
 
-const API_VERSION =
-  process.env.API_VERSION || 'v2';
+// ============================================
+// MIDDLEWARE
+// ============================================
 
-/*
-|--------------------------------------------------------------------------
-| CORS
-|--------------------------------------------------------------------------
-*/
-
-const corsOrigins = process.env.CORS_ORIGINS
-  ? process.env.CORS_ORIGINS
-      .split(',')
-      .map((origin) => origin.trim())
-      .filter(Boolean)
-  : true;
+app.use(helmet());
 
 app.use(
   cors({
-    origin: corsOrigins,
-    credentials: true
+    origin: process.env.CORS_ORIGINS
+      ? process.env.CORS_ORIGINS.split(',')
+      : '*'
   })
 );
-
-/*
-|--------------------------------------------------------------------------
-| Security
-|--------------------------------------------------------------------------
-*/
-
-app.use(
-  helmet({
-    crossOriginResourcePolicy: false
-  })
-);
-
-/*
-|--------------------------------------------------------------------------
-| Compression
-|--------------------------------------------------------------------------
-*/
 
 app.use(compression());
 
-/*
-|--------------------------------------------------------------------------
-| Request Body
-|--------------------------------------------------------------------------
-*/
+app.use(express.json({ limit: '10mb' }));
 
-app.use(
-  express.json({
-    limit: '10mb'
-  })
-);
+app.use(express.urlencoded({
+  extended: true,
+  limit: '10mb'
+}));
 
-app.use(
-  express.urlencoded({
-    extended: true,
-    limit: '10mb'
-  })
-);
+// ============================================
+// HEALTH CHECK
+// ============================================
 
-/*
-|--------------------------------------------------------------------------
-| Request Logger
-|--------------------------------------------------------------------------
-*/
+app.get('/', (_req, res) => {
+  res.json({
+    success: true,
+    service: 'SHEBAODDS Backend',
+    status: 'online',
+    version: '3.0.0'
+  });
+});
 
-app.use(
-  (
-    req: Request,
-    _res: Response,
-    next: NextFunction
-  ) => {
-    console.log(
-      `[HTTP] ${req.method} ${req.originalUrl} - IP: ${req.ip}`
-    );
+app.get('/health', (_req, res) => {
+  res.status(200).json({
+    success: true,
+    status: 'healthy',
+    database:
+      process.env.MONGODB_URI
+        ? 'configured'
+        : 'not configured'
+  });
+});
 
-    next();
-  }
-);
+// ============================================
+// START SERVER
+// ============================================
 
-/*
-|--------------------------------------------------------------------------
-| Root
-|--------------------------------------------------------------------------
-*/
-
-app.get(
-  '/',
-  (_req: Request, res: Response) => {
-    res.status(200).json({
-      name: 'ShebaOdds Enterprise Platform Service',
-      version: '3.0.0',
-      status: 'Operational',
-      uptime: process.uptime(),
-      timestamp: new Date().toISOString()
-    });
-  }
-);
-
-/*
-|--------------------------------------------------------------------------
-| Health Check
-|--------------------------------------------------------------------------
-*/
-
-app.get(
-  '/health',
-  (_req: Request, res: Response) => {
-    res.status(200).json({
-      success: true,
-      status: 'healthy',
-      service: 'shebaodds-backend',
-      uptime: process.uptime(),
-      timestamp: new Date().toISOString()
-    });
-  }
-);
-
-/*
-|--------------------------------------------------------------------------
-| Amharic Translation
-|--------------------------------------------------------------------------
-*/
-
-app.get(
-  '/locales/am.json',
-  (_req: Request, res: Response) => {
-    try {
-      const localesPath = path.join(
-        __dirname,
-        'locales',
-        'am.json'
-      );
-
-      if (!fs.existsSync(localesPath)) {
-        return res.status(404).json({
-          success: false,
-          message:
-            'Amharic translation file not found'
-        });
-      }
-
-      const data = fs.readFileSync(
-        localesPath,
-        'utf8'
-      );
-
-      return res.json(
-        JSON.parse(data)
-      );
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : 'Unknown error';
-
-      return res.status(500).json({
-        success: false,
-        message
-      });
-    }
-  }
-);
-
-/*
-|--------------------------------------------------------------------------
-| API Routes
-|--------------------------------------------------------------------------
-*/
-
-app.use(
-  `/api/${API_VERSION}`,
-  gatewayRouter
-);
-
-app.use(
-  `/api/${API_VERSION}/auth`,
-  authRouter
-);
-
-app.use(
-  `/api/${API_VERSION}/wallet`,
-  walletRouter
-);
-
-app.use(
-  `/api/${API_VERSION}/bets`,
-  bettingRouter
-);
-
-app.use(
-  `/api/${API_VERSION}/matches`,
-  matchesRouter
-);
-
-app.use(
-  `/api/${API_VERSION}/admin`,
-  adminRouter
-);
-
-app.use(
-  `/api/${API_VERSION}/biometric`,
-  biometricRouter
-);
-
-/*
-|--------------------------------------------------------------------------
-| 404 Handler
-|--------------------------------------------------------------------------
-*/
-
-app.use(
-  (
-    req: Request,
-    res: Response
-  ) => {
-    res.status(404).json({
-      success: false,
-      error: 'Not Found',
-      message:
-        `Route ${req.method} ${req.originalUrl} does not exist`
-    });
-  }
-);
-
-/*
-|--------------------------------------------------------------------------
-| Global Error Handler
-|--------------------------------------------------------------------------
-*/
-
-app.use(
-  (
-    err: any,
-    _req: Request,
-    res: Response,
-    _next: NextFunction
-  ) => {
-    console.error(
-      '💥 [GLOBAL ERROR]',
-      err
-    );
-
-    res.status(
-      err?.status || 500
-    ).json({
-      success: false,
-      error: 'Internal Server Error',
-      message:
-        err?.message ||
-        'Unexpected server error'
-    });
-  }
-);
-
-/*
-|--------------------------------------------------------------------------
-| Start Server
-|--------------------------------------------------------------------------
-*/
-
-async function startServer(): Promise<void> {
+async function startServer() {
   try {
-    console.log(
-      '============================================================'
-    );
 
-    console.log(
-      '🚀 Starting ShebaOdds Backend...'
-    );
-
-    console.log(
-      `🌍 Environment: ${
-        process.env.NODE_ENV || 'development'
-      }`
-    );
-
-    console.log(
-      `🔌 Port: ${PORT}`
-    );
-
-    console.log(
-      `🔗 API Version: ${API_VERSION}`
-    );
-
-    console.log(
-      '============================================================'
-    );
-
-    /*
-     * Initialize database and other
-     * application services.
-     */
     await bootstrapAppEngine();
 
-    /*
-     * Start HTTP server.
-     */
-    app.listen(
-      PORT,
-      '0.0.0.0',
-      () => {
-        console.log(
-          '============================================================'
-        );
+    app.listen(PORT, '0.0.0.0', () => {
 
-        console.log(
-          '✅ SHEBAODDS BACKEND IS RUNNING'
-        );
+      console.log('');
+      console.log('============================================');
+      console.log('🦁 SHEBAODDS SERVER ONLINE');
+      console.log('============================================');
+      console.log(`🚀 Port: ${PORT}`);
+      console.log(`🌍 Environment: ${process.env.NODE_ENV}`);
+      console.log('============================================');
 
-        console.log(
-          `🌐 Port: ${PORT}`
-        );
+    });
 
-        console.log(
-          `❤️ Health: /health`
-        );
-
-        console.log(
-          `🔗 API: /api/${API_VERSION}`
-        );
-
-        console.log(
-          '============================================================'
-        );
-      }
-    );
   } catch (error) {
-    console.error(
-      '============================================================'
-    );
 
-    console.error(
-      '💥 SERVER FATAL STARTUP FAILURE'
-    );
-
+    console.error('');
+    console.error('💥 SERVER STARTUP FAILED');
     console.error(error);
-
-    console.error(
-      '============================================================'
-    );
 
     process.exit(1);
   }
