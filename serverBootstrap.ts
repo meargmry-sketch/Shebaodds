@@ -1,9 +1,5 @@
-// ============================================
-// SHEBAODDS - APPLICATION BOOTSTRAP
-// ============================================
-
 import mongoose from 'mongoose';
-import * as dotenv from 'dotenv';
+import dotenv from 'dotenv';
 
 dotenv.config();
 
@@ -35,11 +31,13 @@ const OPTIONAL_ENV_VARIABLES = [
 ];
 
 // ============================================
-// CHECK ENVIRONMENT
+// ENVIRONMENT CHECK
 // ============================================
 
 function verifyEnvironment(): void {
-  console.log('🔄 [BOOTSTRAP] Checking environment configuration...');
+  console.log(
+    '🔄 [BOOTSTRAP] Checking environment configuration...'
+  );
 
   const missing: string[] = [];
 
@@ -62,21 +60,20 @@ function verifyEnvironment(): void {
       '❌ [BOOTSTRAP CRITICAL ERROR] Required environment variables are missing:'
     );
 
-    missing.forEach(variable => {
+    missing.forEach((variable) => {
       console.error(`   - ${variable}`);
     });
 
     console.error('');
-    console.error(
-      '💥 Server startup cancelled because required configuration is missing.'
-    );
 
     throw new Error(
       `Missing required environment variables: ${missing.join(', ')}`
     );
   }
 
-  console.log('✅ Required environment variables configured.');
+  console.log(
+    '✅ [BOOTSTRAP] Required environment variables configured.'
+  );
 
   // ============================================
   // OPTIONAL VARIABLES
@@ -96,12 +93,12 @@ function verifyEnvironment(): void {
       '⚠️ [BOOTSTRAP] Optional environment variables not configured:'
     );
 
-    missingOptional.forEach(variable => {
+    missingOptional.forEach((variable) => {
       console.warn(`   - ${variable}`);
     });
 
     console.warn(
-      'Some payment, Redis, sports, or bonus features may be unavailable.'
+      'Some optional features may not be available.'
     );
   }
 
@@ -117,7 +114,9 @@ function verifyEnvironment(): void {
     process.env.WELCOME_BONUS = '100';
   }
 
-  console.log('✅ Environment configuration validated.');
+  console.log(
+    '✅ [BOOTSTRAP] Environment configuration validated.'
+  );
 }
 
 // ============================================
@@ -128,17 +127,23 @@ async function connectDatabase(): Promise<void> {
   const mongoUri = process.env.MONGODB_URI;
 
   if (!mongoUri) {
-    throw new Error('MONGODB_URI is not configured');
+    throw new Error(
+      'MONGODB_URI is not configured.'
+    );
   }
 
-  console.log('🔄 [BOOTSTRAP] Connecting to MongoDB...');
+  console.log(
+    '🔄 [BOOTSTRAP] Connecting to MongoDB...'
+  );
 
   try {
     await mongoose.connect(mongoUri, {
       serverSelectionTimeoutMS: 10000
     });
 
-    console.log('✅ [BOOTSTRAP] MongoDB connected successfully.');
+    console.log(
+      '✅ [BOOTSTRAP] MongoDB connected successfully.'
+    );
 
     if (mongoose.connection.db) {
       console.log(
@@ -147,9 +152,10 @@ async function connectDatabase(): Promise<void> {
     }
 
   } catch (error: any) {
+
     console.error(
       '❌ [BOOTSTRAP] MongoDB connection failed:',
-      error.message || error
+      error?.message || error
     );
 
     throw error;
@@ -188,12 +194,19 @@ if (require.main === module) {
 
   bootstrapAppEngine()
     .then(() => {
-      console.log('🚀 Server initialization completed.');
+
+      console.log(
+        '🚀 Server initialization completed.'
+      );
+
     })
     .catch((error) => {
 
       console.error('');
-      console.error('💥 [BOOTSTRAP PANIC]');
+      console.error(
+        '💥 [BOOTSTRAP PANIC]'
+      );
+
       console.error(error);
 
       process.exit(1);
