@@ -3,10 +3,11 @@
   "version": "3.0.0",
   "description": "SHEBAODDS Enterprise Betting Platform",
   "main": "dist/server.js",
+  "private": true,
 
   "scripts": {
-    "build": "swc . -d dist --copy-files --ignore node_modules --ignore dist",
-    "start": "node dist/server.js",
+    "build": "swc server.ts serverBootstrap.ts expressApiGateway.ts authRoutes.ts walletRoutes.ts bettingRoutes.ts matchesRoutes.ts adminRoutes.ts biometricRoutes.ts scripts -d dist --copy-files",
+    "start": "node --max-old-space-size=1024 dist/server.js",
     "dev": "ts-node server.ts",
 
     "test": "jest --coverage",
@@ -26,7 +27,8 @@
     "cors": "^2.8.5",
     "helmet": "^7.1.0",
     "compression": "^1.7.4",
-    "express-rate-limit": "^7.1.5",
+
+    "dotenv": "^16.3.1",
 
     "bcryptjs": "^2.4.3",
     "bcrypt": "^5.1.1",
@@ -35,8 +37,8 @@
     "socket.io": "^4.5.4",
     "socket.io-client": "^4.5.4",
 
-    "dotenv": "^16.3.1",
     "axios": "^1.6.2",
+    "express-rate-limit": "^7.1.5",
 
     "ioredis": "^5.3.2",
 
@@ -44,6 +46,7 @@
     "winston-daily-rotate-file": "^4.7.1",
 
     "stripe": "^14.12.0",
+
     "@google/generative-ai": "^0.1.3",
 
     "nodemailer": "^6.9.7",
@@ -67,6 +70,7 @@
 
     "express-session": "^1.17.3",
     "connect-redis": "^7.1.0",
+
     "csurf": "^1.11.0",
     "csp-header": "^5.1.0",
 
@@ -93,12 +97,15 @@
 
     "moment": "^2.29.4",
     "moment-timezone": "^0.5.43",
+
     "lodash": "^4.17.21",
 
     "agenda": "^5.0.0",
 
     "newrelic": "^11.8.0",
+
     "@sentry/node": "^7.88.0",
+
     "datadog-metrics": "^0.10.0",
     "prom-client": "^15.0.0",
 
