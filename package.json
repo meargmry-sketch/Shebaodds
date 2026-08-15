@@ -2,12 +2,12 @@
   "name": "shebaodds-backend",
   "version": "3.0.0",
   "description": "SHEBAODDS Enterprise Betting Platform",
-  "private": true,
   "main": "dist/server.js",
+  "private": true,
 
   "scripts": {
-    "build": "NODE_OPTIONS=--max-old-space-size=2048 swc . -d dist --copy-files --extensions .ts --ignore node_modules,dist",
-    "start": "node dist/server.js",
+    "build": "swc . -d dist --copy-files --ignore node_modules,dist",
+    "start": "node --max-old-space-size=1024 dist/server.js",
     "dev": "ts-node server.ts",
 
     "test": "jest --coverage",
@@ -101,7 +101,6 @@
     "agenda": "^5.0.0",
 
     "newrelic": "^11.8.0",
-
     "@sentry/node": "^7.88.0",
 
     "datadog-metrics": "^0.10.0",
@@ -130,7 +129,7 @@
     "nodemon": "^3.0.1",
 
     "jest": "^29.7.0",
-    "supertest": "^6.3.0",
+    "supertest": "^6.3.3",
 
     "eslint": "^8.55.0",
     "eslint-config-airbnb-base": "^15.0.0",
