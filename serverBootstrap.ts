@@ -1,24 +1,15 @@
+// ============================================
+// SHEBAODDS - SERVER BOOTSTRAP
+// Development/Test Friendly Configuration
+// ============================================
+
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-// ============================================
-// REQUIRED ENVIRONMENT VARIABLES
-// ============================================
-
 const REQUIRED_ENV_VARIABLES = [
   'MONGODB_URI',
-  'JWT_SECRET',
-  'JWT_REFRESH_SECRET',
-  'BIOMETRIC_ENCRYPTION_KEY'
-];
-
-// ============================================
-// OPTIONAL ENVIRONMENT VARIABLES
-// ============================================
-
-const OPTIONAL_ENV_VARIABLES = [
   'TAX_RATE',
   'WELCOME_BONUS',
   'TELE_BIRR_API_KEY',
@@ -26,188 +17,140 @@ const OPTIONAL_ENV_VARIABLES = [
   'CBE_API_KEY',
   'CHAPA_API_KEY',
   'SPORTS_DATA_API_KEY',
-  'REDIS_HOST',
-  'REDIS_PORT'
+  'BIOMETRIC_ENCRYPTION_KEY',
 ];
 
-// ============================================
-// ENVIRONMENT CHECK
-// ============================================
+function verifyEnvironmentMappings(): void {
+  console.log('🔄 [BOOTSTRAP] Checking environment variables...');
 
-function verifyEnvironment(): void {
-  console.log(
-    '🔄 [BOOTSTRAP] Checking environment configuration...'
-  );
+  // Development fallbacks
+  if (!process.env.WELCOME_BONUS && process.env.WELCOME_BONUS_AMOUNT) {
+    process.env.WELCOME_BONUS = process.env.WELCOME_BONUS_AMOUNT;
+  }
 
-  const missing: string[] = [];
+  if (
+    !process.env.BIOMETRIC_ENCRYPTION_KEY &&
+    process.env.ENCRYPTION_KEY
+  ) {
+    process.env.BIOMETRIC_ENCRYPTION_KEY =
+      process.env.ENCRYPTION_KEY;
+  }
+
+  const missingVars: string[] = [];
 
   for (const variable of REQUIRED_ENV_VARIABLES) {
     const value = process.env[variable];
 
     if (
       !value ||
-      value.trim() === '' ||
       value.includes('change_this') ||
       value.includes('your_')
     ) {
-      missing.push(variable);
+      missingVars.push(variable);
     }
   }
 
-  if (missing.length > 0) {
-    console.error('');
-    console.error(
-      '❌ [BOOTSTRAP CRITICAL ERROR] Required environment variables are missing:'
-    );
-
-    missing.forEach((variable) => {
-      console.error(`   - ${variable}`);
-    });
-
-    console.error('');
-
-    throw new Error(
-      `Missing required environment variables: ${missing.join(', ')}`
-    );
-  }
-
-  console.log(
-    '✅ [BOOTSTRAP] Required environment variables configured.'
-  );
-
-  // ============================================
-  // OPTIONAL VARIABLES
-  // ============================================
-
-  const missingOptional: string[] = [];
-
-  for (const variable of OPTIONAL_ENV_VARIABLES) {
-    if (!process.env[variable]) {
-      missingOptional.push(variable);
-    }
-  }
-
-  if (missingOptional.length > 0) {
+  if (missingVars.length > 0) {
     console.warn('');
     console.warn(
-      '⚠️ [BOOTSTRAP] Optional environment variables not configured:'
+      '⚠️ [BOOTSTRAP] The following environment variables are not configured:'
     );
 
-    missingOptional.forEach((variable) => {
+    missingVars.forEach((variable) => {
       console.warn(`   - ${variable}`);
     });
 
+    if (process.env.NODE_ENV === 'production') {
+      console.error('');
+      console.error(
+        '❌ Production cannot start without required environment variables.'
+      );
+
+      process.exit(1);
+    }
+
+    console.warn('');
     console.warn(
-      'Some optional features may not be available.'
+      '⚠️ Development mode: continuing with test configuration.'
+    );
+  } else {
+    console.log(
+      '✅ [BOOTSTRAP] Environment variables configured.'
     );
   }
-
-  // ============================================
-  // DEFAULT VALUES
-  // ============================================
-
-  if (!process.env.TAX_RATE) {
-    process.env.TAX_RATE = '0.15';
-  }
-
-  if (!process.env.WELCOME_BONUS) {
-    process.env.WELCOME_BONUS = '100';
-  }
-
-  console.log(
-    '✅ [BOOTSTRAP] Environment configuration validated.'
-  );
 }
-
-// ============================================
-// MONGODB CONNECTION
-// ============================================
 
 async function connectDatabase(): Promise<void> {
   const mongoUri = process.env.MONGODB_URI;
 
+  console.log('🔄 [BOOTSTRAP] Connecting to MongoDB...');
+
   if (!mongoUri) {
-    throw new Error(
-      'MONGODB_URI is not configured.'
-    );
-  }
-
-  console.log(
-    '🔄 [BOOTSTRAP] Connecting to MongoDB...'
-  );
-
-  try {
-    await mongoose.connect(mongoUri, {
-      serverSelectionTimeoutMS: 10000
-    });
-
-    console.log(
-      '✅ [BOOTSTRAP] MongoDB connected successfully.'
-    );
-
-    if (mongoose.connection.db) {
-      console.log(
-        `📦 [BOOTSTRAP] Database: ${mongoose.connection.db.databaseName}`
-      );
+    if (process.env.NODE_ENV === 'production') {
+      console.error('❌ MONGODB_URI is missing.');
+      process.exit(1);
     }
 
-  } catch (error: any) {
+    console.warn(
+      '⚠️ MONGODB_URI is missing. Database connection skipped in development.'
+    );
 
+    return;
+  }
+
+  try {
+    await mongoose.connect(mongoUri);
+
+    console.log(
+      '✅ [BOOTSTRAP] MongoDB connection established.'
+    );
+
+    console.log(
+      `📦 Database: ${mongoose.connection.name}`
+    );
+
+  } catch (error: any) {
     console.error(
       '❌ [BOOTSTRAP] MongoDB connection failed:',
       error?.message || error
     );
 
-    throw error;
+    if (process.env.NODE_ENV === 'production') {
+      process.exit(1);
+    }
+
+    console.warn(
+      '⚠️ Development mode: continuing without MongoDB.'
+    );
   }
 }
 
-// ============================================
-// MAIN BOOTSTRAP
-// ============================================
-
 export async function bootstrapAppEngine(): Promise<void> {
-
   console.log('');
   console.log('============================================');
-  console.log('🚀 SHEBAODDS APP ENGINE');
+  console.log('🦁 SHEBAODDS BOOTSTRAP');
   console.log('============================================');
 
-  // Step 1
-  verifyEnvironment();
+  verifyEnvironmentMappings();
 
-  // Step 2
   await connectDatabase();
 
-  console.log('');
   console.log('============================================');
   console.log('✅ SHEBAODDS BOOTSTRAP COMPLETE');
   console.log('============================================');
   console.log('');
 }
 
-// ============================================
-// DIRECT EXECUTION
-// ============================================
-
 if (require.main === module) {
-
   bootstrapAppEngine()
     .then(() => {
-
-      console.log(
-        '🚀 Server initialization completed.'
-      );
-
+      console.log('🚀 Bootstrap finished successfully.');
     })
     .catch((error) => {
-
-      console.error('');
       console.error(
-        '💥 [BOOTSTRAP PANIC]'
+        '💥 Bootstrap failed:',
+        error
       );
-
-      console.error(error);
 
       process.exit(1);
     });
