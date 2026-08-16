@@ -11,41 +11,22 @@
     "allowSyntheticDefaultImports": true,
 
     "strict": false,
-    "noImplicitAny": false,
-    "noImplicitThis": false,
-    "strictNullChecks": false,
-    "strictFunctionTypes": false,
-    "strictBindCallApply": false,
-    "strictPropertyInitialization": false,
-    "useUnknownInCatchVariables": false,
-
     "skipLibCheck": true,
 
     "resolveJsonModule": true,
-    "sourceMap": true,
+    "sourceMap": false,
 
-    "forceConsistentCasingInFileNames": false,
-
-    "noEmitOnError": false
+    "forceConsistentCasingInFileNames": true
   },
 
   "include": [
-    "server.ts",
-    "*.ts",
-    "routes/**/*.ts",
-    "services/**/*.ts",
-    "controllers/**/*.ts",
-    "models/**/*.ts",
-    "middleware/**/*.ts",
-    "config/**/*.ts",
-    "utils/**/*.ts"
+    "**/*.ts"
   ],
 
   "exclude": [
     "node_modules",
     "dist",
-    "frontend",
-    "client",
-    "public"
+    "**/*.test.ts",
+    "**/*.spec.ts"
   ]
 }
