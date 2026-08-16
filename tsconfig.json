@@ -6,8 +6,6 @@
     "rootDir": ".",
     "outDir": "dist",
 
-    "moduleResolution": "node16",
-
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
 
@@ -30,8 +28,6 @@
 
   "exclude": [
     "node_modules",
-    "dist",
-    "**/*.test.ts",
-    "**/*.spec.ts"
+    "dist"
   ]
 }
