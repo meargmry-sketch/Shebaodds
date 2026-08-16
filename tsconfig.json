@@ -6,6 +6,8 @@
     "rootDir": ".",
     "outDir": "dist",
 
+    "moduleResolution": "node",
+
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
 
