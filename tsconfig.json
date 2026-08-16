@@ -2,10 +2,11 @@
   "compilerOptions": {
     "target": "ES2022",
     "module": "CommonJS",
-    "moduleResolution": "Node",
 
     "rootDir": ".",
     "outDir": "dist",
+
+    "moduleResolution": "node16",
 
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
@@ -13,10 +14,14 @@
     "strict": false,
     "skipLibCheck": true,
 
-    "resolveJsonModule": true,
-    "sourceMap": false,
+    "forceConsistentCasingInFileNames": true,
 
-    "forceConsistentCasingInFileNames": true
+    "resolveJsonModule": true,
+
+    "sourceMap": false,
+    "declaration": false,
+
+    "noEmitOnError": true
   },
 
   "include": [
