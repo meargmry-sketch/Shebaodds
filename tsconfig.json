@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "rootDir": ".",
+    "outDir": "dist",
+
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+
+    "strict": false,
+    "skipLibCheck": true,
+
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+
+    "sourceMap": false,
+    "declaration": false,
+    "noEmitOnError": true
+  },
+
+  "include": [
+    "server.ts",
+    "bootstrap.ts",
+    "**/*.ts"
+  ],
+
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}
