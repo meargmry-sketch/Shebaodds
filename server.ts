@@ -13,7 +13,7 @@ const app = express();
 const PORT = Number(process.env.PORT) || 5000;
 
 // ============================================
-// MIDDLEWARE
+// SECURITY
 // ============================================
 
 app.use(helmet());
@@ -21,26 +21,38 @@ app.use(helmet());
 app.use(
   cors({
     origin: process.env.CORS_ORIGINS
-      ? process.env.CORS_ORIGINS.split(',')
+      ? process.env.CORS_ORIGINS
+          .split(',')
+          .map((origin) => origin.trim())
       : '*'
   })
 );
 
 app.use(compression());
 
-app.use(express.json({ limit: '10mb' }));
+// ============================================
+// BODY PARSER
+// ============================================
 
-app.use(express.urlencoded({
-  extended: true,
-  limit: '10mb'
-}));
+app.use(
+  express.json({
+    limit: '10mb'
+  })
+);
+
+app.use(
+  express.urlencoded({
+    extended: true,
+    limit: '10mb'
+  })
+);
 
 // ============================================
-// HEALTH CHECK
+// ROOT
 // ============================================
 
 app.get('/', (_req, res) => {
-  res.json({
+  res.status(200).json({
     success: true,
     service: 'SHEBAODDS Backend',
     status: 'online',
@@ -48,43 +60,44 @@ app.get('/', (_req, res) => {
   });
 });
 
+// ============================================
+// HEALTH
+// ============================================
+
 app.get('/health', (_req, res) => {
   res.status(200).json({
     success: true,
     status: 'healthy',
-    database:
-      process.env.MONGODB_URI
-        ? 'configured'
-        : 'not configured'
+    database: process.env.MONGODB_URI
+      ? 'configured'
+      : 'not configured'
   });
 });
 
 // ============================================
-// START SERVER
+// START
 // ============================================
 
-async function startServer() {
+async function startServer(): Promise<void> {
   try {
+    console.log('🚀 Starting SHEBAODDS backend...');
 
     await bootstrapAppEngine();
 
     app.listen(PORT, '0.0.0.0', () => {
-
-      console.log('');
       console.log('============================================');
       console.log('🦁 SHEBAODDS SERVER ONLINE');
       console.log('============================================');
       console.log(`🚀 Port: ${PORT}`);
-      console.log(`🌍 Environment: ${process.env.NODE_ENV}`);
+      console.log(
+        `🌍 Environment: ${process.env.NODE_ENV || 'development'}`
+      );
       console.log('============================================');
-
     });
 
-  } catch (error) {
-
-    console.error('');
+  } catch (error: any) {
     console.error('💥 SERVER STARTUP FAILED');
-    console.error(error);
+    console.error(error?.message || error);
 
     process.exit(1);
   }
