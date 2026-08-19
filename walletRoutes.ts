@@ -1,17 +1,18 @@
 // ============================================
 // SHEBAODDS - WALLET ROUTES
-// MOCK PAYMENT + ADMIN APPROVAL
+// Mock Deposit + Admin Approval System
 // ============================================
 
 import express, {
-  Request,
   Response,
   Router
 } from 'express';
 
 import mongoose from 'mongoose';
 
-import { authenticate } from './authRoutes';
+import {
+  authenticate
+} from './authRoutes';
 
 import {
   checkResponsibleGambling
@@ -22,37 +23,62 @@ import User from './User';
 import {
   Transaction,
   TRANSACTION_TYPES,
-  PAYMENT_METHODS,
   TRANSACTION_STATUS
 } from './Transaction';
 
 const router: Router =
   express.Router();
 
-// ==================== WALLET DEFAULT ====================
+// ==================== WALLET DEFAULTS ====================
 
-function createDefaultWallet() {
-  return {
-    balance: 0,
-    bonusBalance: 0,
-    lockedBalance: 0,
-    totalDeposited: 0,
-    totalWithdrawn: 0,
-    totalWagered: 0,
-    totalWon: 0,
-    totalTaxPaid: 0,
-    currency: 'ETB'
-  };
+function ensureWallet(user: any) {
+
+  if (!user.wallet) {
+
+    user.wallet = {
+      balance: 0,
+      bonusBalance: 0,
+      lockedBalance: 0,
+
+      totalDeposited: 0,
+      totalWithdrawn: 0,
+
+      totalWagered: 0,
+      totalWon: 0,
+
+      totalTaxPaid: 0,
+
+      currency: 'ETB'
+    };
+  }
+
+  return user.wallet;
 }
 
 // ==================== MOCK PAYMENT SERVICE ====================
+//
+// IMPORTANT:
+//
+// This is ONLY a mock gateway.
+//
+// It creates a gateway reference.
+// It DOES NOT credit the user's wallet.
+//
+// The wallet is credited only after admin approval.
+//
 
 export interface ProcessDepositOptions {
+
   userId: any;
+
   amount: number;
+
   paymentMethod: string;
+
   paymentDetails: any;
+
   reference: string;
+
   callbackUrl: string;
 }
 
@@ -61,7 +87,7 @@ export async function processDeposit(
 ) {
 
   console.log(
-    `[MOCK PAYMENT] Deposit created: ${options.amount} ETB`
+    `[MOCK PAYMENT] Deposit initiated: ${options.amount} ETB`
   );
 
   console.log(
@@ -72,11 +98,8 @@ export async function processDeposit(
     `[MOCK PAYMENT] Reference: ${options.reference}`
   );
 
-  // IMPORTANT:
-  // This does NOT credit the wallet.
-  // Admin approval is required.
-
   return {
+
     success: true,
 
     instant: false,
@@ -84,17 +107,24 @@ export async function processDeposit(
     requiresAdminApproval: true,
 
     gatewayReference:
-      `MOCK_DEP_${Date.now()}`
+      `MOCK_DEP_${Date.now()}_${Math.floor(
+        1000 + Math.random() * 9000
+      )}`
   };
 }
 
 // ==================== MOCK WITHDRAWAL ====================
 
 export interface ProcessWithdrawalOptions {
+
   userId: any;
+
   amount: number;
+
   paymentMethod: string;
+
   paymentDetails: any;
+
   reference: string;
 }
 
@@ -103,32 +133,32 @@ export async function processWithdrawal(
 ) {
 
   console.log(
-    `[MOCK PAYMENT] Withdrawal approved: ${options.amount} ETB`
-  );
-
-  console.log(
-    `[MOCK PAYMENT] Method: ${options.paymentMethod}`
-  );
-
-  console.log(
-    `[MOCK PAYMENT] Reference: ${options.reference}`
+    `[MOCK PAYMENT] Withdrawal initiated: ${options.amount} ETB`
   );
 
   return {
+
     success: true,
 
     gatewayReference:
-      `MOCK_WDR_${Date.now()}`
+      `MOCK_WDR_${Date.now()}_${Math.floor(
+        1000 + Math.random() * 9000
+      )}`
   };
 }
 
-// ==================== NOTIFICATION ====================
+// ==================== NOTIFICATION SERVICE ====================
 
 export interface SendNotificationOptions {
+
   userId: any;
+
   title: string;
+
   message: string;
+
   type: string;
+
   data?: any;
 }
 
@@ -137,7 +167,15 @@ export async function sendNotification(
 ) {
 
   console.log(
-    `[Notification] ${options.title}: ${options.message}`
+    `[Notification] ${options.title}`
+  );
+
+  console.log(
+    `[Notification] User: ${options.userId}`
+  );
+
+  console.log(
+    `[Notification] ${options.message}`
   );
 
   return {
@@ -145,25 +183,29 @@ export async function sendNotification(
   };
 }
 
-// ==================== BALANCE ====================
+// ==================== GET BALANCE ====================
 
 router.get(
   '/balance',
   authenticate,
-  async (req: any, res: Response) => {
+  async (
+    req: any,
+    res: Response
+  ) => {
 
     try {
 
       const user = req.user;
 
       const wallet =
-        user.wallet ||
-        createDefaultWallet();
+        ensureWallet(user);
 
-      return res.json({
+      res.json({
+
         success: true,
 
-        balance: wallet.balance || 0,
+        balance:
+          wallet.balance || 0,
 
         bonusBalance:
           wallet.bonusBalance || 0,
@@ -192,6 +234,11 @@ router.get(
 
     } catch (error: any) {
 
+      console.error(
+        'Balance error:',
+        error
+      );
+
       return res.status(500).json({
         success: false,
         message: error.message
@@ -200,12 +247,15 @@ router.get(
   }
 );
 
-// ==================== TRANSACTIONS ====================
+// ==================== GET TRANSACTIONS ====================
 
 router.get(
   '/transactions',
   authenticate,
-  async (req: any, res: Response) => {
+  async (
+    req: any,
+    res: Response
+  ) => {
 
     try {
 
@@ -217,6 +267,21 @@ router.get(
         from,
         to
       } = req.query;
+
+      const limitNum =
+        Math.min(
+          Math.max(
+            parseInt(limit, 10) || 50,
+            1
+          ),
+          100
+        );
+
+      const pageNum =
+        Math.max(
+          parseInt(page, 10) || 1,
+          1
+        );
 
       const query: any = {
         userId: req.user._id
@@ -235,30 +300,31 @@ router.get(
         query.createdAt = {};
 
         if (from) {
-          query.createdAt.$gte =
-            new Date(from as string);
+
+          const fromDate =
+            new Date(from);
+
+          if (!isNaN(fromDate.getTime())) {
+            query.createdAt.$gte =
+              fromDate;
+          }
         }
 
         if (to) {
-          query.createdAt.$lte =
-            new Date(to as string);
+
+          const toDate =
+            new Date(to);
+
+          if (!isNaN(toDate.getTime())) {
+            query.createdAt.$lte =
+              toDate;
+          }
         }
       }
 
-      const limitNum =
-        Math.min(
-          parseInt(limit as string, 10) || 50,
-          100
-        );
-
-      const pageNum =
-        Math.max(
-          parseInt(page as string, 10) || 1,
-          1
-        );
-
       const skip =
-        (pageNum - 1) * limitNum;
+        (pageNum - 1) *
+        limitNum;
 
       const [
         transactions,
@@ -266,28 +332,46 @@ router.get(
       ] = await Promise.all([
 
         Transaction.find(query)
-          .sort({ createdAt: -1 })
+          .sort({
+            createdAt: -1
+          })
           .skip(skip)
-          .limit(limitNum),
+          .limit(limitNum)
+          .lean(),
 
-        Transaction.countDocuments(query)
+        Transaction.countDocuments(
+          query
+        )
+
       ]);
 
       return res.json({
+
         success: true,
 
         transactions,
 
         pagination: {
+
           total,
+
           page: pageNum,
+
           limit: limitNum,
+
           pages:
-            Math.ceil(total / limitNum)
+            Math.ceil(
+              total / limitNum
+            )
         }
       });
 
     } catch (error: any) {
+
+      console.error(
+        'Transaction history error:',
+        error
+      );
 
       return res.status(500).json({
         success: false,
@@ -303,7 +387,10 @@ router.post(
   '/deposit',
   authenticate,
   checkResponsibleGambling,
-  async (req: any, res: Response) => {
+  async (
+    req: any,
+    res: Response
+  ) => {
 
     try {
 
@@ -315,34 +402,45 @@ router.post(
 
       const user = req.user;
 
+      // -----------------------------
+      // Validate amount
+      // -----------------------------
+
+      const minDeposit =
+        parseInt(
+          process.env.DEPOSIT_MIN_AMOUNT ||
+          '10',
+          10
+        ) || 10;
+
+      const maxDeposit =
+        parseInt(
+          process.env.DEPOSIT_MAX_AMOUNT ||
+          '100000',
+          10
+        ) || 100000;
+
       const depositAmount =
         Number(amount);
 
-      const minDeposit =
-        Number(
-          process.env.DEPOSIT_MIN_AMOUNT || 10
-        );
-
-      const maxDeposit =
-        Number(
-          process.env.DEPOSIT_MAX_AMOUNT ||
-          100000
-        );
-
-      // ==================== VALIDATION ====================
-
       if (
-        !Number.isFinite(depositAmount) ||
+        !Number.isFinite(
+          depositAmount
+        ) ||
         depositAmount <= 0
       ) {
 
         return res.status(400).json({
           success: false,
-          message: 'Invalid deposit amount'
+          message:
+            'Please enter a valid deposit amount'
         });
       }
 
-      if (depositAmount < minDeposit) {
+      if (
+        depositAmount <
+        minDeposit
+      ) {
 
         return res.status(400).json({
           success: false,
@@ -351,7 +449,10 @@ router.post(
         });
       }
 
-      if (depositAmount > maxDeposit) {
+      if (
+        depositAmount >
+        maxDeposit
+      ) {
 
         return res.status(400).json({
           success: false,
@@ -369,15 +470,19 @@ router.post(
         });
       }
 
-      // ==================== WALLET ====================
+      // -----------------------------
+      // Wallet
+      // -----------------------------
 
-      user.wallet =
-        user.wallet ||
-        createDefaultWallet();
+      const wallet =
+        ensureWallet(user);
 
-      // ==================== DAILY LIMIT ====================
+      // -----------------------------
+      // Daily deposit limit
+      // -----------------------------
 
-      const todayStart = new Date();
+      const todayStart =
+        new Date();
 
       todayStart.setHours(
         0,
@@ -386,18 +491,16 @@ router.post(
         0
       );
 
-      const userObjectId =
-        new mongoose.Types.ObjectId(
-          user._id.toString()
-        );
-
       const todayDeposits =
         await Transaction.aggregate([
 
           {
             $match: {
 
-              userId: userObjectId,
+              userId:
+                new mongoose.Types.ObjectId(
+                  user._id
+                ),
 
               type:
                 TRANSACTION_TYPES.DEPOSIT,
@@ -406,13 +509,15 @@ router.post(
                 TRANSACTION_STATUS.COMPLETED,
 
               createdAt: {
-                $gte: todayStart
+                $gte:
+                  todayStart
               }
             }
           },
 
           {
             $group: {
+
               _id: null,
 
               total: {
@@ -420,17 +525,23 @@ router.post(
               }
             }
           }
+
         ]);
 
       const depositedToday =
         todayDeposits[0]?.total || 0;
 
       const dailyLimit =
-        typeof user.getDepositLimit === 'function'
+        typeof user.getDepositLimit ===
+        'function'
+
           ? user.getDepositLimit()
+
           : (
-              user.responsibleGambling
-                ?.depositLimit || 50000
+              user
+                .responsibleGambling
+                ?.depositLimit ||
+              50000
             );
 
       if (
@@ -440,14 +551,22 @@ router.post(
       ) {
 
         return res.status(400).json({
+
           success: false,
 
           message:
-            `Daily deposit limit of ${dailyLimit} ETB reached.`
+            `Daily deposit limit of ${dailyLimit} ETB reached. ` +
+            `You have ${Math.max(
+              dailyLimit -
+              depositedToday,
+              0
+            )} ETB remaining today.`
         });
       }
 
-      // ==================== REFERENCE ====================
+      // -----------------------------
+      // Generate reference
+      // -----------------------------
 
       const paymentReference =
         `DEP_${Date.now()}_${Math.random()
@@ -455,15 +574,15 @@ router.post(
           .substring(2, 10)
           .toUpperCase()}`;
 
-      // ==================== CREATE PENDING TRANSACTION ====================
-
-      const currentBalance =
-        Number(user.wallet.balance || 0);
+      // -----------------------------
+      // Create PENDING transaction
+      // -----------------------------
 
       const transaction =
         new Transaction({
 
-          userId: user._id,
+          userId:
+            user._id,
 
           type:
             TRANSACTION_TYPES.DEPOSIT,
@@ -486,23 +605,18 @@ router.post(
             paymentDetails || {},
 
           previousBalance:
-            currentBalance,
+            wallet.balance || 0,
 
           previousBonusBalance:
-            Number(
-              user.wallet.bonusBalance || 0
-            ),
+            wallet.bonusBalance || 0,
 
           // IMPORTANT:
-          // Balance does not change yet.
-
+          // DO NOT add money yet.
           newBalance:
-            currentBalance,
+            wallet.balance || 0,
 
           newBonusBalance:
-            Number(
-              user.wallet.bonusBalance || 0
-            ),
+            wallet.bonusBalance || 0,
 
           status:
             TRANSACTION_STATUS.PENDING,
@@ -513,30 +627,43 @@ router.post(
             req.ip,
 
           userAgent:
-            req.headers['user-agent']
+            req.headers[
+              'user-agent'
+            ],
+
+          metadata: {
+
+            mockPayment: true,
+
+            awaitingAdminApproval: true
+          }
         });
 
       await transaction.save();
 
-      // ==================== MOCK PAYMENT ====================
+      // -----------------------------
+      // Mock gateway
+      // -----------------------------
 
       const paymentResult =
         await processDeposit({
 
-          userId: user._id,
+          userId:
+            user._id,
 
           amount:
             depositAmount,
 
           paymentMethod,
 
-          paymentDetails,
+          paymentDetails:
+            paymentDetails || {},
 
           reference:
             paymentReference,
 
           callbackUrl:
-            `${process.env.BASE_URL || 'http://localhost:5000'}/api/payments/callback`
+            `${process.env.BASE_URL || ''}/api/payments/callback`
         });
 
       if (!paymentResult.success) {
@@ -545,14 +672,16 @@ router.post(
           TRANSACTION_STATUS.FAILED;
 
         transaction.failureReason =
-          'Mock payment failed';
+          'Mock payment initialization failed';
 
         await transaction.save();
 
         return res.status(400).json({
+
           success: false,
+
           message:
-            'Payment could not be initiated'
+            'Payment could not be initialized'
         });
       }
 
@@ -567,20 +696,28 @@ router.post(
 
       await transaction.save();
 
+      // -----------------------------
+      // IMPORTANT:
+      // Wallet is NOT credited here.
+      // -----------------------------
+
       await sendNotification({
 
-        userId: user._id,
+        userId:
+          user._id,
 
         title:
           'Deposit Submitted 💰',
 
         message:
-          `${depositAmount.toLocaleString()} ETB deposit is waiting for admin approval.`,
+          `${depositAmount.toLocaleString()} ETB deposit submitted. ` +
+          `It is waiting for admin approval.`,
 
         type:
           'deposit_pending',
 
         data: {
+
           amount:
             depositAmount,
 
@@ -592,14 +729,12 @@ router.post(
         }
       });
 
-      // ==================== IMPORTANT ====================
-
       return res.status(201).json({
 
         success: true,
 
         message:
-          'Deposit submitted successfully. Waiting for admin approval.',
+          'Deposit submitted successfully. Awaiting admin approval.',
 
         transactionId:
           transaction._id,
@@ -607,16 +742,20 @@ router.post(
         reference:
           paymentReference,
 
+        gatewayReference:
+          paymentResult.gatewayReference,
+
         amount:
           depositAmount,
 
         status:
           TRANSACTION_STATUS.PENDING,
 
-        requiresApproval: true,
+        requiresApproval:
+          true,
 
-        balance:
-          currentBalance
+        currentBalance:
+          wallet.balance || 0
       });
 
     } catch (error: any) {
@@ -627,9 +766,12 @@ router.post(
       );
 
       return res.status(500).json({
+
         success: false,
+
         message:
-          error.message
+          error.message ||
+          'Deposit failed'
       });
     }
   }
@@ -641,7 +783,10 @@ router.post(
   '/withdraw',
   authenticate,
   checkResponsibleGambling,
-  async (req: any, res: Response) => {
+  async (
+    req: any,
+    res: Response
+  ) => {
 
     try {
 
@@ -653,29 +798,34 @@ router.post(
 
       const user = req.user;
 
+      const minWithdraw =
+        parseInt(
+          process.env.WITHDRAWAL_MIN_AMOUNT ||
+          '50',
+          10
+        ) || 50;
+
+      const maxWithdraw =
+        parseInt(
+          process.env.WITHDRAWAL_MAX_AMOUNT ||
+          '50000',
+          10
+        ) || 50000;
+
       const withdrawAmount =
         Number(amount);
 
-      const minWithdraw =
-        Number(
-          process.env.WITHDRAWAL_MIN_AMOUNT || 50
-        );
-
-      const maxWithdraw =
-        Number(
-          process.env.WITHDRAWAL_MAX_AMOUNT ||
-          50000
-        );
-
       if (
-        !Number.isFinite(withdrawAmount) ||
+        !Number.isFinite(
+          withdrawAmount
+        ) ||
         withdrawAmount <= 0
       ) {
 
         return res.status(400).json({
           success: false,
           message:
-            'Invalid withdrawal amount'
+            'Please enter a valid withdrawal amount'
         });
       }
 
@@ -699,33 +849,16 @@ router.post(
         return res.status(400).json({
           success: false,
           message:
-            `Maximum withdrawal is ${maxWithdraw} ETB`
+            `Maximum withdrawal per transaction is ${maxWithdraw} ETB`
         });
       }
 
-      if (!paymentMethod) {
-
-        return res.status(400).json({
-          success: false,
-          message:
-            'Payment method is required'
-        });
-      }
-
-      user.wallet =
-        user.wallet ||
-        createDefaultWallet();
-
-      const balance =
-        Number(user.wallet.balance || 0);
-
-      const lockedBalance =
-        Number(
-          user.wallet.lockedBalance || 0
-        );
+      const wallet =
+        ensureWallet(user);
 
       const availableBalance =
-        balance - lockedBalance;
+        (wallet.balance || 0) -
+        (wallet.lockedBalance || 0);
 
       if (
         availableBalance <
@@ -739,11 +872,184 @@ router.post(
         });
       }
 
-      // ==================== LOCK FUNDS ====================
+      // -----------------------------
+      // Daily withdrawal limit
+      // -----------------------------
 
-      user.wallet.lockedBalance =
-        lockedBalance +
+      const todayStart =
+        new Date();
+
+      todayStart.setHours(
+        0,
+        0,
+        0,
+        0
+      );
+
+      const todayWithdrawals =
+        await Transaction.aggregate([
+
+          {
+            $match: {
+
+              userId:
+                new mongoose.Types.ObjectId(
+                  user._id
+                ),
+
+              type:
+                TRANSACTION_TYPES.WITHDRAWAL,
+
+              status:
+                TRANSACTION_STATUS.COMPLETED,
+
+              createdAt: {
+                $gte:
+                  todayStart
+              }
+            }
+          },
+
+          {
+            $group: {
+
+              _id: null,
+
+              total: {
+                $sum: '$amount'
+              }
+            }
+          }
+
+        ]);
+
+      const withdrawnToday =
+        todayWithdrawals[0]?.total || 0;
+
+      const dailyLimit =
+        parseInt(
+          process.env.WITHDRAWAL_DAILY_LIMIT ||
+          '100000',
+          10
+        ) || 100000;
+
+      if (
+        withdrawnToday +
+        withdrawAmount >
+        dailyLimit
+      ) {
+
+        return res.status(400).json({
+
+          success: false,
+
+          message:
+            `Daily withdrawal limit of ${dailyLimit} ETB reached.`
+        });
+      }
+
+      // -----------------------------
+      // Weekly limit
+      // -----------------------------
+
+      const weekStart =
+        new Date();
+
+      weekStart.setDate(
+        weekStart.getDate() -
+        weekStart.getDay()
+      );
+
+      weekStart.setHours(
+        0,
+        0,
+        0,
+        0
+      );
+
+      const weeklyWithdrawals =
+        await Transaction.aggregate([
+
+          {
+            $match: {
+
+              userId:
+                new mongoose.Types.ObjectId(
+                  user._id
+                ),
+
+              type:
+                TRANSACTION_TYPES.WITHDRAWAL,
+
+              status:
+                TRANSACTION_STATUS.COMPLETED,
+
+              createdAt: {
+                $gte:
+                  weekStart
+              }
+            }
+          },
+
+          {
+            $group: {
+
+              _id: null,
+
+              total: {
+                $sum: '$amount'
+              }
+            }
+          }
+
+        ]);
+
+      const withdrawnWeekly =
+        weeklyWithdrawals[0]?.total || 0;
+
+      const weeklyLimit =
+        parseInt(
+          process.env.WITHDRAWAL_WEEKLY_LIMIT ||
+          '500000',
+          10
+        ) || 500000;
+
+      if (
+        withdrawnWeekly +
+        withdrawAmount >
+        weeklyLimit
+      ) {
+
+        return res.status(400).json({
+
+          success: false,
+
+          message:
+            `Weekly withdrawal limit of ${weeklyLimit} ETB reached.`
+        });
+      }
+
+      // -----------------------------
+      // Lock balance
+      // -----------------------------
+
+      const previousBalance =
+        wallet.balance || 0;
+
+      const previousLockedBalance =
+        wallet.lockedBalance || 0;
+
+      wallet.lockedBalance =
+        previousLockedBalance +
         withdrawAmount;
+
+      wallet.balance =
+        previousBalance -
+        withdrawAmount;
+
+      // -----------------------------
+      // Reference
+      // -----------------------------
 
       const paymentReference =
         `WDR_${Date.now()}_${Math.random()
@@ -751,10 +1057,25 @@ router.post(
           .substring(2, 10)
           .toUpperCase()}`;
 
+      const isVipLevelHigh =
+        Boolean(
+          user.vip &&
+          user.vip.level >= 3
+        );
+
+      const requiresApproval =
+        withdrawAmount > 10000 ||
+        !isVipLevelHigh;
+
+      // -----------------------------
+      // Transaction
+      // -----------------------------
+
       const transaction =
         new Transaction({
 
-          userId: user._id,
+          userId:
+            user._id,
 
           type:
             TRANSACTION_TYPES.WITHDRAWAL,
@@ -776,55 +1097,55 @@ router.post(
           paymentDetails:
             paymentDetails || {},
 
-          previousBalance:
-            balance,
+          previousBalance,
 
           previousBonusBalance:
-            Number(
-              user.wallet.bonusBalance || 0
-            ),
+            wallet.bonusBalance || 0,
 
           newBalance:
-            balance -
-
-            withdrawAmount,
+            wallet.balance,
 
           newBonusBalance:
-            Number(
-              user.wallet.bonusBalance || 0
-            ),
+            wallet.bonusBalance || 0,
 
           status:
             TRANSACTION_STATUS.PENDING,
 
-          requiresApproval: true,
+          requiresApproval,
 
           ipAddress:
             req.ip,
 
           userAgent:
-            req.headers['user-agent']
+            req.headers[
+              'user-agent'
+            ]
         });
 
       await Promise.all([
+
         user.save(),
+
         transaction.save()
+
       ]);
 
       await sendNotification({
 
-        userId: user._id,
+        userId:
+          user._id,
 
         title:
-          'Withdrawal Submitted 💸',
+          'Withdrawal Request Submitted 💸',
 
         message:
-          `${withdrawAmount.toLocaleString()} ETB withdrawal is waiting for admin approval.`,
+          `Your withdrawal request of ${withdrawAmount.toLocaleString()} ETB has been submitted.`,
 
         type:
-          'withdrawal_pending',
+          'withdrawal',
 
         data: {
+
           amount:
             withdrawAmount,
 
@@ -833,28 +1154,110 @@ router.post(
         }
       });
 
-      return res.status(201).json({
+      // -----------------------------
+      // Auto process
+      // -----------------------------
+
+      if (!requiresApproval) {
+
+        const result =
+          await processWithdrawal({
+
+            userId:
+              user._id,
+
+            amount:
+              withdrawAmount,
+
+            paymentMethod,
+
+            paymentDetails:
+              paymentDetails || {},
+
+            reference:
+              paymentReference
+          });
+
+        if (result.success) {
+
+          user.wallet.lockedBalance =
+            Math.max(
+              0,
+              (user.wallet.lockedBalance || 0) -
+              withdrawAmount
+            );
+
+          user.wallet.totalWithdrawn =
+            (user.wallet.totalWithdrawn || 0) +
+            withdrawAmount;
+
+          transaction.status =
+            TRANSACTION_STATUS.COMPLETED;
+
+          transaction.completedAt =
+            new Date();
+
+          transaction.paymentGatewayReference =
+            result.gatewayReference;
+
+          await Promise.all([
+
+            user.save(),
+
+            transaction.save()
+
+          ]);
+
+          await sendNotification({
+
+            userId:
+              user._id,
+
+            title:
+              'Withdrawal Completed ✅',
+
+            message:
+              `Your withdrawal of ${withdrawAmount.toLocaleString()} ETB has been processed.`,
+
+            type:
+              'withdrawal_completed',
+
+            data: {
+              amount:
+                withdrawAmount
+            }
+          });
+
+          return res.json({
+
+            success: true,
+
+            message:
+              'Withdrawal processed successfully!',
+
+            transactionId:
+              transaction._id,
+
+            newBalance:
+              user.wallet.balance
+          });
+        }
+      }
+
+      return res.json({
 
         success: true,
 
         message:
-          'Withdrawal submitted. Waiting for admin approval.',
+          'Withdrawal request submitted for review.',
 
         transactionId:
           transaction._id,
 
+        requiresApproval,
+
         reference:
-          paymentReference,
-
-        amount:
-          withdrawAmount,
-
-        status:
-          TRANSACTION_STATUS.PENDING,
-
-        requiresApproval: true,
-
-        balance
+          paymentReference
       });
 
     } catch (error: any) {
@@ -865,50 +1268,85 @@ router.post(
       );
 
       return res.status(500).json({
+
         success: false,
+
         message:
-          error.message
+          error.message ||
+          'Withdrawal failed'
       });
     }
   }
 );
 
-// ==================== SUMMARY ====================
+// ==================== WALLET SUMMARY ====================
 
 router.get(
   '/summary',
   authenticate,
-  async (req: any, res: Response) => {
+  async (
+    req: any,
+    res: Response
+  ) => {
 
     try {
 
       const userId =
         new mongoose.Types.ObjectId(
-          req.user._id.toString()
+          req.user._id
         );
 
-      const today =
+      const todayStart =
         new Date();
 
-      today.setHours(
+      todayStart.setHours(
         0,
         0,
         0,
         0
       );
 
-      const result =
-        await Transaction.aggregate([
+      const weekStart =
+        new Date();
+
+      weekStart.setDate(
+        weekStart.getDate() -
+        weekStart.getDay()
+      );
+
+      weekStart.setHours(
+        0,
+        0,
+        0,
+        0
+      );
+
+      const monthStart =
+        new Date();
+
+      monthStart.setDate(1);
+
+      monthStart.setHours(
+        0,
+        0,
+        0,
+        0
+      );
+
+      const createStatsPipeline =
+        (startDate: Date) => [
 
           {
             $match: {
+
               userId,
 
               status:
                 TRANSACTION_STATUS.COMPLETED,
 
               createdAt: {
-                $gte: today
+                $gte:
+                  startDate
               }
             }
           },
@@ -979,44 +1417,98 @@ router.get(
               }
             }
           }
-        ]);
+        ];
 
-      const stats =
-        result[0] || {
-          deposits: 0,
-          withdrawals: 0,
-          wins: 0,
-          losses: 0
+      const [
+        todayStats,
+        weekStats,
+        monthStats
+      ] = await Promise.all([
+
+        Transaction.aggregate(
+          createStatsPipeline(
+            todayStart
+          )
+        ),
+
+        Transaction.aggregate(
+          createStatsPipeline(
+            weekStart
+          )
+        ),
+
+        Transaction.aggregate(
+          createStatsPipeline(
+            monthStart
+          )
+        )
+
+      ]);
+
+      const formatStats =
+        (result: any[]) => {
+
+          const stats =
+            result[0] || {};
+
+          const deposits =
+            stats.deposits || 0;
+
+          const withdrawals =
+            stats.withdrawals || 0;
+
+          const wins =
+            stats.wins || 0;
+
+          const losses =
+            stats.losses || 0;
+
+          return {
+
+            deposits,
+
+            withdrawals,
+
+            wins,
+
+            losses,
+
+            netProfit:
+              wins - losses
+          };
         };
 
       return res.json({
 
         success: true,
 
-        today: {
+        today:
+          formatStats(
+            todayStats
+          ),
 
-          deposits:
-            stats.deposits || 0,
+        weekly:
+          formatStats(
+            weekStats
+          ),
 
-          withdrawals:
-            stats.withdrawals || 0,
-
-          wins:
-            stats.wins || 0,
-
-          losses:
-            stats.losses || 0,
-
-          netProfit:
-            (stats.wins || 0) -
-            (stats.losses || 0)
-        }
+        monthly:
+          formatStats(
+            monthStats
+          )
       });
 
     } catch (error: any) {
 
+      console.error(
+        'Wallet summary error:',
+        error
+      );
+
       return res.status(500).json({
+
         success: false,
+
         message:
           error.message
       });
