@@ -1,6 +1,6 @@
 // ============================================
 // SHEBAODDS - TRANSACTION MODEL
-// Complete Financial Transaction Schema
+// Admin Approved Financial Transactions
 // ============================================
 
 import mongoose, {
@@ -9,9 +9,7 @@ import mongoose, {
   Model
 } from 'mongoose';
 
-// ============================================
-// TRANSACTION TYPES
-// ============================================
+// ==================== TRANSACTION TYPES ====================
 
 export const TRANSACTION_TYPES = {
   DEPOSIT: 'deposit',
@@ -35,9 +33,7 @@ export type TransactionType =
     keyof typeof TRANSACTION_TYPES
   ];
 
-// ============================================
-// PAYMENT METHODS
-// ============================================
+// ==================== PAYMENT METHODS ====================
 
 export const PAYMENT_METHODS = {
   TELE_BIRR: 'tele_birr',
@@ -58,9 +54,7 @@ export type PaymentMethodType =
     keyof typeof PAYMENT_METHODS
   ];
 
-// ============================================
-// STATUS
-// ============================================
+// ==================== STATUS ====================
 
 export const TRANSACTION_STATUS = {
   PENDING: 'pending',
@@ -76,38 +70,9 @@ export type TransactionStatusType =
     keyof typeof TRANSACTION_STATUS
   ];
 
-// ============================================
-// PAYMENT DETAILS
-// ============================================
+// ==================== INTERFACE ====================
 
-export interface ITransactionPaymentDetails {
-  phoneNumber?: string;
-  accountNumber?: string;
-  transactionId?: string;
-
-  cardLast4?: string;
-  cardBrand?: string;
-  cardExpiry?: string;
-
-  cryptoCurrency?: string;
-  cryptoAddress?: string;
-  cryptoTxHash?: string;
-  cryptoConfirmations: number;
-
-  bankName?: string;
-  bankAccount?: string;
-  bankReference?: string;
-
-  notes?: string;
-  metadata?: any;
-}
-
-// ============================================
-// TRANSACTION
-// ============================================
-
-export interface ITransaction
-  extends Document {
+export interface ITransaction extends Document {
 
   userId: mongoose.Types.ObjectId;
 
@@ -123,10 +88,31 @@ export interface ITransaction
   netAmount: number;
 
   paymentMethod?: PaymentMethodType;
+
   paymentReference?: string;
   paymentGatewayReference?: string;
 
-  paymentDetails: ITransactionPaymentDetails;
+  paymentDetails: {
+    phoneNumber?: string;
+    accountNumber?: string;
+    transactionId?: string;
+
+    cardLast4?: string;
+    cardBrand?: string;
+    cardExpiry?: string;
+
+    cryptoCurrency?: string;
+    cryptoAddress?: string;
+    cryptoTxHash?: string;
+    cryptoConfirmations: number;
+
+    bankName?: string;
+    bankAccount?: string;
+    bankReference?: string;
+
+    notes?: string;
+    metadata?: any;
+  };
 
   previousBalance: number;
   previousBonusBalance: number;
@@ -179,36 +165,26 @@ export interface ITransaction
   ): Promise<ITransaction>;
 }
 
-// ============================================
-// MODEL
-// ============================================
+// ==================== MODEL INTERFACE ====================
 
 export interface ITransactionModel
   extends Model<ITransaction> {
 
   getUserBalance(
-    userId:
-      | string
-      | mongoose.Types.ObjectId
+    userId: string | mongoose.Types.ObjectId
   ): Promise<number>;
 
   getUserDepositTotal(
-    userId:
-      | string
-      | mongoose.Types.ObjectId
+    userId: string | mongoose.Types.ObjectId
   ): Promise<number>;
 }
 
-// ============================================
-// SCHEMA
-// ============================================
+// ==================== SCHEMA ====================
 
 const transactionSchema =
-  new Schema<
-    ITransaction,
-    ITransactionModel
-  >(
+  new Schema<ITransaction, ITransactionModel>(
     {
+
       userId: {
         type: Schema.Types.ObjectId,
         ref: 'User',
@@ -230,9 +206,7 @@ const transactionSchema =
 
       type: {
         type: String,
-        enum: Object.values(
-          TRANSACTION_TYPES
-        ),
+        enum: Object.values(TRANSACTION_TYPES),
         required: true,
         index: true
       },
@@ -265,9 +239,7 @@ const transactionSchema =
 
       paymentMethod: {
         type: String,
-        enum: Object.values(
-          PAYMENT_METHODS
-        ),
+        enum: Object.values(PAYMENT_METHODS),
         index: true
       },
 
@@ -284,6 +256,7 @@ const transactionSchema =
       },
 
       paymentDetails: {
+
         phoneNumber: String,
         accountNumber: String,
         transactionId: String,
@@ -331,11 +304,8 @@ const transactionSchema =
 
       status: {
         type: String,
-        enum: Object.values(
-          TRANSACTION_STATUS
-        ),
-        default:
-          TRANSACTION_STATUS.PENDING,
+        enum: Object.values(TRANSACTION_STATUS),
+        default: TRANSACTION_STATUS.PENDING,
         index: true
       },
 
@@ -344,7 +314,7 @@ const transactionSchema =
 
       requiresApproval: {
         type: Boolean,
-        default: false,
+        default: true,
         index: true
       },
 
@@ -363,6 +333,7 @@ const transactionSchema =
       processedAt: Date,
 
       ipAddress: String,
+
       userAgent: String,
 
       location: {
@@ -371,9 +342,22 @@ const transactionSchema =
       },
 
       notes: String,
+
       metadata: Schema.Types.Mixed,
 
-      completedAt: Date
+      createdAt: {
+        type: Date,
+        default: Date.now,
+        index: true
+      },
+
+      completedAt: Date,
+
+      updatedAt: {
+        type: Date,
+        default: Date.now
+      }
+
     },
     {
       timestamps: true,
@@ -388,9 +372,7 @@ const transactionSchema =
     }
   );
 
-// ============================================
-// INDEXES
-// ============================================
+// ==================== INDEXES ====================
 
 transactionSchema.index({
   userId: 1,
@@ -399,8 +381,18 @@ transactionSchema.index({
 
 transactionSchema.index({
   userId: 1,
-  type: 1,
+  type: 1
+});
+
+transactionSchema.index({
+  userId: 1,
   status: 1
+});
+
+transactionSchema.index({
+  status: 1,
+  requiresApproval: 1,
+  createdAt: -1
 });
 
 transactionSchema.index({
@@ -408,49 +400,24 @@ transactionSchema.index({
   createdAt: -1
 });
 
-transactionSchema.index({
-  paymentReference: 1
-});
-
-transactionSchema.index({
-  paymentGatewayReference: 1
-});
-
-transactionSchema.index({
-  createdAt: -1
-});
-
-// ============================================
-// VIRTUALS
-// ============================================
+// ==================== VIRTUALS ====================
 
 transactionSchema.virtual(
   'isDeposit'
-).get(function(
-  this: ITransaction
-) {
-  return (
-    this.type ===
-    TRANSACTION_TYPES.DEPOSIT
-  );
+).get(function () {
+  return this.type === TRANSACTION_TYPES.DEPOSIT;
 });
 
 transactionSchema.virtual(
   'isWithdrawal'
-).get(function(
-  this: ITransaction
-) {
-  return (
-    this.type ===
-    TRANSACTION_TYPES.WITHDRAWAL
-  );
+).get(function () {
+  return this.type === TRANSACTION_TYPES.WITHDRAWAL;
 });
 
 transactionSchema.virtual(
   'isCredit'
-).get(function(
-  this: ITransaction
-) {
+).get(function () {
+
   return [
     TRANSACTION_TYPES.DEPOSIT,
     TRANSACTION_TYPES.BET_WIN,
@@ -458,166 +425,148 @@ transactionSchema.virtual(
     TRANSACTION_TYPES.CASHBACK,
     TRANSACTION_TYPES.REFUND,
     TRANSACTION_TYPES.JACKPOT
-  ].includes(
-    this.type as any
-  );
+  ].includes(this.type as any);
 });
 
 transactionSchema.virtual(
   'isDebit'
-).get(function(
-  this: ITransaction
-) {
+).get(function () {
+
   return [
     TRANSACTION_TYPES.BET_PLACE,
     TRANSACTION_TYPES.WITHDRAWAL,
     TRANSACTION_TYPES.FEE,
     TRANSACTION_TYPES.TAX
-  ].includes(
-    this.type as any
-  );
+  ].includes(this.type as any);
 });
 
-// ============================================
-// COMPLETE
-// ============================================
+// ==================== COMPLETE ====================
 
 transactionSchema.methods.complete =
-  function(
+  async function (
     this: ITransaction
   ): Promise<ITransaction> {
+
     this.status =
       TRANSACTION_STATUS.COMPLETED;
 
-    this.completedAt =
-      new Date();
-
-    this.processedAt =
-      new Date();
+    this.completedAt = new Date();
+    this.updatedAt = new Date();
 
     return this.save();
   };
 
-// ============================================
-// FAIL
-// ============================================
+// ==================== FAIL ====================
 
 transactionSchema.methods.fail =
-  function(
+  async function (
     this: ITransaction,
     reason: string,
     code?: string
   ): Promise<ITransaction> {
+
     this.status =
       TRANSACTION_STATUS.FAILED;
 
-    this.failureReason =
-      reason;
+    this.failureReason = reason;
 
     if (code) {
       this.failureCode = code;
     }
 
+    this.updatedAt = new Date();
+
     return this.save();
   };
 
-// ============================================
-// APPROVE
-// ============================================
+// ==================== APPROVE ====================
 
 transactionSchema.methods.approve =
-  function(
+  async function (
     this: ITransaction,
     adminId: mongoose.Types.ObjectId
   ): Promise<ITransaction> {
+
     this.requiresApproval = false;
 
     this.approvedBy = adminId;
+
     this.approvedAt = new Date();
 
     this.status =
       TRANSACTION_STATUS.PROCESSING;
 
+    this.updatedAt = new Date();
+
     return this.save();
   };
 
-// ============================================
-// STATIC: BALANCE
-// ============================================
+// ==================== GET USER BALANCE ====================
 
 transactionSchema.statics.getUserBalance =
-  async function(
+  async function (
     this: ITransactionModel,
-    userId:
-      | string
-      | mongoose.Types.ObjectId
+    userId: string | mongoose.Types.ObjectId
   ): Promise<number> {
 
-    const objectId =
-      userId instanceof mongoose.Types.ObjectId
-        ? userId
-        : new mongoose.Types.ObjectId(
-            userId
-          );
+    const result = await this.aggregate([
 
-    const result =
-      await this.aggregate([
-        {
-          $match: {
-            userId: objectId,
-            status:
-              TRANSACTION_STATUS.COMPLETED
-          }
-        },
+      {
+        $match: {
+          userId: new mongoose.Types.ObjectId(userId),
+          status: TRANSACTION_STATUS.COMPLETED
+        }
+      },
 
-        {
-          $group: {
-            _id: null,
+      {
+        $group: {
 
-            totalCredit: {
-              $sum: {
-                $cond: [
-                  {
-                    $in: [
-                      '$type',
-                      [
-                        TRANSACTION_TYPES.DEPOSIT,
-                        TRANSACTION_TYPES.BET_WIN,
-                        TRANSACTION_TYPES.BONUS,
-                        TRANSACTION_TYPES.CASHBACK,
-                        TRANSACTION_TYPES.REFUND,
-                        TRANSACTION_TYPES.JACKPOT
-                      ]
+          _id: null,
+
+          totalCredit: {
+            $sum: {
+              $cond: [
+                {
+                  $in: [
+                    '$type',
+                    [
+                      TRANSACTION_TYPES.DEPOSIT,
+                      TRANSACTION_TYPES.BET_WIN,
+                      TRANSACTION_TYPES.BONUS,
+                      TRANSACTION_TYPES.CASHBACK,
+                      TRANSACTION_TYPES.REFUND,
+                      TRANSACTION_TYPES.JACKPOT
                     ]
-                  },
-                  '$netAmount',
-                  0
-                ]
-              }
-            },
+                  ]
+                },
+                '$netAmount',
+                0
+              ]
+            }
+          },
 
-            totalDebit: {
-              $sum: {
-                $cond: [
-                  {
-                    $in: [
-                      '$type',
-                      [
-                        TRANSACTION_TYPES.BET_PLACE,
-                        TRANSACTION_TYPES.WITHDRAWAL,
-                        TRANSACTION_TYPES.FEE,
-                        TRANSACTION_TYPES.TAX
-                      ]
+          totalDebit: {
+            $sum: {
+              $cond: [
+                {
+                  $in: [
+                    '$type',
+                    [
+                      TRANSACTION_TYPES.BET_PLACE,
+                      TRANSACTION_TYPES.WITHDRAWAL,
+                      TRANSACTION_TYPES.FEE,
+                      TRANSACTION_TYPES.TAX
                     ]
-                  },
-                  '$netAmount',
-                  0
-                ]
-              }
+                  ]
+                },
+                '$netAmount',
+                0
+              ]
             }
           }
         }
-      ]);
+      }
+    ]);
 
     return (
       (result[0]?.totalCredit || 0) -
@@ -625,65 +574,47 @@ transactionSchema.statics.getUserBalance =
     );
   };
 
-// ============================================
-// STATIC: DEPOSIT TOTAL
-// ============================================
+// ==================== DEPOSIT TOTAL ====================
 
 transactionSchema.statics.getUserDepositTotal =
-  async function(
+  async function (
     this: ITransactionModel,
-    userId:
-      | string
-      | mongoose.Types.ObjectId
+    userId: string | mongoose.Types.ObjectId
   ): Promise<number> {
 
-    const objectId =
-      userId instanceof mongoose.Types.ObjectId
-        ? userId
-        : new mongoose.Types.ObjectId(
-            userId
-          );
+    const result = await this.aggregate([
 
-    const result =
-      await this.aggregate([
-        {
-          $match: {
-            userId: objectId,
-            type:
-              TRANSACTION_TYPES.DEPOSIT,
-            status:
-              TRANSACTION_STATUS.COMPLETED
-          }
-        },
+      {
+        $match: {
+          userId:
+            new mongoose.Types.ObjectId(userId),
 
-        {
-          $group: {
-            _id: null,
-            total: {
-              $sum: '$amount'
-            }
+          type:
+            TRANSACTION_TYPES.DEPOSIT,
+
+          status:
+            TRANSACTION_STATUS.COMPLETED
+        }
+      },
+
+      {
+        $group: {
+          _id: null,
+          total: {
+            $sum: '$amount'
           }
         }
-      ]);
+      }
+    ]);
 
     return result[0]?.total || 0;
   };
 
-// ============================================
-// MODEL
-// ============================================
+// ==================== EXPORT ====================
 
-const existingTransactionModel =
-  mongoose.models.Transaction as
-    | ITransactionModel
-    | undefined;
-
-export const Transaction: ITransactionModel =
-  existingTransactionModel ||
-  mongoose.model<
-    ITransaction,
-    ITransactionModel
-  >(
+export const Transaction =
+  mongoose.models.Transaction ||
+  mongoose.model<ITransaction, ITransactionModel>(
     'Transaction',
     transactionSchema
   );
