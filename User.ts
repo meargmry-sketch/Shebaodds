@@ -1,14 +1,17 @@
 // ============================================
 // SHEBAODDS - USER MODEL
 // Enterprise Grade User Schema
+// Fixed TypeScript + Mongoose 8 Version
 // ============================================
 
-import mongoose, { Schema, Document, Model } from 'mongoose';
+import mongoose, {
+  Schema,
+  Document,
+  Model
+} from 'mongoose';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 
-// speakeasy may not have compatible TypeScript declarations
-// in the current project, so keep it dynamically loaded.
 const speakeasy = require('speakeasy');
 
 // ============================================
@@ -50,7 +53,7 @@ export const createDefaultWallet = (): IUserWallet => ({
 });
 
 // ============================================
-// SUPPORTING TYPES
+// TYPES
 // ============================================
 
 export type KYCDocumentType =
@@ -293,21 +296,23 @@ export interface IUser extends Document {
   createdAt: Date;
   updatedAt: Date;
 
-  // ============================================
-  // INSTANCE METHODS
-  // ============================================
-
-  comparePassword(candidatePassword: string): Promise<boolean>;
+  comparePassword(
+    candidatePassword: string
+  ): Promise<boolean>;
 
   generateReferralCode(): string;
 
   generateTwoFactorSecret(): any;
 
-  verifyTwoFactorToken(token: string): boolean;
+  verifyTwoFactorToken(
+    token: string
+  ): boolean;
 
   generateBackupCodes(): string[];
 
-  verifyBackupCode(code: string): Promise<boolean>;
+  verifyBackupCode(
+    code: string
+  ): Promise<boolean>;
 
   generateEmailVerificationToken(): string;
 
@@ -319,7 +324,7 @@ export interface IUser extends Document {
 }
 
 // ============================================
-// USER MODEL INTERFACE
+// MODEL INTERFACE
 // ============================================
 
 export interface IUserModel extends Model<IUser> {
@@ -340,9 +345,9 @@ export interface IUserModel extends Model<IUser> {
 
 const userSchema = new Schema<IUser, IUserModel>(
   {
-    // ============================================
+    // ==========================================
     // BASIC INFORMATION
-    // ============================================
+    // ==========================================
 
     username: {
       type: String,
@@ -365,11 +370,11 @@ const userSchema = new Schema<IUser, IUserModel>(
       required: [true, 'Email is required'],
       trim: true,
       lowercase: true,
+      index: true,
       match: [
-        /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
+        /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
         'Please provide a valid email'
-      ],
-      index: true
+      ]
     },
 
     password: {
@@ -399,10 +404,7 @@ const userSchema = new Schema<IUser, IUserModel>(
     fullName: {
       type: String,
       trim: true,
-      maxlength: [
-        100,
-        'Full name cannot exceed 100 characters'
-      ]
+      maxlength: [100, 'Full name cannot exceed 100 characters']
     },
 
     dateOfBirth: {
@@ -411,28 +413,31 @@ const userSchema = new Schema<IUser, IUserModel>(
 
     country: {
       type: String,
-      default: 'Ethiopia'
+      default: 'Ethiopia',
+      trim: true
     },
 
     city: {
-      type: String
+      type: String,
+      trim: true
     },
 
     address: {
-      type: String
+      type: String,
+      trim: true
     },
 
     postalCode: {
-      type: String
+      type: String,
+      trim: true
     },
 
-    // ============================================
+    // ==========================================
     // PREFERENCES
-    // ============================================
+    // ==========================================
 
     language: {
       type: String,
-      default: 'en',
       enum: [
         'en',
         'am',
@@ -444,7 +449,8 @@ const userSchema = new Schema<IUser, IUserModel>(
         'pt',
         'ru',
         'zh'
-      ]
+      ],
+      default: 'en'
     },
 
     theme: {
@@ -455,7 +461,6 @@ const userSchema = new Schema<IUser, IUserModel>(
 
     currency: {
       type: String,
-      default: 'ETB',
       enum: [
         'ETB',
         'USD',
@@ -464,7 +469,8 @@ const userSchema = new Schema<IUser, IUserModel>(
         'BTC',
         'ETH',
         'USDT'
-      ]
+      ],
+      default: 'ETB'
     },
 
     timezone: {
@@ -472,9 +478,9 @@ const userSchema = new Schema<IUser, IUserModel>(
       default: 'Africa/Addis_Ababa'
     },
 
-    // ============================================
+    // ==========================================
     // WALLET
-    // ============================================
+    // ==========================================
 
     wallet: {
       balance: {
@@ -541,9 +547,9 @@ const userSchema = new Schema<IUser, IUserModel>(
       }
     },
 
-    // ============================================
-    // BETTING STATISTICS
-    // ============================================
+    // ==========================================
+    // STATISTICS
+    // ==========================================
 
     statistics: {
       totalBets: {
@@ -592,9 +598,9 @@ const userSchema = new Schema<IUser, IUserModel>(
       }
     },
 
-    // ============================================
+    // ==========================================
     // VIP
-    // ============================================
+    // ==========================================
 
     vip: {
       level: {
@@ -639,9 +645,9 @@ const userSchema = new Schema<IUser, IUserModel>(
       }
     },
 
-    // ============================================
+    // ==========================================
     // TAX PROFILE
-    // ============================================
+    // ==========================================
 
     taxProfile: {
       taxExempt: {
@@ -679,9 +685,9 @@ const userSchema = new Schema<IUser, IUserModel>(
       }
     },
 
-    // ============================================
+    // ==========================================
     // ACCOUNT STATUS
-    // ============================================
+    // ==========================================
 
     isActive: {
       type: Boolean,
@@ -712,17 +718,13 @@ const userSchema = new Schema<IUser, IUserModel>(
       default: false
     },
 
-    suspensionReason: {
-      type: String
-    },
+    suspensionReason: String,
 
-    suspensionEndDate: {
-      type: Date
-    },
+    suspensionEndDate: Date,
 
-    // ============================================
+    // ==========================================
     // KYC
-    // ============================================
+    // ==========================================
 
     kycDocuments: [
       {
@@ -737,13 +739,9 @@ const userSchema = new Schema<IUser, IUserModel>(
           ]
         },
 
-        documentUrl: {
-          type: String
-        },
+        documentUrl: String,
 
-        documentNumber: {
-          type: String
-        },
+        documentNumber: String,
 
         status: {
           type: String,
@@ -760,25 +758,15 @@ const userSchema = new Schema<IUser, IUserModel>(
           default: Date.now
         },
 
-        reviewedAt: {
-          type: Date
-        },
+        reviewedAt: Date,
 
-        reviewedBy: {
-          type: String
-        },
+        reviewedBy: String,
 
-        rejectionReason: {
-          type: String
-        },
+        rejectionReason: String,
 
-        verifiedAt: {
-          type: Date
-        },
+        verifiedAt: Date,
 
-        verifiedBy: {
-          type: String
-        }
+        verifiedBy: String
       }
     ],
 
@@ -795,13 +783,13 @@ const userSchema = new Schema<IUser, IUserModel>(
 
     kycLevel: {
       type: Number,
-      default: 0,
-      enum: [0, 1, 2, 3]
+      enum: [0, 1, 2, 3],
+      default: 0
     },
 
-    // ============================================
+    // ==========================================
     // TWO FACTOR AUTHENTICATION
-    // ============================================
+    // ==========================================
 
     twoFactorEnabled: {
       type: Boolean,
@@ -813,12 +801,15 @@ const userSchema = new Schema<IUser, IUserModel>(
       select: false
     },
 
-    twoFactorBackupCodes: [
-      {
-        type: String,
-        select: false
-      }
-    ],
+    twoFactorBackupCodes: {
+      type: [String],
+      default: [],
+      select: false
+    },
+
+    // ==========================================
+    // VERIFICATION
+    // ==========================================
 
     emailVerified: {
       type: Boolean,
@@ -830,38 +821,26 @@ const userSchema = new Schema<IUser, IUserModel>(
       default: false
     },
 
-    emailVerificationToken: {
-      type: String
-    },
+    emailVerificationToken: String,
 
-    emailVerificationExpires: {
-      type: Date
-    },
+    emailVerificationExpires: Date,
 
-    phoneVerificationCode: {
-      type: String
-    },
+    phoneVerificationCode: String,
 
-    phoneVerificationExpires: {
-      type: Date
-    },
+    phoneVerificationExpires: Date,
 
-    // ============================================
+    // ==========================================
     // LOGIN SECURITY
-    // ============================================
+    // ==========================================
 
     loginAttempts: {
       type: Number,
       default: 0
     },
 
-    lockedUntil: {
-      type: Date
-    },
+    lockedUntil: Date,
 
-    lastLoginIP: {
-      type: String
-    },
+    lastLoginIP: String,
 
     lastLoginLocation: {
       city: String,
@@ -870,21 +849,17 @@ const userSchema = new Schema<IUser, IUserModel>(
       lng: Number
     },
 
-    // ============================================
+    // ==========================================
     // PASSWORD RESET
-    // ============================================
+    // ==========================================
 
-    resetPasswordToken: {
-      type: String
-    },
+    resetPasswordToken: String,
 
-    resetPasswordExpires: {
-      type: Date
-    },
+    resetPasswordExpires: Date,
 
-    // ============================================
-    // REFERRAL SYSTEM
-    // ============================================
+    // ==========================================
+    // REFERRALS
+    // ==========================================
 
     referralCode: {
       type: String,
@@ -912,9 +887,9 @@ const userSchema = new Schema<IUser, IUserModel>(
       default: 1
     },
 
-    // ============================================
+    // ==========================================
     // RESPONSIBLE GAMBLING
-    // ============================================
+    // ==========================================
 
     responsibleGambling: {
       depositLimit: {
@@ -947,22 +922,16 @@ const userSchema = new Schema<IUser, IUserModel>(
         default: false
       },
 
-      selfExclusionEndDate: {
-        type: Date
-      },
+      selfExclusionEndDate: Date,
 
-      coolingOffPeriodEnd: {
-        type: Date
-      },
+      coolingOffPeriodEnd: Date,
 
-      lastRealityCheck: {
-        type: Date
-      }
+      lastRealityCheck: Date
     },
 
-    // ============================================
+    // ==========================================
     // NOTIFICATIONS
-    // ============================================
+    // ==========================================
 
     notifications: {
       email: {
@@ -1006,9 +975,9 @@ const userSchema = new Schema<IUser, IUserModel>(
       }
     },
 
-    // ============================================
+    // ==========================================
     // DEVICES
-    // ============================================
+    // ==========================================
 
     devices: [
       {
@@ -1058,9 +1027,9 @@ const userSchema = new Schema<IUser, IUserModel>(
       }
     ],
 
-    // ============================================
+    // ==========================================
     // SESSIONS
-    // ============================================
+    // ==========================================
 
     sessions: [
       {
@@ -1089,9 +1058,9 @@ const userSchema = new Schema<IUser, IUserModel>(
       }
     ],
 
-    // ============================================
-    // SAVED PAYMENT METHODS
-    // ============================================
+    // ==========================================
+    // PAYMENT METHODS
+    // ==========================================
 
     savedPaymentMethods: [
       {
@@ -1127,9 +1096,9 @@ const userSchema = new Schema<IUser, IUserModel>(
       }
     ],
 
-    // ============================================
+    // ==========================================
     // BETTING PREFERENCES
-    // ============================================
+    // ==========================================
 
     bettingPreferences: {
       defaultStake: {
@@ -1142,28 +1111,25 @@ const userSchema = new Schema<IUser, IUserModel>(
         default: 0
       },
 
-      favoriteLeagues: [
-        {
-          type: String
-        }
-      ],
+      favoriteLeagues: {
+        type: [String],
+        default: []
+      },
 
-      favoriteTeams: [
-        {
-          type: String
-        }
-      ],
+      favoriteTeams: {
+        type: [String],
+        default: []
+      },
 
-      excludedMarkets: [
-        {
-          type: String
-        }
-      ]
+      excludedMarkets: {
+        type: [String],
+        default: []
+      }
     },
 
-    // ============================================
+    // ==========================================
     // AFFILIATE
-    // ============================================
+    // ==========================================
 
     affiliate: {
       partnerId: String,
@@ -1184,9 +1150,9 @@ const userSchema = new Schema<IUser, IUserModel>(
       }
     },
 
-    // ============================================
+    // ==========================================
     // ADMIN NOTES
-    // ============================================
+    // ==========================================
 
     notes: [
       {
@@ -1204,28 +1170,16 @@ const userSchema = new Schema<IUser, IUserModel>(
       }
     ],
 
-    // ============================================
-    // TIMESTAMPS
-    // ============================================
+    // ==========================================
+    // LAST ACTIVITY
+    // ==========================================
 
-    lastLogin: {
-      type: Date
-    },
+    lastLogin: Date,
 
     lastActive: {
       type: Date,
-      default: Date.now
-    },
-
-    createdAt: {
-      type: Date,
       default: Date.now,
       index: true
-    },
-
-    updatedAt: {
-      type: Date,
-      default: Date.now
     }
   },
   {
@@ -1248,6 +1202,7 @@ const userSchema = new Schema<IUser, IUserModel>(
 userSchema.index({ createdAt: -1 });
 userSchema.index({ lastActive: -1 });
 userSchema.index({ 'wallet.balance': -1 });
+userSchema.index({ 'wallet.totalWagered': -1 });
 userSchema.index({ 'vip.level': -1 });
 userSchema.index({ 'vip.loyaltyPoints': -1 });
 userSchema.index({ referralCode: 1 });
@@ -1257,7 +1212,7 @@ userSchema.index({ 'sessions.sessionId': 1 });
 userSchema.index({ kycStatus: 1 });
 
 // ============================================
-// PRE-SAVE PASSWORD HASHING
+// PASSWORD HASHING
 // ============================================
 
 userSchema.pre('save', async function(next) {
@@ -1272,28 +1227,63 @@ userSchema.pre('save', async function(next) {
       return next();
     }
 
+    /*
+     * IMPORTANT:
+     *
+     * passwordHistory contains bcrypt hashes.
+     * We store the OLD/current hash before replacing
+     * the password with the new hash.
+     */
+
+    const oldPasswordHash =
+      user.isNew
+        ? undefined
+        : user.get('password', null);
+
     const salt = await bcrypt.genSalt(12);
-    const hashedPassword = await bcrypt.hash(
-      user.password,
-      salt
-    );
+
+    const newPasswordHash =
+      await bcrypt.hash(
+        user.password,
+        salt
+      );
 
     if (!user.passwordHistory) {
       user.passwordHistory = [];
     }
 
-    user.passwordHistory.unshift(hashedPassword);
+    /*
+     * Do not duplicate the same hash.
+     */
+    if (
+      oldPasswordHash &&
+      typeof oldPasswordHash === 'string'
+    ) {
+      const alreadyStored =
+        user.passwordHistory.includes(
+          oldPasswordHash
+        );
 
+      if (!alreadyStored) {
+        user.passwordHistory.unshift(
+          oldPasswordHash
+        );
+      }
+    }
+
+    /*
+     * Keep only the last 5 password hashes.
+     */
     if (user.passwordHistory.length > 5) {
       user.passwordHistory =
         user.passwordHistory.slice(0, 5);
     }
 
-    user.password = hashedPassword;
+    user.password = newPasswordHash;
 
-    return next();
+    next();
   } catch (error) {
-    return next(error as Error);
+    next(error as Error);
   }
 });
 
@@ -1309,6 +1299,11 @@ userSchema.pre('save', function(next) {
       user.wallet = createDefaultWallet();
     }
 
+    if (!user.wallet.currency) {
+      user.wallet.currency =
+        user.currency || 'ETB';
+    }
+
     if (!user.referralCode && user.isNew) {
       user.referralCode =
         user.generateReferralCode();
@@ -1316,30 +1311,34 @@ userSchema.pre('save', function(next) {
 
     user.updatedAt = new Date();
 
-    return next();
+    next();
   } catch (error) {
-    return next(error as Error);
+    next(error as Error);
   }
 });
 
 // ============================================
-// PASSWORD
+// PASSWORD COMPARISON
 // ============================================
 
-userSchema.methods.comparePassword = async function(
-  candidatePassword: string
-): Promise<boolean> {
-  const user = this as IUser;
+userSchema.methods.comparePassword =
+  async function(
+    candidatePassword: string
+  ): Promise<boolean> {
+    const user = this as IUser;
 
-  if (!user.password) {
-    return false;
-  }
+    if (
+      !candidatePassword ||
+      !user.password
+    ) {
+      return false;
+    }
 
-  return bcrypt.compare(
-    candidatePassword,
-    user.password
-  );
-};
+    return bcrypt.compare(
+      candidatePassword,
+      user.password
+    );
+  };
 
 // ============================================
 // REFERRAL CODE
@@ -1347,43 +1346,50 @@ userSchema.methods.comparePassword = async function(
 
 userSchema.methods.generateReferralCode =
   function(): string {
-    const prefix = 'SHB';
+    const random =
+      crypto
+        .randomBytes(4)
+        .toString('hex')
+        .toUpperCase();
 
-    const random = Math.random()
-      .toString(36)
-      .substring(2, 8)
-      .toUpperCase();
-
-    return `${prefix}${random}`;
+    return `SHB${random}`;
   };
 
 // ============================================
-// TWO FACTOR SECRET
+// 2FA SECRET
 // ============================================
 
 userSchema.methods.generateTwoFactorSecret =
   function(): any {
     const user = this as IUser;
 
-    const secret = speakeasy.generateSecret({
-      length: 20,
-      name: `SHEBAODDS (${user.email})`
-    });
+    const secret =
+      speakeasy.generateSecret({
+        length: 20,
+        name: `SHEBAODDS (${user.email})`,
+        issuer: 'SHEBAODDS'
+      });
 
-    user.twoFactorSecret = secret.base32;
+    user.twoFactorSecret =
+      secret.base32;
 
     return secret;
   };
 
 // ============================================
-// VERIFY TWO FACTOR TOKEN
+// VERIFY 2FA
 // ============================================
 
 userSchema.methods.verifyTwoFactorToken =
-  function(token: string): boolean {
+  function(
+    token: string
+  ): boolean {
     const user = this as IUser;
 
-    if (!user.twoFactorSecret) {
+    if (
+      !user.twoFactorSecret ||
+      !token
+    ) {
       return false;
     }
 
@@ -1391,14 +1397,14 @@ userSchema.methods.verifyTwoFactorToken =
       speakeasy.totp.verify({
         secret: user.twoFactorSecret,
         encoding: 'base32',
-        token,
+        token: String(token),
         window: 2
       })
     );
   };
 
 // ============================================
-// BACKUP CODES
+// GENERATE BACKUP CODES
 // ============================================
 
 userSchema.methods.generateBackupCodes =
@@ -1408,14 +1414,19 @@ userSchema.methods.generateBackupCodes =
     const codes: string[] = [];
 
     for (let i = 0; i < 10; i++) {
-      codes.push(
+      const code =
         crypto
           .randomBytes(6)
           .toString('hex')
-          .toUpperCase()
-      );
+          .toUpperCase();
+
+      codes.push(code);
     }
 
+    /*
+     * Store only bcrypt hashes.
+     * Plain-text codes are returned once to the user.
+     */
     user.twoFactorBackupCodes =
       codes.map(code =>
         bcrypt.hashSync(code, 10)
@@ -1434,20 +1445,36 @@ userSchema.methods.verifyBackupCode =
   ): Promise<boolean> {
     const user = this as IUser;
 
-    if (!user.twoFactorBackupCodes?.length) {
+    if (
+      !code ||
+      !user.twoFactorBackupCodes ||
+      user.twoFactorBackupCodes.length === 0
+    ) {
       return false;
     }
 
     for (
-      const hashedCode
-      of user.twoFactorBackupCodes
+      let i = 0;
+      i < user.twoFactorBackupCodes.length;
+      i++
     ) {
-      if (
+      const valid =
         await bcrypt.compare(
-          code,
-          hashedCode
-        )
-      ) {
+          code.trim().toUpperCase(),
+          user.twoFactorBackupCodes[i]
+        );
+
+      if (valid) {
+        /*
+         * Backup codes are single-use.
+         */
+        user.twoFactorBackupCodes.splice(
+          i,
+          1
+        );
+
+        await user.save();
+
         return true;
       }
     }
@@ -1456,7 +1483,7 @@ userSchema.methods.verifyBackupCode =
   };
 
 // ============================================
-// EMAIL VERIFICATION
+// EMAIL VERIFICATION TOKEN
 // ============================================
 
 userSchema.methods.generateEmailVerificationToken =
@@ -1464,9 +1491,12 @@ userSchema.methods.generateEmailVerificationToken =
     const user = this as IUser;
 
     const token =
-      crypto.randomBytes(32).toString('hex');
+      crypto
+        .randomBytes(32)
+        .toString('hex');
 
-    user.emailVerificationToken = token;
+    user.emailVerificationToken =
+      token;
 
     user.emailVerificationExpires =
       new Date(
@@ -1544,10 +1574,15 @@ userSchema.methods.updateVipLevel =
 // ============================================
 
 userSchema.methods.canPlaceBet =
-  function(amount: number): boolean {
+  function(
+    amount: number
+  ): boolean {
     const user = this as IUser;
 
-    if (!Number.isFinite(amount) || amount <= 0) {
+    if (
+      !Number.isFinite(amount) ||
+      amount <= 0
+    ) {
       return false;
     }
 
@@ -1562,27 +1597,25 @@ userSchema.methods.canPlaceBet =
     const now = new Date();
 
     if (
-      user.responsibleGambling
-        ?.selfExcluded &&
-      user.responsibleGambling
-        .selfExclusionEndDate &&
-      user.responsibleGambling
-        .selfExclusionEndDate > now
+      user.responsibleGambling?.selfExcluded &&
+      user.responsibleGambling.selfExclusionEndDate &&
+      user.responsibleGambling.selfExclusionEndDate > now
     ) {
       return false;
     }
 
     if (
-      user.responsibleGambling
-        ?.coolingOffPeriodEnd &&
-      user.responsibleGambling
-        .coolingOffPeriodEnd > now
+      user.responsibleGambling?.coolingOffPeriodEnd &&
+      user.responsibleGambling.coolingOffPeriodEnd > now
     ) {
       return false;
     }
 
+    const availableBalance =
+      user.wallet?.balance || 0;
+
     if (
-      (user.wallet?.balance || 0) < amount
+      availableBalance < amount
     ) {
       return false;
     }
@@ -1602,11 +1635,15 @@ userSchema.methods.getDepositLimit =
       user.responsibleGambling
         ?.depositLimit || 0;
 
-    if (user.vip?.higherLimits) {
+    if (
+      user.vip?.higherLimits
+    ) {
       limit *= 2;
     }
 
-    if ((user.vip?.level || 0) >= 7) {
+    if (
+      (user.vip?.level || 0) >= 7
+    ) {
       limit *= 5;
     }
 
@@ -1621,9 +1658,11 @@ userSchema.methods.toJSON =
   function(): any {
     const user = this as IUser;
 
-    const obj = user.toObject();
+    const obj =
+      user.toObject();
 
     delete obj.password;
+    delete obj.passwordHistory;
     delete obj.twoFactorSecret;
     delete obj.twoFactorBackupCodes;
     delete obj.resetPasswordToken;
@@ -1634,7 +1673,7 @@ userSchema.methods.toJSON =
   };
 
 // ============================================
-// STATIC: FIND USER
+// STATIC: FIND BY EMAIL OR USERNAME
 // ============================================
 
 userSchema.statics.findByEmailOrUsername =
@@ -1642,7 +1681,9 @@ userSchema.statics.findByEmailOrUsername =
     identifier: string
   ): Promise<IUser | null> {
     const normalized =
-      identifier.trim().toLowerCase();
+      String(identifier)
+        .trim()
+        .toLowerCase();
 
     return this.findOne({
       $or: [
@@ -1664,13 +1705,22 @@ userSchema.statics.getTopWagered =
   function(
     limit = 100
   ): Promise<IUser[]> {
+    const safeLimit =
+      Math.min(
+        Math.max(
+          Number(limit) || 100,
+          1
+        ),
+        500
+      );
+
     return this.find({
       isActive: true
     })
       .sort({
         'wallet.totalWagered': -1
       })
-      .limit(limit)
+      .limit(safeLimit)
       .select(
         'username fullName wallet.totalWagered vip.level'
       )
@@ -1697,27 +1747,33 @@ userSchema.statics.getOnlineUsers =
   };
 
 // ============================================
-// MODEL
-// ============================================
-//
-// Important:
-// Do not directly use mongoose.models.User ||
-// mongoose.model(...) without casting.
-// In a TypeScript + Mongoose project this can
-// produce incompatible model unions.
-//
+// MODEL CREATION
 // ============================================
 
-const existingUserModel =
+/*
+ * IMPORTANT:
+ *
+ * In development, ts-node/hot reload can execute
+ * this file more than once.
+ *
+ * Reusing mongoose.models.User prevents:
+ *
+ * OverwriteModelError:
+ * Cannot overwrite `User` model once compiled.
+ */
+
+const existingModel =
   mongoose.models.User as
     | IUserModel
     | undefined;
 
-export const User: IUserModel =
-  existingUserModel ||
+const User: IUserModel =
+  existingModel ??
   mongoose.model<IUser, IUserModel>(
     'User',
     userSchema
   );
+
+export { User };
 
 export default User;
