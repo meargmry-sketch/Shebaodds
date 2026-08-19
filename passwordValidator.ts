@@ -1,6 +1,6 @@
 // ============================================
 // SHEBAODDS - STRONG PASSWORD VALIDATION
-// Enterprise Password Validation
+// Enterprise-grade password requirements
 // ============================================
 
 import { Request, Response, NextFunction } from 'express';
@@ -57,10 +57,9 @@ export const COMMON_PASSWORDS = [
 
 // ==================== SPECIAL CHARACTERS ====================
 
-export const SPECIAL_CHARS =
-  '!@#$%^&*()_+-=[]{}|;:,.<>?';
+export const SPECIAL_CHARS = '!@#$%^&*()_+-=[]{}|;:,.<>?';
 
-// ==================== INTERFACES ====================
+// ==================== USER INFO ====================
 
 export interface UserInfo {
   username?: string;
@@ -69,10 +68,13 @@ export interface UserInfo {
   phone?: string;
 }
 
+// ==================== VALIDATION RESULT ====================
+
 export interface ValidationResult {
   isValid: boolean;
   strength: string;
   score: number;
+
   errors: string[];
   warnings: string[];
 
@@ -93,8 +95,12 @@ export function validatePasswordStrength(
   const errors: string[] = [];
   const warnings: string[] = [];
 
-  let score = 0;
   let strength = PASSWORD_STRENGTH.WEAK;
+  let score = 0;
+
+  // -----------------------------
+  // Basic type validation
+  // -----------------------------
 
   if (typeof password !== 'string') {
     return {
@@ -111,7 +117,9 @@ export function validatePasswordStrength(
     };
   }
 
-  // ==================== LENGTH ====================
+  // -----------------------------
+  // Minimum length
+  // -----------------------------
 
   if (password.length < PASSWORD_RULES.minLength) {
     errors.push(
@@ -125,24 +133,21 @@ export function validatePasswordStrength(
     score += 0.5;
   }
 
+  // -----------------------------
+  // Maximum length
+  // -----------------------------
+
   if (password.length > PASSWORD_RULES.maxLength) {
     errors.push(
       `Password cannot exceed ${PASSWORD_RULES.maxLength} characters`
     );
   }
 
-  // ==================== CHARACTER TYPES ====================
+  // -----------------------------
+  // Uppercase
+  // -----------------------------
 
   const hasUppercase = /[A-Z]/.test(password);
-  const hasLowercase = /[a-z]/.test(password);
-  const hasNumbers = /[0-9]/.test(password);
-
-  const escapedSpecialChars =
-    SPECIAL_CHARS.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-
-  const hasSpecial = new RegExp(
-    `[${escapedSpecialChars}]`
-  ).test(password);
 
   if (PASSWORD_RULES.requireUppercase && !hasUppercase) {
     errors.push(
@@ -152,6 +157,12 @@ export function validatePasswordStrength(
     score += 1;
   }
 
+  // -----------------------------
+  // Lowercase
+  // -----------------------------
+
+  const hasLowercase = /[a-z]/.test(password);
+
   if (PASSWORD_RULES.requireLowercase && !hasLowercase) {
     errors.push(
       'Password must contain at least one lowercase letter'
@@ -159,6 +170,12 @@ export function validatePasswordStrength(
   } else if (hasLowercase) {
     score += 1;
   }
+
+  // -----------------------------
+  // Numbers
+  // -----------------------------
+
+  const hasNumbers = /[0-9]/.test(password);
 
   if (PASSWORD_RULES.requireNumbers && !hasNumbers) {
     errors.push(
@@ -168,33 +185,52 @@ export function validatePasswordStrength(
     score += 1;
   }
 
+  // -----------------------------
+  // Special characters
+  // -----------------------------
+
+  const escapedSpecialChars =
+    SPECIAL_CHARS.replace(
+      /[-\/\\^$*+?.()|[\]{}]/g,
+      '\\$&'
+    );
+
+  const specialRegex = new RegExp(
+    `[${escapedSpecialChars}]`
+  );
+
+  const hasSpecial = specialRegex.test(password);
+
   if (PASSWORD_RULES.requireSpecialChars && !hasSpecial) {
     errors.push(
-      `Password must contain at least one special character`
+      `Password must contain at least one special character (${SPECIAL_CHARS})`
     );
   } else if (hasSpecial) {
     score += 1.5;
   }
 
-  // ==================== COMMON PASSWORD ====================
+  // -----------------------------
+  // Common passwords
+  // -----------------------------
 
   if (PASSWORD_RULES.preventCommonPasswords) {
 
-    const normalizedPassword =
-      password.toLowerCase().trim();
+    const lowerPassword = password.toLowerCase();
 
-    if (COMMON_PASSWORDS.includes(normalizedPassword)) {
+    if (COMMON_PASSWORDS.includes(lowerPassword)) {
       errors.push(
         'This password is too common. Please choose a more secure password'
       );
     }
   }
 
-  // ==================== SEQUENTIAL CHARACTERS ====================
+  // -----------------------------
+  // Sequential characters
+  // -----------------------------
 
   if (PASSWORD_RULES.preventSequentialChars) {
 
-    const patterns = [
+    const sequentialPatterns = [
       'abcdefghijklmnopqrstuvwxyz',
       'qwertyuiop',
       'asdfghjkl',
@@ -203,43 +239,49 @@ export function validatePasswordStrength(
       '0123456789'
     ];
 
-    for (const pattern of patterns) {
+    let sequentialFound = false;
+
+    for (const pattern of sequentialPatterns) {
 
       for (let i = 0; i <= password.length - 4; i++) {
 
-        const part =
+        const substring =
           password.substring(i, i + 4).toLowerCase();
 
-        if (pattern.includes(part)) {
-
-          warnings.push(
-            'Password contains sequential characters which makes it easier to guess'
-          );
-
-          i = password.length;
+        if (pattern.includes(substring)) {
+          sequentialFound = true;
           break;
         }
       }
 
-      if (warnings.length > 0) {
+      if (sequentialFound) {
         break;
       }
     }
+
+    if (sequentialFound) {
+      warnings.push(
+        'Password contains sequential characters which makes it easier to guess'
+      );
+    }
   }
 
-  // ==================== REPEATED CHARACTERS ====================
+  // -----------------------------
+  // Repeated characters
+  // -----------------------------
 
   if (PASSWORD_RULES.preventRepeatedChars) {
 
     if (/(.)\1{3,}/.test(password)) {
-
       warnings.push(
         'Password contains repeated characters which makes it easier to guess'
       );
     }
   }
 
-  // ==================== PERSONAL INFORMATION ====================
+  // -----------------------------
+  // Personal information
+  // -----------------------------
 
   if (PASSWORD_RULES.preventPersonalInfo) {
 
@@ -252,24 +294,27 @@ export function validatePasswordStrength(
       .filter(Boolean)
       .map(value => String(value).toLowerCase());
 
-    const lowerPassword =
-      password.toLowerCase();
+    const lowerPassword = password.toLowerCase();
 
     for (const info of personalInfo) {
 
-      if (info.length >= 3 &&
-          lowerPassword.includes(info)) {
+      if (info && info.length >= 3) {
 
-        errors.push(
-          'Password should not contain personal information like username, email, name, or phone number'
-        );
+        if (lowerPassword.includes(info)) {
 
-        break;
+          errors.push(
+            'Password should not contain personal information like username, email, or name'
+          );
+
+          break;
+        }
       }
     }
   }
 
-  // ==================== STRENGTH ====================
+  // -----------------------------
+  // Strength
+  // -----------------------------
 
   if (score >= 6) {
     strength = PASSWORD_STRENGTH.VERY_STRONG;
@@ -345,9 +390,7 @@ export class PasswordHistory {
     newPasswordHash: string
   ): Promise<string[]> {
 
-    this.passwordHistory.unshift(
-      newPasswordHash
-    );
+    this.passwordHistory.unshift(newPasswordHash);
 
     if (
       this.passwordHistory.length >
@@ -364,7 +407,7 @@ export class PasswordHistory {
   }
 }
 
-// ==================== PASSWORD METER ====================
+// ==================== STRENGTH METER ====================
 
 export function getPasswordStrengthMeter(
   strength: string
@@ -440,11 +483,13 @@ export function validatePassword(
 
   const {
     password,
-    ...userInfo
+    username,
+    email,
+    fullName,
+    phone
   } = req.body;
 
   if (!password) {
-
     return res.status(400).json({
       success: false,
       message: 'Password is required'
@@ -454,7 +499,12 @@ export function validatePassword(
   const validation =
     validatePasswordStrength(
       password,
-      userInfo
+      {
+        username,
+        email,
+        fullName,
+        phone
+      }
     );
 
   if (!validation.isValid) {
