@@ -1,18 +1,12 @@
 // ============================================
 // SHEBAODDS - STRONG PASSWORD VALIDATION
+// Enterprise Password Validation
 // ============================================
 
-import {
-  Request,
-  Response,
-  NextFunction
-} from 'express';
-
+import { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 
-// ============================================
-// STRENGTH
-// ============================================
+// ==================== PASSWORD STRENGTH ====================
 
 export const PASSWORD_STRENGTH = {
   WEAK: 'weak',
@@ -22,14 +16,7 @@ export const PASSWORD_STRENGTH = {
   VERY_STRONG: 'very_strong'
 } as const;
 
-export type PasswordStrength =
-  typeof PASSWORD_STRENGTH[
-    keyof typeof PASSWORD_STRENGTH
-  ];
-
-// ============================================
-// RULES
-// ============================================
+// ==================== PASSWORD RULES ====================
 
 export const PASSWORD_RULES = {
   minLength: 8,
@@ -42,16 +29,13 @@ export const PASSWORD_RULES = {
 
   preventCommonPasswords: true,
   preventPersonalInfo: true,
-
   preventSequentialChars: true,
   preventRepeatedChars: true,
 
   maxHistory: 5
 };
 
-// ============================================
-// COMMON PASSWORDS
-// ============================================
+// ==================== COMMON PASSWORDS ====================
 
 export const COMMON_PASSWORDS = [
   'password',
@@ -71,16 +55,12 @@ export const COMMON_PASSWORDS = [
   'admin@123'
 ];
 
-// ============================================
-// SPECIAL CHARACTERS
-// ============================================
+// ==================== SPECIAL CHARACTERS ====================
 
 export const SPECIAL_CHARS =
   '!@#$%^&*()_+-=[]{}|;:,.<>?';
 
-// ============================================
-// USER INFO
-// ============================================
+// ==================== INTERFACES ====================
 
 export interface UserInfo {
   username?: string;
@@ -89,13 +69,9 @@ export interface UserInfo {
   phone?: string;
 }
 
-// ============================================
-// RESULT
-// ============================================
-
 export interface ValidationResult {
   isValid: boolean;
-  strength: PasswordStrength;
+  strength: string;
   score: number;
   errors: string[];
   warnings: string[];
@@ -107,25 +83,25 @@ export interface ValidationResult {
   isLongEnough: boolean;
 }
 
-// ============================================
-// PASSWORD VALIDATION
-// ============================================
+// ==================== VALIDATE PASSWORD ====================
 
 export function validatePasswordStrength(
   password: string,
   userInfo: UserInfo = {}
 ): ValidationResult {
+
   const errors: string[] = [];
   const warnings: string[] = [];
 
   let score = 0;
+  let strength = PASSWORD_STRENGTH.WEAK;
 
   if (typeof password !== 'string') {
     return {
       isValid: false,
       strength: PASSWORD_STRENGTH.WEAK,
       score: 0,
-      errors: ['Password must be a string'],
+      errors: ['Password must be a valid string'],
       warnings: [],
       hasUppercase: false,
       hasLowercase: false,
@@ -135,64 +111,40 @@ export function validatePasswordStrength(
     };
   }
 
-  // ==========================================
-  // LENGTH
-  // ==========================================
+  // ==================== LENGTH ====================
 
-  if (
-    password.length <
-    PASSWORD_RULES.minLength
-  ) {
+  if (password.length < PASSWORD_RULES.minLength) {
     errors.push(
       `Password must be at least ${PASSWORD_RULES.minLength} characters`
     );
+  } else if (password.length >= 12) {
+    score += 2;
+  } else if (password.length >= 10) {
+    score += 1;
+  } else {
+    score += 0.5;
   }
 
-  if (
-    password.length >
-    PASSWORD_RULES.maxLength
-  ) {
+  if (password.length > PASSWORD_RULES.maxLength) {
     errors.push(
       `Password cannot exceed ${PASSWORD_RULES.maxLength} characters`
     );
   }
 
-  if (password.length >= 12) {
-    score += 2;
-  } else if (password.length >= 10) {
-    score += 1.5;
-  } else if (password.length >= 8) {
-    score += 1;
-  }
+  // ==================== CHARACTER TYPES ====================
 
-  // ==========================================
-  // CHARACTER TYPES
-  // ==========================================
-
-  const hasUppercase =
-    /[A-Z]/.test(password);
-
-  const hasLowercase =
-    /[a-z]/.test(password);
-
-  const hasNumbers =
-    /[0-9]/.test(password);
+  const hasUppercase = /[A-Z]/.test(password);
+  const hasLowercase = /[a-z]/.test(password);
+  const hasNumbers = /[0-9]/.test(password);
 
   const escapedSpecialChars =
-    SPECIAL_CHARS.replace(
-      /[-\/\\^$*+?.()|[\]{}]/g,
-      '\\$&'
-    );
+    SPECIAL_CHARS.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
 
-  const hasSpecial =
-    new RegExp(
-      `[${escapedSpecialChars}]`
-    ).test(password);
+  const hasSpecial = new RegExp(
+    `[${escapedSpecialChars}]`
+  ).test(password);
 
-  if (
-    PASSWORD_RULES.requireUppercase &&
-    !hasUppercase
-  ) {
+  if (PASSWORD_RULES.requireUppercase && !hasUppercase) {
     errors.push(
       'Password must contain at least one uppercase letter'
     );
@@ -200,10 +152,7 @@ export function validatePasswordStrength(
     score += 1;
   }
 
-  if (
-    PASSWORD_RULES.requireLowercase &&
-    !hasLowercase
-  ) {
+  if (PASSWORD_RULES.requireLowercase && !hasLowercase) {
     errors.push(
       'Password must contain at least one lowercase letter'
     );
@@ -211,10 +160,7 @@ export function validatePasswordStrength(
     score += 1;
   }
 
-  if (
-    PASSWORD_RULES.requireNumbers &&
-    !hasNumbers
-  ) {
+  if (PASSWORD_RULES.requireNumbers && !hasNumbers) {
     errors.push(
       'Password must contain at least one number'
     );
@@ -222,42 +168,32 @@ export function validatePasswordStrength(
     score += 1;
   }
 
-  if (
-    PASSWORD_RULES.requireSpecialChars &&
-    !hasSpecial
-  ) {
+  if (PASSWORD_RULES.requireSpecialChars && !hasSpecial) {
     errors.push(
-      'Password must contain at least one special character'
+      `Password must contain at least one special character`
     );
   } else if (hasSpecial) {
     score += 1.5;
   }
 
-  // ==========================================
-  // COMMON PASSWORD
-  // ==========================================
+  // ==================== COMMON PASSWORD ====================
 
-  if (
-    PASSWORD_RULES.preventCommonPasswords
-  ) {
-    if (
-      COMMON_PASSWORDS.includes(
-        password.toLowerCase()
-      )
-    ) {
+  if (PASSWORD_RULES.preventCommonPasswords) {
+
+    const normalizedPassword =
+      password.toLowerCase().trim();
+
+    if (COMMON_PASSWORDS.includes(normalizedPassword)) {
       errors.push(
         'This password is too common. Please choose a more secure password'
       );
     }
   }
 
-  // ==========================================
-  // SEQUENTIAL CHARACTERS
-  // ==========================================
+  // ==================== SEQUENTIAL CHARACTERS ====================
 
-  if (
-    PASSWORD_RULES.preventSequentialChars
-  ) {
+  if (PASSWORD_RULES.preventSequentialChars) {
+
     const patterns = [
       'abcdefghijklmnopqrstuvwxyz',
       'qwertyuiop',
@@ -267,61 +203,46 @@ export function validatePasswordStrength(
       '0123456789'
     ];
 
-    const lowerPassword =
-      password.toLowerCase();
-
-    let foundSequential = false;
-
     for (const pattern of patterns) {
-      for (
-        let i = 0;
-        i <= lowerPassword.length - 4;
-        i++
-      ) {
-        const chunk =
-          lowerPassword.substring(
-            i,
-            i + 4
+
+      for (let i = 0; i <= password.length - 4; i++) {
+
+        const part =
+          password.substring(i, i + 4).toLowerCase();
+
+        if (pattern.includes(part)) {
+
+          warnings.push(
+            'Password contains sequential characters which makes it easier to guess'
           );
 
-        if (pattern.includes(chunk)) {
-          foundSequential = true;
+          i = password.length;
           break;
         }
       }
 
-      if (foundSequential) {
+      if (warnings.length > 0) {
         break;
       }
     }
+  }
 
-    if (foundSequential) {
-      errors.push(
-        'Password contains sequential characters'
+  // ==================== REPEATED CHARACTERS ====================
+
+  if (PASSWORD_RULES.preventRepeatedChars) {
+
+    if (/(.)\1{3,}/.test(password)) {
+
+      warnings.push(
+        'Password contains repeated characters which makes it easier to guess'
       );
     }
   }
 
-  // ==========================================
-  // REPEATED CHARACTERS
-  // ==========================================
+  // ==================== PERSONAL INFORMATION ====================
 
-  if (
-    PASSWORD_RULES.preventRepeatedChars &&
-    /(.)\1{3,}/.test(password)
-  ) {
-    errors.push(
-      'Password contains too many repeated characters'
-    );
-  }
+  if (PASSWORD_RULES.preventPersonalInfo) {
 
-  // ==========================================
-  // PERSONAL INFORMATION
-  // ==========================================
-
-  if (
-    PASSWORD_RULES.preventPersonalInfo
-  ) {
     const personalInfo = [
       userInfo.username,
       userInfo.email?.split('@')[0],
@@ -329,59 +250,37 @@ export function validatePasswordStrength(
       userInfo.phone
     ]
       .filter(Boolean)
-      .map(value =>
-        String(value)
-          .trim()
-          .toLowerCase()
-      )
-      .filter(value => value.length >= 3);
+      .map(value => String(value).toLowerCase());
 
     const lowerPassword =
       password.toLowerCase();
 
     for (const info of personalInfo) {
-      if (
-        lowerPassword.includes(info)
-      ) {
+
+      if (info.length >= 3 &&
+          lowerPassword.includes(info)) {
+
         errors.push(
-          'Password should not contain personal information'
+          'Password should not contain personal information like username, email, name, or phone number'
         );
+
         break;
       }
     }
   }
 
-  // ==========================================
-  // WARNINGS
-  // ==========================================
-
-  if (password.length < 12) {
-    warnings.push(
-      'A password of 12 or more characters is recommended'
-    );
-  }
-
-  // ==========================================
-  // STRENGTH
-  // ==========================================
-
-  let strength: PasswordStrength;
+  // ==================== STRENGTH ====================
 
   if (score >= 6) {
-    strength =
-      PASSWORD_STRENGTH.VERY_STRONG;
+    strength = PASSWORD_STRENGTH.VERY_STRONG;
   } else if (score >= 4.5) {
-    strength =
-      PASSWORD_STRENGTH.STRONG;
+    strength = PASSWORD_STRENGTH.STRONG;
   } else if (score >= 3) {
-    strength =
-      PASSWORD_STRENGTH.GOOD;
+    strength = PASSWORD_STRENGTH.GOOD;
   } else if (score >= 1.5) {
-    strength =
-      PASSWORD_STRENGTH.FAIR;
+    strength = PASSWORD_STRENGTH.FAIR;
   } else {
-    strength =
-      PASSWORD_STRENGTH.WEAK;
+    strength = PASSWORD_STRENGTH.WEAK;
   }
 
   return {
@@ -397,16 +296,14 @@ export function validatePasswordStrength(
     hasSpecial,
 
     isLongEnough:
-      password.length >=
-      PASSWORD_RULES.minLength
+      password.length >= PASSWORD_RULES.minLength
   };
 }
 
-// ============================================
-// PASSWORD HISTORY
-// ============================================
+// ==================== PASSWORD HISTORY ====================
 
 export class PasswordHistory {
+
   userId: string;
   passwordHistory: string[];
 
@@ -415,13 +312,13 @@ export class PasswordHistory {
     passwordHistory: string[] = []
   ) {
     this.userId = userId;
-    this.passwordHistory =
-      passwordHistory;
+    this.passwordHistory = passwordHistory;
   }
 
   async isPasswordReused(
     newPassword: string
   ): Promise<boolean> {
+
     if (
       !PASSWORD_RULES.maxHistory ||
       this.passwordHistory.length === 0
@@ -429,10 +326,8 @@ export class PasswordHistory {
       return false;
     }
 
-    for (
-      const oldHash
-      of this.passwordHistory
-    ) {
+    for (const oldHash of this.passwordHistory) {
+
       if (
         await bcrypt.compare(
           newPassword,
@@ -449,6 +344,7 @@ export class PasswordHistory {
   async addToHistory(
     newPasswordHash: string
   ): Promise<string[]> {
+
     this.passwordHistory.unshift(
       newPasswordHash
     );
@@ -468,14 +364,14 @@ export class PasswordHistory {
   }
 }
 
-// ============================================
-// STRENGTH METER
-// ============================================
+// ==================== PASSWORD METER ====================
 
 export function getPasswordStrengthMeter(
   strength: string
 ) {
+
   const meters: Record<string, any> = {
+
     [PASSWORD_STRENGTH.WEAK]: {
       label: 'Weak',
       labelAm: 'ደካማ',
@@ -496,7 +392,7 @@ export function getPasswordStrengthMeter(
       percentage: 40,
       suggestions: [
         'Make it longer',
-        'Add more character variety'
+        'Add more variety of characters'
       ]
     },
 
@@ -506,8 +402,8 @@ export function getPasswordStrengthMeter(
       color: '#2196F3',
       percentage: 60,
       suggestions: [
-        'Make it longer',
-        'Use a less predictable combination'
+        'Add more special characters',
+        'Make it longer for better security'
       ]
     },
 
@@ -534,27 +430,21 @@ export function getPasswordStrengthMeter(
   );
 }
 
-// ============================================
-// EXPRESS MIDDLEWARE
-// ============================================
+// ==================== EXPRESS MIDDLEWARE ====================
 
 export function validatePassword(
   req: Request,
   res: Response,
   next: NextFunction
 ) {
+
   const {
     password,
-    username,
-    email,
-    fullName,
-    phone
-  } = req.body || {};
+    ...userInfo
+  } = req.body;
 
-  if (
-    typeof password !== 'string' ||
-    !password
-  ) {
+  if (!password) {
+
     return res.status(400).json({
       success: false,
       message: 'Password is required'
@@ -564,22 +454,19 @@ export function validatePassword(
   const validation =
     validatePasswordStrength(
       password,
-      {
-        username,
-        email,
-        fullName,
-        phone
-      }
+      userInfo
     );
 
   if (!validation.isValid) {
+
     return res.status(400).json({
       success: false,
       message:
         'Password does not meet security requirements',
       errors: validation.errors,
       warnings: validation.warnings,
-      strength: validation.strength
+      strength: validation.strength,
+      score: validation.score
     });
   }
 
@@ -589,8 +476,5 @@ export function validatePassword(
   (req as any).passwordStrength =
     validation.strength;
 
-  (req as any).passwordValidation =
-    validation;
-
-  return next();
+  next();
 }
