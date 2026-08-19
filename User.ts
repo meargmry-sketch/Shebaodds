@@ -1,7 +1,6 @@
 // ============================================
 // SHEBAODDS - USER MODEL
 // Enterprise Grade User Schema
-// Fixed TypeScript + Mongoose 8 Version
 // ============================================
 
 import mongoose, {
@@ -345,10 +344,6 @@ export interface IUserModel extends Model<IUser> {
 
 const userSchema = new Schema<IUser, IUserModel>(
   {
-    // ==========================================
-    // BASIC INFORMATION
-    // ==========================================
-
     username: {
       type: String,
       unique: true,
@@ -370,11 +365,11 @@ const userSchema = new Schema<IUser, IUserModel>(
       required: [true, 'Email is required'],
       trim: true,
       lowercase: true,
-      index: true,
       match: [
-        /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+        /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
         'Please provide a valid email'
-      ]
+      ],
+      index: true
     },
 
     password: {
@@ -404,7 +399,10 @@ const userSchema = new Schema<IUser, IUserModel>(
     fullName: {
       type: String,
       trim: true,
-      maxlength: [100, 'Full name cannot exceed 100 characters']
+      maxlength: [
+        100,
+        'Full name cannot exceed 100 characters'
+      ]
     },
 
     dateOfBirth: {
@@ -413,31 +411,16 @@ const userSchema = new Schema<IUser, IUserModel>(
 
     country: {
       type: String,
-      default: 'Ethiopia',
-      trim: true
+      default: 'Ethiopia'
     },
 
-    city: {
-      type: String,
-      trim: true
-    },
-
-    address: {
-      type: String,
-      trim: true
-    },
-
-    postalCode: {
-      type: String,
-      trim: true
-    },
-
-    // ==========================================
-    // PREFERENCES
-    // ==========================================
+    city: String,
+    address: String,
+    postalCode: String,
 
     language: {
       type: String,
+      default: 'en',
       enum: [
         'en',
         'am',
@@ -449,8 +432,7 @@ const userSchema = new Schema<IUser, IUserModel>(
         'pt',
         'ru',
         'zh'
-      ],
-      default: 'en'
+      ]
     },
 
     theme: {
@@ -461,6 +443,7 @@ const userSchema = new Schema<IUser, IUserModel>(
 
     currency: {
       type: String,
+      default: 'ETB',
       enum: [
         'ETB',
         'USD',
@@ -469,8 +452,7 @@ const userSchema = new Schema<IUser, IUserModel>(
         'BTC',
         'ETH',
         'USDT'
-      ],
-      default: 'ETB'
+      ]
     },
 
     timezone: {
@@ -478,9 +460,9 @@ const userSchema = new Schema<IUser, IUserModel>(
       default: 'Africa/Addis_Ababa'
     },
 
-    // ==========================================
+    // ============================================
     // WALLET
-    // ==========================================
+    // ============================================
 
     wallet: {
       balance: {
@@ -547,9 +529,9 @@ const userSchema = new Schema<IUser, IUserModel>(
       }
     },
 
-    // ==========================================
+    // ============================================
     // STATISTICS
-    // ==========================================
+    // ============================================
 
     statistics: {
       totalBets: {
@@ -598,9 +580,9 @@ const userSchema = new Schema<IUser, IUserModel>(
       }
     },
 
-    // ==========================================
+    // ============================================
     // VIP
-    // ==========================================
+    // ============================================
 
     vip: {
       level: {
@@ -645,9 +627,9 @@ const userSchema = new Schema<IUser, IUserModel>(
       }
     },
 
-    // ==========================================
-    // TAX PROFILE
-    // ==========================================
+    // ============================================
+    // TAX
+    // ============================================
 
     taxProfile: {
       taxExempt: {
@@ -680,14 +662,12 @@ const userSchema = new Schema<IUser, IUserModel>(
         default: 0
       },
 
-      lastTaxCalculation: {
-        type: Date
-      }
+      lastTaxCalculation: Date
     },
 
-    // ==========================================
-    // ACCOUNT STATUS
-    // ==========================================
+    // ============================================
+    // STATUS
+    // ============================================
 
     isActive: {
       type: Boolean,
@@ -719,12 +699,11 @@ const userSchema = new Schema<IUser, IUserModel>(
     },
 
     suspensionReason: String,
-
     suspensionEndDate: Date,
 
-    // ==========================================
+    // ============================================
     // KYC
-    // ==========================================
+    // ============================================
 
     kycDocuments: [
       {
@@ -740,7 +719,6 @@ const userSchema = new Schema<IUser, IUserModel>(
         },
 
         documentUrl: String,
-
         documentNumber: String,
 
         status: {
@@ -759,13 +737,9 @@ const userSchema = new Schema<IUser, IUserModel>(
         },
 
         reviewedAt: Date,
-
         reviewedBy: String,
-
         rejectionReason: String,
-
         verifiedAt: Date,
-
         verifiedBy: String
       }
     ],
@@ -783,13 +757,13 @@ const userSchema = new Schema<IUser, IUserModel>(
 
     kycLevel: {
       type: Number,
-      enum: [0, 1, 2, 3],
-      default: 0
+      default: 0,
+      enum: [0, 1, 2, 3]
     },
 
-    // ==========================================
-    // TWO FACTOR AUTHENTICATION
-    // ==========================================
+    // ============================================
+    // 2FA
+    // ============================================
 
     twoFactorEnabled: {
       type: Boolean,
@@ -801,15 +775,12 @@ const userSchema = new Schema<IUser, IUserModel>(
       select: false
     },
 
-    twoFactorBackupCodes: {
-      type: [String],
-      default: [],
-      select: false
-    },
-
-    // ==========================================
-    // VERIFICATION
-    // ==========================================
+    twoFactorBackupCodes: [
+      {
+        type: String,
+        select: false
+      }
+    ],
 
     emailVerified: {
       type: Boolean,
@@ -822,16 +793,14 @@ const userSchema = new Schema<IUser, IUserModel>(
     },
 
     emailVerificationToken: String,
-
     emailVerificationExpires: Date,
 
     phoneVerificationCode: String,
-
     phoneVerificationExpires: Date,
 
-    // ==========================================
+    // ============================================
     // LOGIN SECURITY
-    // ==========================================
+    // ============================================
 
     loginAttempts: {
       type: Number,
@@ -839,7 +808,6 @@ const userSchema = new Schema<IUser, IUserModel>(
     },
 
     lockedUntil: Date,
-
     lastLoginIP: String,
 
     lastLoginLocation: {
@@ -849,17 +817,12 @@ const userSchema = new Schema<IUser, IUserModel>(
       lng: Number
     },
 
-    // ==========================================
-    // PASSWORD RESET
-    // ==========================================
-
     resetPasswordToken: String,
-
     resetPasswordExpires: Date,
 
-    // ==========================================
+    // ============================================
     // REFERRALS
-    // ==========================================
+    // ============================================
 
     referralCode: {
       type: String,
@@ -887,9 +850,9 @@ const userSchema = new Schema<IUser, IUserModel>(
       default: 1
     },
 
-    // ==========================================
+    // ============================================
     // RESPONSIBLE GAMBLING
-    // ==========================================
+    // ============================================
 
     responsibleGambling: {
       depositLimit: {
@@ -923,15 +886,13 @@ const userSchema = new Schema<IUser, IUserModel>(
       },
 
       selfExclusionEndDate: Date,
-
       coolingOffPeriodEnd: Date,
-
       lastRealityCheck: Date
     },
 
-    // ==========================================
+    // ============================================
     // NOTIFICATIONS
-    // ==========================================
+    // ============================================
 
     notifications: {
       email: {
@@ -975,9 +936,9 @@ const userSchema = new Schema<IUser, IUserModel>(
       }
     },
 
-    // ==========================================
+    // ============================================
     // DEVICES
-    // ==========================================
+    // ============================================
 
     devices: [
       {
@@ -999,13 +960,9 @@ const userSchema = new Schema<IUser, IUserModel>(
         },
 
         browser: String,
-
         os: String,
-
         ipAddress: String,
-
         location: String,
-
         pushToken: String,
 
         biometricEnabled: {
@@ -1027,9 +984,9 @@ const userSchema = new Schema<IUser, IUserModel>(
       }
     ],
 
-    // ==========================================
+    // ============================================
     // SESSIONS
-    // ==========================================
+    // ============================================
 
     sessions: [
       {
@@ -1039,9 +996,7 @@ const userSchema = new Schema<IUser, IUserModel>(
         },
 
         ipAddress: String,
-
         userAgent: String,
-
         deviceId: String,
 
         loginAt: {
@@ -1058,9 +1013,9 @@ const userSchema = new Schema<IUser, IUserModel>(
       }
     ],
 
-    // ==========================================
+    // ============================================
     // PAYMENT METHODS
-    // ==========================================
+    // ============================================
 
     savedPaymentMethods: [
       {
@@ -1077,9 +1032,7 @@ const userSchema = new Schema<IUser, IUserModel>(
         },
 
         identifier: String,
-
         last4: String,
-
         brand: String,
 
         isDefault: {
@@ -1096,9 +1049,9 @@ const userSchema = new Schema<IUser, IUserModel>(
       }
     ],
 
-    // ==========================================
+    // ============================================
     // BETTING PREFERENCES
-    // ==========================================
+    // ============================================
 
     bettingPreferences: {
       defaultStake: {
@@ -1111,25 +1064,28 @@ const userSchema = new Schema<IUser, IUserModel>(
         default: 0
       },
 
-      favoriteLeagues: {
-        type: [String],
-        default: []
-      },
+      favoriteLeagues: [
+        {
+          type: String
+        }
+      ],
 
-      favoriteTeams: {
-        type: [String],
-        default: []
-      },
+      favoriteTeams: [
+        {
+          type: String
+        }
+      ],
 
-      excludedMarkets: {
-        type: [String],
-        default: []
-      }
+      excludedMarkets: [
+        {
+          type: String
+        }
+      ]
     },
 
-    // ==========================================
+    // ============================================
     // AFFILIATE
-    // ==========================================
+    // ============================================
 
     affiliate: {
       partnerId: String,
@@ -1150,9 +1106,9 @@ const userSchema = new Schema<IUser, IUserModel>(
       }
     },
 
-    // ==========================================
-    // ADMIN NOTES
-    // ==========================================
+    // ============================================
+    // NOTES
+    // ============================================
 
     notes: [
       {
@@ -1170,16 +1126,12 @@ const userSchema = new Schema<IUser, IUserModel>(
       }
     ],
 
-    // ==========================================
-    // LAST ACTIVITY
-    // ==========================================
-
+    // Timestamps are handled by Mongoose.
     lastLogin: Date,
 
     lastActive: {
       type: Date,
-      default: Date.now,
-      index: true
+      default: Date.now
     }
   },
   {
@@ -1202,7 +1154,6 @@ const userSchema = new Schema<IUser, IUserModel>(
 userSchema.index({ createdAt: -1 });
 userSchema.index({ lastActive: -1 });
 userSchema.index({ 'wallet.balance': -1 });
-userSchema.index({ 'wallet.totalWagered': -1 });
 userSchema.index({ 'vip.level': -1 });
 userSchema.index({ 'vip.loyaltyPoints': -1 });
 userSchema.index({ referralCode: 1 });
@@ -1212,74 +1163,42 @@ userSchema.index({ 'sessions.sessionId': 1 });
 userSchema.index({ kycStatus: 1 });
 
 // ============================================
-// PASSWORD HASHING
+// PASSWORD HASH
 // ============================================
 
 userSchema.pre('save', async function(next) {
   try {
-    const user = this as IUser;
-
-    if (!user.isModified('password')) {
+    if (!this.isModified('password')) {
       return next();
     }
 
-    if (!user.password) {
+    if (!this.password) {
       return next();
     }
 
-    /*
-     * IMPORTANT:
-     *
-     * passwordHistory contains bcrypt hashes.
-     * We store the OLD/current hash before replacing
-     * the password with the new hash.
-     */
+    const plainPassword = this.password;
 
-    const oldPasswordHash =
-      user.isNew
-        ? undefined
-        : user.get('password', null);
+    const hashedPassword = await bcrypt.hash(
+      plainPassword,
+      12
+    );
 
-    const salt = await bcrypt.genSalt(12);
-
-    const newPasswordHash =
-      await bcrypt.hash(
-        user.password,
-        salt
-      );
-
-    if (!user.passwordHistory) {
-      user.passwordHistory = [];
+    if (!this.passwordHistory) {
+      this.passwordHistory = [];
     }
 
     /*
-     * Do not duplicate the same hash.
+     * Avoid adding the same hash twice.
+     * The history contains hashes, not plaintext.
      */
-    if (
-      oldPasswordHash &&
-      typeof oldPasswordHash === 'string'
-    ) {
-      const alreadyStored =
-        user.passwordHistory.includes(
-          oldPasswordHash
-        );
+    this.passwordHistory.unshift(hashedPassword);
 
-      if (!alreadyStored) {
-        user.passwordHistory.unshift(
-          oldPasswordHash
-        );
-      }
+    if (this.passwordHistory.length > 5) {
+      this.passwordHistory =
+        this.passwordHistory.slice(0, 5);
     }
 
-    /*
-     * Keep only the last 5 password hashes.
-     */
-    if (user.passwordHistory.length > 5) {
-      user.passwordHistory =
-        user.passwordHistory.slice(0, 5);
-    }
-
-    user.password = newPasswordHash;
+    this.password = hashedPassword;
 
     next();
   } catch (error) {
@@ -1288,28 +1207,19 @@ userSchema.pre('save', async function(next) {
 });
 
 // ============================================
-// PRE-SAVE NORMALIZATION
+// NORMALIZATION
 // ============================================
 
 userSchema.pre('save', function(next) {
   try {
-    const user = this as IUser;
-
-    if (!user.wallet) {
-      user.wallet = createDefaultWallet();
+    if (!this.wallet) {
+      this.wallet = createDefaultWallet();
     }
 
-    if (!user.wallet.currency) {
-      user.wallet.currency =
-        user.currency || 'ETB';
+    if (!this.referralCode && this.isNew) {
+      this.referralCode =
+        this.generateReferralCode();
     }
-
-    if (!user.referralCode && user.isNew) {
-      user.referralCode =
-        user.generateReferralCode();
-    }
-
-    user.updatedAt = new Date();
 
     next();
   } catch (error) {
@@ -1318,25 +1228,20 @@ userSchema.pre('save', function(next) {
 });
 
 // ============================================
-// PASSWORD COMPARISON
+// PASSWORD
 // ============================================
 
 userSchema.methods.comparePassword =
   async function(
     candidatePassword: string
   ): Promise<boolean> {
-    const user = this as IUser;
-
-    if (
-      !candidatePassword ||
-      !user.password
-    ) {
+    if (!this.password) {
       return false;
     }
 
     return bcrypt.compare(
       candidatePassword,
-      user.password
+      this.password
     );
   };
 
@@ -1346,11 +1251,10 @@ userSchema.methods.comparePassword =
 
 userSchema.methods.generateReferralCode =
   function(): string {
-    const random =
-      crypto
-        .randomBytes(4)
-        .toString('hex')
-        .toUpperCase();
+    const random = crypto
+      .randomBytes(4)
+      .toString('hex')
+      .toUpperCase();
 
     return `SHB${random}`;
   };
@@ -1361,16 +1265,13 @@ userSchema.methods.generateReferralCode =
 
 userSchema.methods.generateTwoFactorSecret =
   function(): any {
-    const user = this as IUser;
-
     const secret =
       speakeasy.generateSecret({
         length: 20,
-        name: `SHEBAODDS (${user.email})`,
-        issuer: 'SHEBAODDS'
+        name: `SHEBAODDS (${this.email})`
       });
 
-    user.twoFactorSecret =
+    this.twoFactorSecret =
       secret.base32;
 
     return secret;
@@ -1381,53 +1282,39 @@ userSchema.methods.generateTwoFactorSecret =
 // ============================================
 
 userSchema.methods.verifyTwoFactorToken =
-  function(
-    token: string
-  ): boolean {
-    const user = this as IUser;
-
-    if (
-      !user.twoFactorSecret ||
-      !token
-    ) {
+  function(token: string): boolean {
+    if (!this.twoFactorSecret) {
       return false;
     }
 
     return Boolean(
       speakeasy.totp.verify({
-        secret: user.twoFactorSecret,
+        secret: this.twoFactorSecret,
         encoding: 'base32',
-        token: String(token),
+        token,
         window: 2
       })
     );
   };
 
 // ============================================
-// GENERATE BACKUP CODES
+// BACKUP CODES
 // ============================================
 
 userSchema.methods.generateBackupCodes =
   function(): string[] {
-    const user = this as IUser;
-
     const codes: string[] = [];
 
     for (let i = 0; i < 10; i++) {
-      const code =
+      codes.push(
         crypto
           .randomBytes(6)
           .toString('hex')
-          .toUpperCase();
-
-      codes.push(code);
+          .toUpperCase()
+      );
     }
 
-    /*
-     * Store only bcrypt hashes.
-     * Plain-text codes are returned once to the user.
-     */
-    user.twoFactorBackupCodes =
+    this.twoFactorBackupCodes =
       codes.map(code =>
         bcrypt.hashSync(code, 10)
       );
@@ -1443,37 +1330,30 @@ userSchema.methods.verifyBackupCode =
   async function(
     code: string
   ): Promise<boolean> {
-    const user = this as IUser;
-
     if (
-      !code ||
-      !user.twoFactorBackupCodes ||
-      user.twoFactorBackupCodes.length === 0
+      !this.twoFactorBackupCodes ||
+      this.twoFactorBackupCodes.length === 0
     ) {
       return false;
     }
 
     for (
       let i = 0;
-      i < user.twoFactorBackupCodes.length;
+      i < this.twoFactorBackupCodes.length;
       i++
     ) {
-      const valid =
-        await bcrypt.compare(
-          code.trim().toUpperCase(),
-          user.twoFactorBackupCodes[i]
-        );
+      const hash =
+        this.twoFactorBackupCodes[i];
 
-      if (valid) {
+      if (
+        await bcrypt.compare(code, hash)
+      ) {
         /*
-         * Backup codes are single-use.
+         * Backup codes are one-time-use.
          */
-        user.twoFactorBackupCodes.splice(
-          i,
-          1
-        );
+        this.twoFactorBackupCodes.splice(i, 1);
 
-        await user.save();
+        await this.save();
 
         return true;
       }
@@ -1483,22 +1363,18 @@ userSchema.methods.verifyBackupCode =
   };
 
 // ============================================
-// EMAIL VERIFICATION TOKEN
+// EMAIL VERIFICATION
 // ============================================
 
 userSchema.methods.generateEmailVerificationToken =
   function(): string {
-    const user = this as IUser;
-
     const token =
-      crypto
-        .randomBytes(32)
-        .toString('hex');
+      crypto.randomBytes(32).toString('hex');
 
-    user.emailVerificationToken =
+    this.emailVerificationToken =
       token;
 
-    user.emailVerificationExpires =
+    this.emailVerificationExpires =
       new Date(
         Date.now() +
         24 * 60 * 60 * 1000
@@ -1508,65 +1384,56 @@ userSchema.methods.generateEmailVerificationToken =
   };
 
 // ============================================
-// VIP LEVEL
+// VIP
 // ============================================
 
 userSchema.methods.updateVipLevel =
   function(): void {
-    const user = this as IUser;
-
     const totalWagered =
-      user.wallet?.totalWagered || 0;
+      this.wallet?.totalWagered || 0;
 
-    let newLevel = 1;
-    let newName = 'Bronze';
+    let level = 1;
+    let name = 'Bronze';
     let cashback = 2;
 
     if (totalWagered >= 1_000_000) {
-      newLevel = 8;
-      newName = 'Ambassador';
+      level = 8;
+      name = 'Ambassador';
       cashback = 25;
     } else if (totalWagered >= 500_000) {
-      newLevel = 7;
-      newName = 'President';
+      level = 7;
+      name = 'President';
       cashback = 20;
     } else if (totalWagered >= 250_000) {
-      newLevel = 6;
-      newName = 'Elite';
+      level = 6;
+      name = 'Elite';
       cashback = 15;
     } else if (totalWagered >= 100_000) {
-      newLevel = 5;
-      newName = 'Diamond';
+      level = 5;
+      name = 'Diamond';
       cashback = 10;
     } else if (totalWagered >= 50_000) {
-      newLevel = 4;
-      newName = 'Platinum';
+      level = 4;
+      name = 'Platinum';
       cashback = 7;
     } else if (totalWagered >= 20_000) {
-      newLevel = 3;
-      newName = 'Gold';
+      level = 3;
+      name = 'Gold';
       cashback = 5;
     } else if (totalWagered >= 5_000) {
-      newLevel = 2;
-      newName = 'Silver';
+      level = 2;
+      name = 'Silver';
       cashback = 3;
     }
 
-    user.vip.level = newLevel;
-    user.vip.name = newName;
-    user.vip.cashbackPercentage = cashback;
+    this.vip.level = level;
+    this.vip.name = name;
+    this.vip.cashbackPercentage = cashback;
 
-    user.vip.personalManager =
-      newLevel >= 6;
-
-    user.vip.higherLimits =
-      newLevel >= 4;
-
-    user.vip.exclusivePromotions =
-      newLevel >= 3;
-
-    user.vip.fasterWithdrawals =
-      newLevel >= 5;
+    this.vip.personalManager = level >= 6;
+    this.vip.higherLimits = level >= 4;
+    this.vip.exclusivePromotions = level >= 3;
+    this.vip.fasterWithdrawals = level >= 5;
   };
 
 // ============================================
@@ -1574,11 +1441,7 @@ userSchema.methods.updateVipLevel =
 // ============================================
 
 userSchema.methods.canPlaceBet =
-  function(
-    amount: number
-  ): boolean {
-    const user = this as IUser;
-
+  function(amount: number): boolean {
     if (
       !Number.isFinite(amount) ||
       amount <= 0
@@ -1587,9 +1450,9 @@ userSchema.methods.canPlaceBet =
     }
 
     if (
-      !user.isActive ||
-      user.isBlocked ||
-      user.isSuspended
+      !this.isActive ||
+      this.isBlocked ||
+      this.isSuspended
     ) {
       return false;
     }
@@ -1597,30 +1460,23 @@ userSchema.methods.canPlaceBet =
     const now = new Date();
 
     if (
-      user.responsibleGambling?.selfExcluded &&
-      user.responsibleGambling.selfExclusionEndDate &&
-      user.responsibleGambling.selfExclusionEndDate > now
+      this.responsibleGambling?.selfExcluded &&
+      this.responsibleGambling.selfExclusionEndDate &&
+      this.responsibleGambling.selfExclusionEndDate > now
     ) {
       return false;
     }
 
     if (
-      user.responsibleGambling?.coolingOffPeriodEnd &&
-      user.responsibleGambling.coolingOffPeriodEnd > now
+      this.responsibleGambling?.coolingOffPeriodEnd &&
+      this.responsibleGambling.coolingOffPeriodEnd > now
     ) {
       return false;
     }
 
-    const availableBalance =
-      user.wallet?.balance || 0;
-
-    if (
-      availableBalance < amount
-    ) {
-      return false;
-    }
-
-    return true;
+    return (
+      (this.wallet?.balance || 0) >= amount
+    );
   };
 
 // ============================================
@@ -1629,21 +1485,15 @@ userSchema.methods.canPlaceBet =
 
 userSchema.methods.getDepositLimit =
   function(): number {
-    const user = this as IUser;
-
     let limit =
-      user.responsibleGambling
+      this.responsibleGambling
         ?.depositLimit || 0;
 
-    if (
-      user.vip?.higherLimits
-    ) {
+    if (this.vip?.higherLimits) {
       limit *= 2;
     }
 
-    if (
-      (user.vip?.level || 0) >= 7
-    ) {
+    if ((this.vip?.level || 0) >= 7) {
       limit *= 5;
     }
 
@@ -1656,10 +1506,7 @@ userSchema.methods.getDepositLimit =
 
 userSchema.methods.toJSON =
   function(): any {
-    const user = this as IUser;
-
-    const obj =
-      user.toObject();
+    const obj = this.toObject();
 
     delete obj.password;
     delete obj.passwordHistory;
@@ -1673,7 +1520,7 @@ userSchema.methods.toJSON =
   };
 
 // ============================================
-// STATIC: FIND BY EMAIL OR USERNAME
+// STATIC: FIND USER
 // ============================================
 
 userSchema.statics.findByEmailOrUsername =
@@ -1681,18 +1528,12 @@ userSchema.statics.findByEmailOrUsername =
     identifier: string
   ): Promise<IUser | null> {
     const normalized =
-      String(identifier)
-        .trim()
-        .toLowerCase();
+      identifier.trim().toLowerCase();
 
     return this.findOne({
       $or: [
-        {
-          email: normalized
-        },
-        {
-          username: normalized
-        }
+        { email: normalized },
+        { username: normalized }
       ]
     }).exec();
   };
@@ -1706,13 +1547,7 @@ userSchema.statics.getTopWagered =
     limit = 100
   ): Promise<IUser[]> {
     const safeLimit =
-      Math.min(
-        Math.max(
-          Number(limit) || 100,
-          1
-        ),
-        500
-      );
+      Math.min(Math.max(limit, 1), 1000);
 
     return this.find({
       isActive: true
@@ -1747,33 +1582,19 @@ userSchema.statics.getOnlineUsers =
   };
 
 // ============================================
-// MODEL CREATION
+// MODEL
 // ============================================
 
-/*
- * IMPORTANT:
- *
- * In development, ts-node/hot reload can execute
- * this file more than once.
- *
- * Reusing mongoose.models.User prevents:
- *
- * OverwriteModelError:
- * Cannot overwrite `User` model once compiled.
- */
-
-const existingModel =
+const existingUserModel =
   mongoose.models.User as
     | IUserModel
     | undefined;
 
-const User: IUserModel =
-  existingModel ??
+export const User: IUserModel =
+  existingUserModel ||
   mongoose.model<IUser, IUserModel>(
     'User',
     userSchema
   );
-
-export { User };
 
 export default User;
