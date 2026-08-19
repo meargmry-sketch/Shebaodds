@@ -1,44 +1,86 @@
 // ============================================
 // SHEBAODDS - STRONG PASSWORD VALIDATION
-// Enterprise-grade password requirements
 // ============================================
 
-import { Request, Response, NextFunction } from 'express';
+import {
+  Request,
+  Response,
+  NextFunction
+} from 'express';
+
 import bcrypt from 'bcryptjs';
 
-// Password strength levels
+// ============================================
+// STRENGTH
+// ============================================
+
 export const PASSWORD_STRENGTH = {
   WEAK: 'weak',
   FAIR: 'fair',
   GOOD: 'good',
   STRONG: 'strong',
   VERY_STRONG: 'very_strong'
-};
+} as const;
 
-// Password validation rules
+export type PasswordStrength =
+  typeof PASSWORD_STRENGTH[
+    keyof typeof PASSWORD_STRENGTH
+  ];
+
+// ============================================
+// RULES
+// ============================================
+
 export const PASSWORD_RULES = {
   minLength: 8,
   maxLength: 128,
+
   requireUppercase: true,
   requireLowercase: true,
   requireNumbers: true,
   requireSpecialChars: true,
+
   preventCommonPasswords: true,
   preventPersonalInfo: true,
+
   preventSequentialChars: true,
   preventRepeatedChars: true,
-  maxHistory: 5 // Prevent password reuse
+
+  maxHistory: 5
 };
 
-// Common passwords blacklist
+// ============================================
+// COMMON PASSWORDS
+// ============================================
+
 export const COMMON_PASSWORDS = [
-  'password', '12345678', 'qwerty123', 'admin123', 'letmein123',
-  'welcome123', 'password123', 'abc123456', 'shebaodds', 'ethiopia123',
-  '123456789', '11111111', '00000000', 'passw0rd', 'admin@123'
+  'password',
+  '12345678',
+  'qwerty123',
+  'admin123',
+  'letmein123',
+  'welcome123',
+  'password123',
+  'abc123456',
+  'shebaodds',
+  'ethiopia123',
+  '123456789',
+  '11111111',
+  '00000000',
+  'passw0rd',
+  'admin@123'
 ];
 
-// Special characters allowed
-export const SPECIAL_CHARS = '!@#$%^&*()_+-=[]{}|;:,.<>?';
+// ============================================
+// SPECIAL CHARACTERS
+// ============================================
+
+export const SPECIAL_CHARS =
+  '!@#$%^&*()_+-=[]{}|;:,.<>?';
+
+// ============================================
+// USER INFO
+// ============================================
 
 export interface UserInfo {
   username?: string;
@@ -47,12 +89,17 @@ export interface UserInfo {
   phone?: string;
 }
 
+// ============================================
+// RESULT
+// ============================================
+
 export interface ValidationResult {
   isValid: boolean;
-  strength: string;
+  strength: PasswordStrength;
   score: number;
   errors: string[];
   warnings: string[];
+
   hasUppercase: boolean;
   hasLowercase: boolean;
   hasNumbers: boolean;
@@ -60,123 +107,281 @@ export interface ValidationResult {
   isLongEnough: boolean;
 }
 
-// Validate password strength
-export function validatePasswordStrength(password: string, userInfo: UserInfo = {}): ValidationResult {
+// ============================================
+// PASSWORD VALIDATION
+// ============================================
+
+export function validatePasswordStrength(
+  password: string,
+  userInfo: UserInfo = {}
+): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
-  let strength = PASSWORD_STRENGTH.WEAK;
+
   let score = 0;
 
-  // Check minimum length
-  if (password.length < PASSWORD_RULES.minLength) {
-    errors.push(`Password must be at least ${PASSWORD_RULES.minLength} characters`);
-  } else if (password.length >= 12) {
+  if (typeof password !== 'string') {
+    return {
+      isValid: false,
+      strength: PASSWORD_STRENGTH.WEAK,
+      score: 0,
+      errors: ['Password must be a string'],
+      warnings: [],
+      hasUppercase: false,
+      hasLowercase: false,
+      hasNumbers: false,
+      hasSpecial: false,
+      isLongEnough: false
+    };
+  }
+
+  // ==========================================
+  // LENGTH
+  // ==========================================
+
+  if (
+    password.length <
+    PASSWORD_RULES.minLength
+  ) {
+    errors.push(
+      `Password must be at least ${PASSWORD_RULES.minLength} characters`
+    );
+  }
+
+  if (
+    password.length >
+    PASSWORD_RULES.maxLength
+  ) {
+    errors.push(
+      `Password cannot exceed ${PASSWORD_RULES.maxLength} characters`
+    );
+  }
+
+  if (password.length >= 12) {
     score += 2;
   } else if (password.length >= 10) {
-    score += 1;
+    score += 1.5;
   } else if (password.length >= 8) {
-    score += 0.5;
+    score += 1;
   }
 
-  // Check maximum length
-  if (password.length > PASSWORD_RULES.maxLength) {
-    errors.push(`Password cannot exceed ${PASSWORD_RULES.maxLength} characters`);
-  }
+  // ==========================================
+  // CHARACTER TYPES
+  // ==========================================
 
-  // Check for uppercase letters
-  const hasUppercase = /[A-Z]/.test(password);
-  if (PASSWORD_RULES.requireUppercase && !hasUppercase) {
-    errors.push('Password must contain at least one uppercase letter');
+  const hasUppercase =
+    /[A-Z]/.test(password);
+
+  const hasLowercase =
+    /[a-z]/.test(password);
+
+  const hasNumbers =
+    /[0-9]/.test(password);
+
+  const escapedSpecialChars =
+    SPECIAL_CHARS.replace(
+      /[-\/\\^$*+?.()|[\]{}]/g,
+      '\\$&'
+    );
+
+  const hasSpecial =
+    new RegExp(
+      `[${escapedSpecialChars}]`
+    ).test(password);
+
+  if (
+    PASSWORD_RULES.requireUppercase &&
+    !hasUppercase
+  ) {
+    errors.push(
+      'Password must contain at least one uppercase letter'
+    );
   } else if (hasUppercase) {
     score += 1;
   }
 
-  // Check for lowercase letters
-  const hasLowercase = /[a-z]/.test(password);
-  if (PASSWORD_RULES.requireLowercase && !hasLowercase) {
-    errors.push('Password must contain at least one lowercase letter');
+  if (
+    PASSWORD_RULES.requireLowercase &&
+    !hasLowercase
+  ) {
+    errors.push(
+      'Password must contain at least one lowercase letter'
+    );
   } else if (hasLowercase) {
     score += 1;
   }
 
-  // Check for numbers
-  const hasNumbers = /[0-9]/.test(password);
-  if (PASSWORD_RULES.requireNumbers && !hasNumbers) {
-    errors.push('Password must contain at least one number');
+  if (
+    PASSWORD_RULES.requireNumbers &&
+    !hasNumbers
+  ) {
+    errors.push(
+      'Password must contain at least one number'
+    );
   } else if (hasNumbers) {
     score += 1;
   }
 
-  // Check for special characters
-  const escapedSpecialChars = SPECIAL_CHARS.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-  const hasSpecial = new RegExp(`[${escapedSpecialChars}]`).test(password);
-  if (PASSWORD_RULES.requireSpecialChars && !hasSpecial) {
-    errors.push(`Password must contain at least one special character (${SPECIAL_CHARS})`);
+  if (
+    PASSWORD_RULES.requireSpecialChars &&
+    !hasSpecial
+  ) {
+    errors.push(
+      'Password must contain at least one special character'
+    );
   } else if (hasSpecial) {
     score += 1.5;
   }
 
-  // Check for common passwords
-  if (PASSWORD_RULES.preventCommonPasswords) {
-    const lowerPassword = password.toLowerCase();
-    if (COMMON_PASSWORDS.includes(lowerPassword)) {
-      errors.push('This password is too common. Please choose a more secure password');
+  // ==========================================
+  // COMMON PASSWORD
+  // ==========================================
+
+  if (
+    PASSWORD_RULES.preventCommonPasswords
+  ) {
+    if (
+      COMMON_PASSWORDS.includes(
+        password.toLowerCase()
+      )
+    ) {
+      errors.push(
+        'This password is too common. Please choose a more secure password'
+      );
     }
   }
 
-  // Check for sequential characters (abc, 123, etc.)
-  if (PASSWORD_RULES.preventSequentialChars) {
-    const sequentialPatterns = [
-      'abcdefghijklmnopqrstuvwxyz', 'qwertyuiop', 'asdfghjkl', 'zxcvbnm',
-      '1234567890', '0123456789'
+  // ==========================================
+  // SEQUENTIAL CHARACTERS
+  // ==========================================
+
+  if (
+    PASSWORD_RULES.preventSequentialChars
+  ) {
+    const patterns = [
+      'abcdefghijklmnopqrstuvwxyz',
+      'qwertyuiop',
+      'asdfghjkl',
+      'zxcvbnm',
+      '1234567890',
+      '0123456789'
     ];
 
-    for (const pattern of sequentialPatterns) {
-      for (let i = 0; i < password.length - 3; i++) {
-        const substr = password.substring(i, i + 4).toLowerCase();
-        if (pattern.includes(substr)) {
-          warnings.push('Password contains sequential characters which makes it easier to guess');
+    const lowerPassword =
+      password.toLowerCase();
+
+    let foundSequential = false;
+
+    for (const pattern of patterns) {
+      for (
+        let i = 0;
+        i <= lowerPassword.length - 4;
+        i++
+      ) {
+        const chunk =
+          lowerPassword.substring(
+            i,
+            i + 4
+          );
+
+        if (pattern.includes(chunk)) {
+          foundSequential = true;
           break;
         }
       }
+
+      if (foundSequential) {
+        break;
+      }
+    }
+
+    if (foundSequential) {
+      errors.push(
+        'Password contains sequential characters'
+      );
     }
   }
 
-  // Check for repeated characters (aaaa, 1111, etc.)
-  if (PASSWORD_RULES.preventRepeatedChars) {
-    if (/(.)\1{3,}/.test(password)) {
-      warnings.push('Password contains repeated characters which makes it easier to guess');
-    }
+  // ==========================================
+  // REPEATED CHARACTERS
+  // ==========================================
+
+  if (
+    PASSWORD_RULES.preventRepeatedChars &&
+    /(.)\1{3,}/.test(password)
+  ) {
+    errors.push(
+      'Password contains too many repeated characters'
+    );
   }
 
-  // Check for personal information
-  if (PASSWORD_RULES.preventPersonalInfo && userInfo) {
+  // ==========================================
+  // PERSONAL INFORMATION
+  // ==========================================
+
+  if (
+    PASSWORD_RULES.preventPersonalInfo
+  ) {
     const personalInfo = [
       userInfo.username,
       userInfo.email?.split('@')[0],
       userInfo.fullName,
       userInfo.phone
-    ].filter(Boolean) as string[];
+    ]
+      .filter(Boolean)
+      .map(value =>
+        String(value)
+          .trim()
+          .toLowerCase()
+      )
+      .filter(value => value.length >= 3);
+
+    const lowerPassword =
+      password.toLowerCase();
 
     for (const info of personalInfo) {
-      if (info && password.toLowerCase().includes(info.toLowerCase())) {
-        errors.push('Password should not contain personal information like username, email, or name');
+      if (
+        lowerPassword.includes(info)
+      ) {
+        errors.push(
+          'Password should not contain personal information'
+        );
         break;
       }
     }
   }
 
-  // Determine strength
+  // ==========================================
+  // WARNINGS
+  // ==========================================
+
+  if (password.length < 12) {
+    warnings.push(
+      'A password of 12 or more characters is recommended'
+    );
+  }
+
+  // ==========================================
+  // STRENGTH
+  // ==========================================
+
+  let strength: PasswordStrength;
+
   if (score >= 6) {
-    strength = PASSWORD_STRENGTH.VERY_STRONG;
+    strength =
+      PASSWORD_STRENGTH.VERY_STRONG;
   } else if (score >= 4.5) {
-    strength = PASSWORD_STRENGTH.STRONG;
+    strength =
+      PASSWORD_STRENGTH.STRONG;
   } else if (score >= 3) {
-    strength = PASSWORD_STRENGTH.GOOD;
+    strength =
+      PASSWORD_STRENGTH.GOOD;
   } else if (score >= 1.5) {
-    strength = PASSWORD_STRENGTH.FAIR;
+    strength =
+      PASSWORD_STRENGTH.FAIR;
   } else {
-    strength = PASSWORD_STRENGTH.WEAK;
+    strength =
+      PASSWORD_STRENGTH.WEAK;
   }
 
   return {
@@ -185,51 +390,91 @@ export function validatePasswordStrength(password: string, userInfo: UserInfo = 
     score,
     errors,
     warnings,
+
     hasUppercase,
     hasLowercase,
     hasNumbers,
     hasSpecial,
-    isLongEnough: password.length >= PASSWORD_RULES.minLength
+
+    isLongEnough:
+      password.length >=
+      PASSWORD_RULES.minLength
   };
 }
 
-// Password history tracking (prevent reuse)
+// ============================================
+// PASSWORD HISTORY
+// ============================================
+
 export class PasswordHistory {
   userId: string;
   passwordHistory: string[];
 
-  constructor(userId: string, passwordHistory: string[] = []) {
+  constructor(
+    userId: string,
+    passwordHistory: string[] = []
+  ) {
     this.userId = userId;
-    this.passwordHistory = passwordHistory;
+    this.passwordHistory =
+      passwordHistory;
   }
 
-  async isPasswordReused(newPassword: string): Promise<boolean> {
-    if (!PASSWORD_RULES.maxHistory || this.passwordHistory.length === 0) {
+  async isPasswordReused(
+    newPassword: string
+  ): Promise<boolean> {
+    if (
+      !PASSWORD_RULES.maxHistory ||
+      this.passwordHistory.length === 0
+    ) {
       return false;
     }
 
-    for (const oldHash of this.passwordHistory) {
-      if (await bcrypt.compare(newPassword, oldHash)) {
+    for (
+      const oldHash
+      of this.passwordHistory
+    ) {
+      if (
+        await bcrypt.compare(
+          newPassword,
+          oldHash
+        )
+      ) {
         return true;
       }
     }
+
     return false;
   }
 
-  async addToHistory(newPasswordHash: string): Promise<string[]> {
-    this.passwordHistory.unshift(newPasswordHash);
+  async addToHistory(
+    newPasswordHash: string
+  ): Promise<string[]> {
+    this.passwordHistory.unshift(
+      newPasswordHash
+    );
 
-    // Keep only last N passwords
-    if (this.passwordHistory.length > PASSWORD_RULES.maxHistory) {
-      this.passwordHistory = this.passwordHistory.slice(0, PASSWORD_RULES.maxHistory);
+    if (
+      this.passwordHistory.length >
+      PASSWORD_RULES.maxHistory
+    ) {
+      this.passwordHistory =
+        this.passwordHistory.slice(
+          0,
+          PASSWORD_RULES.maxHistory
+        );
     }
 
     return this.passwordHistory;
   }
 }
 
-// Generate password strength meter data
-export function getPasswordStrengthMeter(strength: string) {
+// ============================================
+// STRENGTH METER
+// ============================================
+
+export function getPasswordStrengthMeter(
+  strength: string
+) {
   const meters: Record<string, any> = {
     [PASSWORD_STRENGTH.WEAK]: {
       label: 'Weak',
@@ -243,6 +488,7 @@ export function getPasswordStrengthMeter(strength: string) {
         'Add special characters'
       ]
     },
+
     [PASSWORD_STRENGTH.FAIR]: {
       label: 'Fair',
       labelAm: 'መጠነኛ',
@@ -250,19 +496,21 @@ export function getPasswordStrengthMeter(strength: string) {
       percentage: 40,
       suggestions: [
         'Make it longer',
-        'Add more variety of characters'
+        'Add more character variety'
       ]
     },
+
     [PASSWORD_STRENGTH.GOOD]: {
       label: 'Good',
       labelAm: 'ጥሩ',
       color: '#2196F3',
       percentage: 60,
       suggestions: [
-        'Add more special characters',
-        'Make it longer for better security'
+        'Make it longer',
+        'Use a less predictable combination'
       ]
     },
+
     [PASSWORD_STRENGTH.STRONG]: {
       label: 'Strong',
       labelAm: 'ጠንካራ',
@@ -270,6 +518,7 @@ export function getPasswordStrengthMeter(strength: string) {
       percentage: 80,
       suggestions: []
     },
+
     [PASSWORD_STRENGTH.VERY_STRONG]: {
       label: 'Very Strong',
       labelAm: 'በጣም ጠንካራ',
@@ -279,33 +528,69 @@ export function getPasswordStrengthMeter(strength: string) {
     }
   };
 
-  return meters[strength] || meters[PASSWORD_STRENGTH.WEAK];
+  return (
+    meters[strength] ||
+    meters[PASSWORD_STRENGTH.WEAK]
+  );
 }
 
-// Express middleware for password validation
-export function validatePassword(req: Request, res: Response, next: NextFunction) {
-  const { password, ...userInfo } = req.body;
+// ============================================
+// EXPRESS MIDDLEWARE
+// ============================================
 
-  if (!password) {
+export function validatePassword(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  const {
+    password,
+    username,
+    email,
+    fullName,
+    phone
+  } = req.body || {};
+
+  if (
+    typeof password !== 'string' ||
+    !password
+  ) {
     return res.status(400).json({
       success: false,
       message: 'Password is required'
     });
   }
 
-  const validation = validatePasswordStrength(password, userInfo);
+  const validation =
+    validatePasswordStrength(
+      password,
+      {
+        username,
+        email,
+        fullName,
+        phone
+      }
+    );
 
   if (!validation.isValid) {
     return res.status(400).json({
       success: false,
-      message: 'Password does not meet security requirements',
+      message:
+        'Password does not meet security requirements',
       errors: validation.errors,
+      warnings: validation.warnings,
       strength: validation.strength
     });
   }
 
-  // Add warnings/strength to request
-  (req as any).passwordWarnings = validation.warnings;
-  (req as any).passwordStrength = validation.strength;
-  next();
+  (req as any).passwordWarnings =
+    validation.warnings;
+
+  (req as any).passwordStrength =
+    validation.strength;
+
+  (req as any).passwordValidation =
+    validation;
+
+  return next();
 }
