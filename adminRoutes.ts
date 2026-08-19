@@ -1,596 +1,925 @@
 // ============================================
-// SHEBAODDS - ADMIN ROUTES
-// Complete Admin Dashboard API
+// SHEBAODDS - ADMIN TRANSACTION ROUTES
+// Mock Deposit Approval / Rejection
 // ============================================
 
-import express, { Request, Response, NextFunction } from 'express';
+import express, {
+  Request,
+  Response,
+  Router
+} from 'express';
+
 import mongoose from 'mongoose';
-import { authenticate, isAdmin, isSuperAdmin } from './authMiddleware';
+
+import {
+  authenticate
+} from './authRoutes';
+
 import User from './User';
-import Match from './Match';
-import Bet, { BET_STATUS } from './Bet';
-import { Transaction, TRANSACTION_TYPES, TRANSACTION_STATUS } from './Transaction';
-import { TaxTransaction } from './Tax';
-import { generateMonthlyTaxReport, submitTaxReport } from './taxService';
-import { sendNotification } from './walletRoutes';
 
-const router = express.Router();
+import {
+  Transaction,
+  TRANSACTION_TYPES,
+  TRANSACTION_STATUS
+} from './Transaction';
 
-// ==================== DASHBOARD STATISTICS ====================
-router.get('/dashboard/stats', authenticate, isAdmin, async (req: any, res: Response) => {
-  try {
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    
-    const weekStart = new Date();
-    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-    weekStart.setHours(0, 0, 0, 0);
-    
-    const monthStart = new Date();
-    monthStart.setDate(1);
-    monthStart.setHours(0, 0, 0, 0);
-    
-    // User statistics
-    const [totalUsers, activeUsers, newUsersToday, newUsersThisWeek, newUsersThisMonth] = await Promise.all([
-      User.countDocuments(),
-      User.countDocuments({ lastActive: { $gte: new Date(Date.now() - 5 * 60 * 1000) } }),
-      User.countDocuments({ createdAt: { $gte: todayStart } }),
-      User.countDocuments({ createdAt: { $gte: weekStart } }),
-      User.countDocuments({ createdAt: { $gte: monthStart } })
-    ]);
-    
-    // Bet statistics
-    const [totalBets, todayBets, pendingBets, runningBets, totalWagered, todayWagered] = await Promise.all([
-      Bet.countDocuments(),
-      Bet.countDocuments({ createdAt: { $gte: todayStart } }),
-      Bet.countDocuments({ status: BET_STATUS.PENDING }),
-      Bet.countDocuments({ status: BET_STATUS.RUNNING }),
-      Bet.aggregate([{ $group: { _id: null, total: { $sum: '$stake' } } }]),
-      Bet.aggregate([
-        { $match: { createdAt: { $gte: todayStart } } },
-        { $group: { _id: null, total: { $sum: '$stake' } } }
-      ])
-    ]);
-    
-    // Transaction statistics
-    const [totalDeposits, todayDeposits, totalWithdrawals, todayWithdrawals, pendingWithdrawals] = await Promise.all([
-      Transaction.aggregate([
-        { $match: { type: TRANSACTION_TYPES.DEPOSIT, status: TRANSACTION_STATUS.COMPLETED } },
-        { $group: { _id: null, total: { $sum: '$amount' } } }
-      ]),
-      Transaction.aggregate([
-        { $match: { type: TRANSACTION_TYPES.DEPOSIT, status: TRANSACTION_STATUS.COMPLETED, createdAt: { $gte: todayStart } } },
-        { $group: { _id: null, total: { $sum: '$amount' } } }
-      ]),
-      Transaction.aggregate([
-        { $match: { type: TRANSACTION_TYPES.WITHDRAWAL, status: TRANSACTION_STATUS.COMPLETED } },
-        { $group: { _id: null, total: { $sum: '$amount' } } }
-      ]),
-      Transaction.aggregate([
-        { $match: { type: TRANSACTION_TYPES.WITHDRAWAL, status: TRANSACTION_STATUS.COMPLETED, createdAt: { $gte: todayStart } } },
-        { $group: { _id: null, total: { $sum: '$amount' } } }
-      ]),
-      Transaction.countDocuments({ type: TRANSACTION_TYPES.WITHDRAWAL, status: TRANSACTION_STATUS.PENDING })
-    ]);
-    
-    // Tax statistics
-    const [totalTaxCollected, todayTaxCollected] = await Promise.all([
-      TaxTransaction.aggregate([{ $group: { _id: null, total: { $sum: '$taxAmount' } } }]),
-      TaxTransaction.aggregate([
-        { $match: { deductedAt: { $gte: todayStart } } },
-        { $group: { _id: null, total: { $sum: '$taxAmount' } } }
-      ])
-    ]);
-    
-    // Platform statistics
-    const [totalBalance, totalBonusBalance] = await Promise.all([
-      User.aggregate([{ $group: { _id: null, total: { $sum: '$wallet.balance' } } }]),
-      User.aggregate([{ $group: { _id: null, total: { $sum: '$wallet.bonusBalance' } } }])
-    ]);
-    
-    // Chart data (last 7 days)
-    const chartData = [];
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-      date.setHours(0, 0, 0, 0);
-      const nextDate = new Date(date);
-      nextDate.setDate(nextDate.getDate() + 1);
-      
-      const [bets, deposits, withdrawals, newUsers, tax] = await Promise.all([
-        Bet.countDocuments({ createdAt: { $gte: date, $lt: nextDate } }),
-        Transaction.aggregate([
-          { $match: { type: TRANSACTION_TYPES.DEPOSIT, status: TRANSACTION_STATUS.COMPLETED, createdAt: { $gte: date, $lt: nextDate } } },
-          { $group: { _id: null, total: { $sum: '$amount' } } }
-        ]),
-        Transaction.aggregate([
-          { $match: { type: TRANSACTION_TYPES.WITHDRAWAL, status: TRANSACTION_STATUS.COMPLETED, createdAt: { $gte: date, $lt: nextDate } } },
-          { $group: { _id: null, total: { $sum: '$amount' } } }
-        ]),
-        User.countDocuments({ createdAt: { $gte: date, $lt: nextDate } }),
-        TaxTransaction.aggregate([
-          { $match: { deductedAt: { $gte: date, $lt: nextDate } } },
-          { $group: { _id: null, total: { $sum: '$taxAmount' } } }
-        ])
+const router: Router =
+  express.Router();
+
+// ==================== ADMIN AUTH ====================
+
+function requireAdmin(
+  req: Request,
+  res: Response,
+  next: Function
+) {
+
+  const user =
+    (req as any).user;
+
+  if (!user) {
+
+    return res.status(401).json({
+
+      success: false,
+
+      message:
+        'Authentication required'
+    });
+  }
+
+  const role =
+    String(
+      user.role || ''
+    ).toLowerCase();
+
+  const isAdmin =
+    role === 'admin' ||
+    role === 'superadmin' ||
+    role === 'super_admin';
+
+  if (!isAdmin) {
+
+    return res.status(403).json({
+
+      success: false,
+
+      message:
+        'Administrator access required'
+    });
+  }
+
+  next();
+}
+
+// ==================== WALLET INITIALIZER ====================
+
+function ensureWallet(
+  user: any
+) {
+
+  if (!user.wallet) {
+
+    user.wallet = {
+
+      balance: 0,
+
+      bonusBalance: 0,
+
+      lockedBalance: 0,
+
+      totalDeposited: 0,
+
+      totalWithdrawn: 0,
+
+      totalWagered: 0,
+
+      totalWon: 0,
+
+      totalTaxPaid: 0,
+
+      currency: 'ETB'
+    };
+  }
+
+  return user.wallet;
+}
+
+// ==================== NOTIFICATION ====================
+
+async function sendNotification(
+  userId: any,
+  title: string,
+  message: string,
+  type: string,
+  data?: any
+) {
+
+  console.log(
+    `[Admin Notification] ${userId}`
+  );
+
+  console.log(
+    `[${title}] ${message}`
+  );
+
+  return {
+    success: true
+  };
+}
+
+// ==================== GET PENDING TRANSACTIONS ====================
+
+router.get(
+  '/transactions/pending',
+  authenticate,
+  requireAdmin,
+  async (
+    req: Request,
+    res: Response
+  ) => {
+
+    try {
+
+      const {
+        type = TRANSACTION_TYPES.DEPOSIT,
+        limit = '50',
+        page = '1'
+      } = req.query as any;
+
+      const limitNum =
+        Math.min(
+          Math.max(
+            parseInt(limit, 10) || 50,
+            1
+          ),
+          100
+        );
+
+      const pageNum =
+        Math.max(
+          parseInt(page, 10) || 1,
+          1
+        );
+
+      const query: any = {
+
+        status:
+          TRANSACTION_STATUS.PENDING,
+
+        requiresApproval:
+          true
+      };
+
+      if (type) {
+        query.type = type;
+      }
+
+      const skip =
+        (pageNum - 1) *
+        limitNum;
+
+      const [
+        transactions,
+        total
+      ] = await Promise.all([
+
+        Transaction.find(query)
+
+          .populate(
+            'userId',
+            'username email fullName phone'
+          )
+
+          .sort({
+            createdAt: 1
+          })
+
+          .skip(skip)
+
+          .limit(limitNum)
+
+          .lean(),
+
+        Transaction.countDocuments(
+          query
+        )
+
       ]);
-      
-      chartData.push({
-        date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        bets,
-        deposits: deposits[0]?.total || 0,
-        withdrawals: withdrawals[0]?.total || 0,
-        newUsers,
-        tax: tax[0]?.total || 0
-      });
-    }
-    
-    // Recent transactions
-    const recentTransactions = await Transaction.find()
-      .populate('userId', 'username email')
-      .sort({ createdAt: -1 })
-      .limit(10);
-    
-    return res.json({
-      success: true,
-      users: {
-        total: totalUsers,
-        active: activeUsers,
-        newToday: newUsersToday,
-        newThisWeek: newUsersThisWeek,
-        newThisMonth: newUsersThisMonth
-      },
-      bets: {
-        total: totalBets,
-        today: todayBets,
-        pending: pendingBets,
-        running: runningBets,
-        totalWagered: totalWagered[0]?.total || 0,
-        todayWagered: todayWagered[0]?.total || 0
-      },
-      finances: {
-        totalDeposits: totalDeposits[0]?.total || 0,
-        todayDeposits: todayDeposits[0]?.total || 0,
-        totalWithdrawals: totalWithdrawals[0]?.total || 0,
-        todayWithdrawals: todayWithdrawals[0]?.total || 0,
-        pendingWithdrawals,
-        totalBalance: totalBalance[0]?.total || 0,
-        totalBonusBalance: totalBonusBalance[0]?.total || 0
-      },
-      tax: {
-        totalCollected: totalTaxCollected[0]?.total || 0,
-        todayCollected: todayTaxCollected[0]?.total || 0,
-        rate: Math.round(parseFloat(process.env.TAX_RATE || '0.15') * 100),
-        freeLimit: parseInt(process.env.TAX_FREE_LIMIT || '100', 10)
-      },
-      chartData,
-      recentTransactions
-    });
-    
-  } catch (error: any) {
-    console.error('Dashboard stats error:', error);
-    return res.status(500).json({ success: false, message: error.message });
-  }
-});
 
-// ==================== GET ALL USERS ====================
-router.get('/users', authenticate, isAdmin, async (req: Request, res: Response) => {
-  try {
-    const { 
-      search, 
-      status, 
-      vipLevel,
-      kycStatus,
-      limit = '50', 
-      page = '1',
-      sortBy = 'createdAt',
-      sortOrder = 'desc'
-    } = req.query;
-    
-    const query: any = {};
-    
-    if (search) {
-      query.$or = [
-        { username: { $regex: search as string, $options: 'i' } },
-        { email: { $regex: search as string, $options: 'i' } },
-        { phone: { $regex: search as string, $options: 'i' } },
-        { fullName: { $regex: search as string, $options: 'i' } }
-      ];
-    }
-    
-    if (status === 'active') query.isActive = true;
-    if (status === 'blocked') query.isBlocked = true;
-    if (status === 'suspended') query.isSuspended = true;
-    if (vipLevel) query['vip.level'] = parseInt(vipLevel as string, 10);
-    if (kycStatus) query.kycStatus = kycStatus;
-    
-    const limitNum = parseInt(limit as string, 10) || 50;
-    const pageNum = parseInt(page as string, 10) || 1;
-    const skip = (pageNum - 1) * limitNum;
-    const sort = { [sortBy as string]: sortOrder === 'desc' ? -1 : 1 } as any;
-    
-    const [users, total] = await Promise.all([
-      User.find(query)
-        .select('-password -twoFactorSecret -twoFactorBackupCodes')
-        .sort(sort)
-        .skip(skip)
-        .limit(limitNum),
-      User.countDocuments(query)
-    ]);
-    
-    return res.json({
-      success: true,
-      users,
-      pagination: {
-        total,
-        page: pageNum,
-        limit: limitNum,
-        pages: Math.ceil(total / limitNum)
-      }
-    });
-    
-  } catch (error: any) {
-    return res.status(500).json({ success: false, message: error.message });
-  }
-});
+      return res.json({
 
-// ==================== GET USER DETAILS ====================
-router.get('/users/:userId', authenticate, isAdmin, async (req: Request, res: Response) => {
-  try {
-    const { userId } = req.params;
-    
-    const user = await User.findById(userId).select('-password -twoFactorSecret');
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-    
-    // Get user's recent bets
-    const recentBets = await Bet.find({ userId: user._id })
-      .populate('matchId', 'homeTeam awayTeam league')
-      .sort({ createdAt: -1 })
-      .limit(20);
-    
-    // Get user's transactions
-    const recentTransactions = await Transaction.find({ userId: user._id })
-      .sort({ createdAt: -1 })
-      .limit(20);
-    
-    // Get user's tax summary
-    const taxSummary = await TaxTransaction.aggregate([
-      { $match: { userId: user._id } },
-      { 
-        $group: { 
-          _id: null, 
-          totalGross: { $sum: '$grossWinning' }, 
-          totalTax: { $sum: '$taxAmount' }, 
-          totalNet: { $sum: '$netWinning' }, 
-          count: { $sum: 1 } 
-        } 
-      }
-    ]);
-    
-    return res.json({
-      success: true,
-      user,
-      recentBets,
-      recentTransactions,
-      taxSummary: taxSummary[0] || { totalGross: 0, totalTax: 0, totalNet: 0, count: 0 }
-    });
-    
-  } catch (error: any) {
-    return res.status(500).json({ success: false, message: error.message });
-  }
-});
+        success: true,
 
-// ==================== UPDATE USER ====================
-router.put('/users/:userId', authenticate, isAdmin, async (req: any, res: Response) => {
-  try {
-    const { userId } = req.params;
-    const { 
-      balance, 
-      bonusBalance, 
-      isActive, 
-      isBlocked, 
-      isVerified, 
-      vipLevel,
-      kycStatus,
-      note 
-    } = req.body;
-    
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-    
-    // Update balance (with transaction)
-    if (balance !== undefined && balance !== user.wallet.balance) {
-      const difference = balance - user.wallet.balance;
-      const previousBalance = user.wallet.balance;
-      user.wallet.balance = balance;
-      
-      const transaction = new Transaction({
-        userId: user._id,
-        type: TRANSACTION_TYPES.ADJUSTMENT,
-        amount: Math.abs(difference),
-        netAmount: Math.abs(difference),
-        previousBalance,
-        newBalance: balance,
-        status: TRANSACTION_STATUS.COMPLETED,
-        processedBy: req.user._id,
-        processedAt: new Date(),
-        notes: `Admin balance adjustment by ${req.user.username}`,
-        metadata: { adminId: req.user._id, adminName: req.user.username }
-      });
-      await transaction.save();
-    }
-    
-    if (bonusBalance !== undefined) user.wallet.bonusBalance = bonusBalance;
-    if (isActive !== undefined) user.isActive = isActive;
-    if (isBlocked !== undefined) user.isBlocked = isBlocked;
-    if (isVerified !== undefined) user.isVerified = isVerified;
-    if (vipLevel !== undefined) {
-      user.vip.level = vipLevel;
-      if (typeof user.updateVipLevel === 'function') {
-        user.updateVipLevel();
-      }
-    }
-    if (kycStatus !== undefined) user.kycStatus = kycStatus;
-    if (note) {
-      user.notes.push({
-        note,
-        createdBy: req.user._id,
-        createdAt: new Date()
-      });
-    }
-    
-    await user.save();
-    
-    // Send notification to user
-    await sendNotification({
-      userId: user._id,
-      title: 'Account Updated',
-      message: 'Your account has been updated by an administrator.',
-      type: 'system',
-      data: { admin: req.user.username }
-    });
-    
-    return res.json({ success: true, user: user.toJSON() });
-    
-  } catch (error: any) {
-    return res.status(500).json({ success: false, message: error.message });
-  }
-});
+        transactions,
 
-// ==================== TOGGLE USER BLOCK ====================
-router.post('/users/:userId/toggle-block', authenticate, isAdmin, async (req: any, res: Response) => {
-  try {
-    const { userId } = req.params;
-    const { reason } = req.body;
-    
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-    
-    user.isBlocked = !user.isBlocked;
-    if (user.isBlocked) {
-      user.isActive = false;
-      user.suspensionReason = reason || 'Blocked by administrator';
-      user.suspensionEndDate = null;
-    } else {
-      user.isActive = true;
-      user.suspensionReason = null;
-    }
-    
-    await user.save();
-    
-    await sendNotification({
-      userId: user._id,
-      title: user.isBlocked ? 'Account Blocked' : 'Account Unblocked',
-      message: user.isBlocked 
-        ? `Your account has been blocked. Reason: ${reason || 'Violation of terms'}. Please contact support.`
-        : 'Your account has been unblocked. You can now login and bet again.',
-      type: 'security'
-    });
-    
-    return res.json({ success: true, isBlocked: user.isBlocked });
-    
-  } catch (error: any) {
-    return res.status(500).json({ success: false, message: error.message });
-  }
-});
+        pagination: {
 
-// ==================== GET ALL TRANSACTIONS ====================
-router.get('/transactions', authenticate, isAdmin, async (req: Request, res: Response) => {
-  try {
-    const { 
-      type, 
-      status, 
-      paymentMethod,
-      userId,
-      from,
-      to,
-      limit = '50', 
-      page = '1' 
-    } = req.query;
-    
-    const query: any = {};
-    
-    if (type) query.type = type;
-    if (status) query.status = status;
-    if (paymentMethod) query.paymentMethod = paymentMethod;
-    if (userId) query.userId = new mongoose.Types.ObjectId(userId as string);
-    if (from || to) {
-      query.createdAt = {};
-      if (from) query.createdAt.$gte = new Date(from as string);
-      if (to) query.createdAt.$lte = new Date(to as string);
-    }
-    
-    const limitNum = parseInt(limit as string, 10) || 50;
-    const pageNum = parseInt(page as string, 10) || 1;
-    const skip = (pageNum - 1) * limitNum;
-    
-    const [transactions, total] = await Promise.all([
-      Transaction.find(query)
-        .populate('userId', 'username email phone fullName')
-        .populate('processedBy', 'username')
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limitNum),
-      Transaction.countDocuments(query)
-    ]);
-    
-    // Get summary
-    const summary = await Transaction.aggregate([
-      { $match: query },
-      { 
-        $group: {
-          _id: null,
-          totalAmount: { $sum: '$amount' },
-          totalDeposits: { $sum: { $cond: [{ $eq: ['$type', TRANSACTION_TYPES.DEPOSIT] }, '$amount', 0] } },
-          totalWithdrawals: { $sum: { $cond: [{ $eq: ['$type', TRANSACTION_TYPES.WITHDRAWAL] }, '$amount', 0] } },
-          pendingCount: { $sum: { $cond: [{ $eq: ['$status', TRANSACTION_STATUS.PENDING] }, 1, 0] } },
-          completedCount: { $sum: { $cond: [{ $eq: ['$status', TRANSACTION_STATUS.COMPLETED] }, 1, 0] } }
+          total,
+
+          page: pageNum,
+
+          limit: limitNum,
+
+          pages:
+            Math.ceil(
+              total / limitNum
+            )
         }
-      }
-    ]);
-    
-    return res.json({
-      success: true,
-      transactions,
-      summary: summary[0] || { totalAmount: 0, totalDeposits: 0, totalWithdrawals: 0, pendingCount: 0, completedCount: 0 },
-      pagination: {
-        total,
-        page: pageNum,
-        limit: limitNum,
-        pages: Math.ceil(total / limitNum)
-      }
-    });
-    
-  } catch (error: any) {
-    return res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-// ==================== APPROVE TRANSACTION ====================
-// ⚠️ This endpoint credits/debits a REAL wallet balance in the database. It is not
-// connected to AdminDepositReview.jsx (the ticket-matching demo UI) on purpose —
-// see the boundary note in walletRoutes.ts above processDeposit(). Before this
-// endpoint is used to approve real user funds, add: (1) audit logging of who
-// approved what and why, (2) verification of the payment reference against a
-// statement/webhook rather than an admin's typed input, and (3) the operator's
-// jurisdiction-appropriate payment/gambling licensing.
-router.post('/transactions/:id/approve', authenticate, isAdmin, async (req: any, res: Response) => {
-  try {
-    const { id } = req.params;
-    
-    const transaction = await Transaction.findById(id);
-    if (!transaction) {
-      return res.status(404).json({ success: false, message: 'Transaction not found' });
-    }
-    
-    if (transaction.status !== TRANSACTION_STATUS.PENDING) {
-      return res.status(400).json({ success: false, message: 'Transaction already processed' });
-    }
-    
-    const user = await User.findById(transaction.userId);
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-    
-    if (transaction.type === TRANSACTION_TYPES.WITHDRAWAL) {
-      if (user.wallet.lockedBalance !== undefined) {
-        user.wallet.lockedBalance -= transaction.amount;
-      }
-      user.wallet.totalWithdrawn += transaction.amount;
-      transaction.status = TRANSACTION_STATUS.COMPLETED;
-      transaction.completedAt = new Date();
-      
-      await sendNotification({
-        userId: user._id,
-        title: 'Withdrawal Approved ✅',
-        message: `Your withdrawal of ${transaction.amount.toLocaleString()} ETB has been approved and processed.`,
-        type: 'withdrawal',
-        data: { amount: transaction.amount, reference: transaction.paymentReference }
       });
-      
-    } else if (transaction.type === TRANSACTION_TYPES.DEPOSIT) {
-      user.wallet.balance += transaction.amount;
-      user.wallet.totalDeposited += transaction.amount;
-      transaction.status = TRANSACTION_STATUS.COMPLETED;
-      transaction.completedAt = new Date();
-      
-      await sendNotification({
-        userId: user._id,
-        title: 'Deposit Approved ✅',
-        message: `Your deposit of ${transaction.amount.toLocaleString()} ETB has been approved and added to your wallet.`,
-        type: 'deposit',
-        data: { amount: transaction.amount, newBalance: user.wallet.balance }
+
+    } catch (error: any) {
+
+      console.error(
+        'Pending transaction error:',
+        error
+      );
+
+      return res.status(500).json({
+
+        success: false,
+
+        message:
+          error.message
       });
     }
-    
-    transaction.processedBy = req.user._id;
-    transaction.processedAt = new Date();
-    
-    await Promise.all([user.save(), transaction.save()]);
-    
-    req.io?.to(`user_${user._id}`).emit('wallet_update', { balance: user.wallet.balance });
-    
-    return res.json({ success: true, message: 'Transaction approved', newBalance: user.wallet.balance });
-    
-  } catch (error: any) {
-    return res.status(500).json({ success: false, message: error.message });
   }
-});
+);
 
-// ==================== REJECT TRANSACTION ====================
-router.post('/transactions/:id/reject', authenticate, isAdmin, async (req: any, res: Response) => {
-  try {
-    const { id } = req.params;
-    const { reason } = req.body;
-    
-    const transaction = await Transaction.findById(id);
-    if (!transaction) {
-      return res.status(404).json({ success: false, message: 'Transaction not found' });
-    }
-    
-    if (transaction.status !== TRANSACTION_STATUS.PENDING) {
-      return res.status(400).json({ success: false, message: 'Transaction already processed' });
-    }
-    
-    const user = await User.findById(transaction.userId);
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-    
-    if (transaction.type === TRANSACTION_TYPES.WITHDRAWAL) {
-      user.wallet.balance += transaction.amount;
-      if (user.wallet.lockedBalance !== undefined) {
-        user.wallet.lockedBalance -= transaction.amount;
+// ==================== GET SINGLE TRANSACTION ====================
+
+router.get(
+  '/transactions/:id',
+  authenticate,
+  requireAdmin,
+  async (
+    req: Request,
+    res: Response
+  ) => {
+
+    try {
+
+      const {
+        id
+      } = req.params;
+
+      if (
+        !mongoose.Types.ObjectId.isValid(
+          id
+        )
+      ) {
+
+        return res.status(400).json({
+
+          success: false,
+
+          message:
+            'Invalid transaction ID'
+        });
       }
+
+      const transaction =
+        await Transaction.findById(id)
+          .populate(
+            'userId',
+            'username email fullName phone wallet'
+          )
+          .populate(
+            'approvedBy',
+            'username email fullName'
+          );
+
+      if (!transaction) {
+
+        return res.status(404).json({
+
+          success: false,
+
+          message:
+            'Transaction not found'
+        });
+      }
+
+      return res.json({
+
+        success: true,
+
+        transaction
+      });
+
+    } catch (error: any) {
+
+      console.error(
+        'Transaction lookup error:',
+        error
+      );
+
+      return res.status(500).json({
+
+        success: false,
+
+        message:
+          error.message
+      });
+    }
+  }
+);
+
+// ==================== APPROVE DEPOSIT ====================
+
+router.post(
+  '/transactions/:id/approve',
+  authenticate,
+  requireAdmin,
+  async (
+    req: Request,
+    res: Response
+  ) => {
+
+    try {
+
+      const admin =
+        (req as any).user;
+
+      const {
+        id
+      } = req.params;
+
+      if (
+        !mongoose.Types.ObjectId.isValid(
+          id
+        )
+      ) {
+
+        return res.status(400).json({
+
+          success: false,
+
+          message:
+            'Invalid transaction ID'
+        });
+      }
+
+      // -----------------------------
+      // Find transaction
+      // -----------------------------
+
+      const transaction =
+        await Transaction.findById(
+          id
+        );
+
+      if (!transaction) {
+
+        return res.status(404).json({
+
+          success: false,
+
+          message:
+            'Transaction not found'
+        });
+      }
+
+      // -----------------------------
+      // Only deposits can use this
+      // -----------------------------
+
+      if (
+        transaction.type !==
+        TRANSACTION_TYPES.DEPOSIT
+      ) {
+
+        return res.status(400).json({
+
+          success: false,
+
+          message:
+            'Only deposit transactions can be approved by this endpoint'
+        });
+      }
+
+      // -----------------------------
+      // Prevent double approval
+      // -----------------------------
+
+      if (
+        transaction.status ===
+        TRANSACTION_STATUS.COMPLETED
+      ) {
+
+        return res.status(409).json({
+
+          success: false,
+
+          message:
+            'This deposit has already been approved',
+
+          transactionId:
+            transaction._id
+        });
+      }
+
+      if (
+        transaction.status !==
+        TRANSACTION_STATUS.PENDING
+      ) {
+
+        return res.status(400).json({
+
+          success: false,
+
+          message:
+            `Transaction cannot be approved because its status is ${transaction.status}`
+        });
+      }
+
+      // -----------------------------
+      // Find user
+      // -----------------------------
+
+      const user =
+        await User.findById(
+          transaction.userId
+        );
+
+      if (!user) {
+
+        return res.status(404).json({
+
+          success: false,
+
+          message:
+            'User associated with transaction was not found'
+        });
+      }
+
+      // -----------------------------
+      // Wallet
+      // -----------------------------
+
+      const wallet =
+        ensureWallet(user);
+
+      const depositAmount =
+        transaction.amount;
+
+      const previousBalance =
+        wallet.balance || 0;
+
+      const previousBonusBalance =
+        wallet.bonusBalance || 0;
+
+      // -----------------------------
+      // First deposit check
+      // -----------------------------
+
+      const previousCompletedDeposits =
+        await Transaction.countDocuments({
+
+          userId:
+            transaction.userId,
+
+          type:
+            TRANSACTION_TYPES.DEPOSIT,
+
+          status:
+            TRANSACTION_STATUS.COMPLETED,
+
+          _id: {
+            $ne:
+              transaction._id
+          }
+        });
+
+      const isFirstDeposit =
+        previousCompletedDeposits === 0;
+
+      // -----------------------------
+      // Deposit bonus
+      // -----------------------------
+
+      let bonusAmount = 0;
+
+      if (isFirstDeposit) {
+
+        const bonusPercentage =
+          parseInt(
+            process.env.DEPOSIT_BONUS_PERCENTAGE ||
+            '50',
+            10
+          ) || 50;
+
+        const maxBonus =
+          parseInt(
+            process.env.DEPOSIT_BONUS_MAX ||
+            '500',
+            10
+          ) || 500;
+
+        bonusAmount =
+          Math.min(
+            (
+              depositAmount *
+              bonusPercentage
+            ) / 100,
+            maxBonus
+          );
+      }
+
+      // -----------------------------
+      // Calculate balances
+      // -----------------------------
+
+      const newBalance =
+        previousBalance +
+        depositAmount;
+
+      const newBonusBalance =
+        previousBonusBalance +
+        bonusAmount;
+
+      // -----------------------------
+      // Update user wallet
+      // -----------------------------
+
+      wallet.balance =
+        newBalance;
+
+      wallet.bonusBalance =
+        newBonusBalance;
+
+      wallet.totalDeposited =
+        (wallet.totalDeposited || 0) +
+        depositAmount;
+
+      // -----------------------------
+      // Update transaction
+      // -----------------------------
+
+      transaction.previousBalance =
+        previousBalance;
+
+      transaction.previousBonusBalance =
+        previousBonusBalance;
+
+      transaction.newBalance =
+        newBalance;
+
+      transaction.newBonusBalance =
+        newBonusBalance;
+
+      transaction.status =
+        TRANSACTION_STATUS.COMPLETED;
+
+      transaction.requiresApproval =
+        false;
+
+      transaction.approvedBy =
+        admin._id;
+
+      transaction.approvedAt =
+        new Date();
+
+      transaction.processedBy =
+        admin._id;
+
+      transaction.processedAt =
+        new Date();
+
+      transaction.completedAt =
+        new Date();
+
+      transaction.updatedAt =
+        new Date();
+
+      transaction.metadata = {
+
+        ...(transaction.metadata || {}),
+
+        mockPayment: true,
+
+        adminApproved: true,
+
+        approvedAt:
+          new Date(),
+
+        bonusAmount
+      };
+
+      // -----------------------------
+      // Save both
+      // -----------------------------
+
       await user.save();
-      
-      await sendNotification({
-        userId: user._id,
-        title: 'Withdrawal Rejected ❌',
-        message: `Your withdrawal of ${transaction.amount.toLocaleString()} ETB was rejected. Reason: ${reason || 'Please contact support for details'}.`,
-        type: 'withdrawal'
+
+      await transaction.save();
+
+      // -----------------------------
+      // Notify user
+      // -----------------------------
+
+      await sendNotification(
+
+        user._id,
+
+        'Deposit Approved 💰',
+
+        `${depositAmount.toLocaleString()} ETB has been added to your wallet.`,
+
+        'deposit_approved',
+
+        {
+
+          transactionId:
+            transaction._id,
+
+          amount:
+            depositAmount,
+
+          bonusAmount,
+
+          newBalance
+        }
+      );
+
+      // -----------------------------
+      // Bonus notification
+      // -----------------------------
+
+      if (bonusAmount > 0) {
+
+        await sendNotification(
+
+          user._id,
+
+          'First Deposit Bonus 🎁',
+
+          `You received ${bonusAmount.toLocaleString()} ETB bonus.`,
+
+          'bonus',
+
+          {
+
+            bonusAmount,
+
+            transactionId:
+              transaction._id
+          }
+        );
+      }
+
+      return res.json({
+
+        success: true,
+
+        message:
+          'Deposit approved successfully',
+
+        transactionId:
+          transaction._id,
+
+        amount:
+          depositAmount,
+
+        bonusAmount,
+
+        previousBalance,
+
+        newBalance,
+
+        previousBonusBalance,
+
+        newBonusBalance,
+
+        status:
+          transaction.status,
+
+        approvedBy:
+          admin._id,
+
+        approvedAt:
+          transaction.approvedAt
+      });
+
+    } catch (error: any) {
+
+      console.error(
+        'Approve deposit error:',
+        error
+      );
+
+      return res.status(500).json({
+
+        success: false,
+
+        message:
+          error.message ||
+          'Failed to approve deposit'
       });
     }
-    
-    transaction.status = TRANSACTION_STATUS.FAILED;
-    transaction.failureReason = reason || 'Rejected by administrator';
-    transaction.processedBy = req.user._id;
-    transaction.processedAt = new Date();
-    
-    await transaction.save();
-    
-    req.io?.to(`user_${user._id}`).emit('wallet_update', { balance: user.wallet.balance });
-    
-    return res.json({ success: true, message: 'Transaction rejected' });
-    
-  } catch (error: any) {
-    return res.status(500).json({ success: false, message: error.message });
   }
-});
+);
+
+// ==================== REJECT DEPOSIT ====================
+
+router.post(
+  '/transactions/:id/reject',
+  authenticate,
+  requireAdmin,
+  async (
+    req: Request,
+    res: Response
+  ) => {
+
+    try {
+
+      const admin =
+        (req as any).user;
+
+      const {
+        id
+      } = req.params;
+
+      const {
+        reason
+      } = req.body;
+
+      if (
+        !mongoose.Types.ObjectId.isValid(
+          id
+        )
+      ) {
+
+        return res.status(400).json({
+
+          success: false,
+
+          message:
+            'Invalid transaction ID'
+        });
+      }
+
+      const transaction =
+        await Transaction.findById(
+          id
+        );
+
+      if (!transaction) {
+
+        return res.status(404).json({
+
+          success: false,
+
+          message:
+            'Transaction not found'
+        });
+      }
+
+      if (
+        transaction.type !==
+        TRANSACTION_TYPES.DEPOSIT
+      ) {
+
+        return res.status(400).json({
+
+          success: false,
+
+          message:
+            'Only deposits can be rejected by this endpoint'
+        });
+      }
+
+      if (
+        transaction.status ===
+        TRANSACTION_STATUS.COMPLETED
+      ) {
+
+        return res.status(409).json({
+
+          success: false,
+
+          message:
+            'A completed deposit cannot be rejected'
+        });
+      }
+
+      if (
+        transaction.status !==
+        TRANSACTION_STATUS.PENDING
+      ) {
+
+        return res.status(400).json({
+
+          success: false,
+
+          message:
+            `Transaction cannot be rejected because its status is ${transaction.status}`
+        });
+      }
+
+      transaction.status =
+        TRANSACTION_STATUS.CANCELLED;
+
+      transaction.requiresApproval =
+        false;
+
+      transaction.approvedBy =
+        admin._id;
+
+      transaction.approvedAt =
+        new Date();
+
+      transaction.processedBy =
+        admin._id;
+
+      transaction.processedAt =
+        new Date();
+
+      transaction.failureReason =
+        reason ||
+        'Deposit rejected by administrator';
+
+      transaction.notes =
+        reason ||
+        'Deposit rejected by administrator';
+
+      transaction.updatedAt =
+        new Date();
+
+      transaction.metadata = {
+
+        ...(transaction.metadata || {}),
+
+        mockPayment: true,
+
+        adminRejected: true,
+
+        rejectedAt:
+          new Date(),
+
+        rejectedBy:
+          admin._id
+      };
+
+      await transaction.save();
+
+      await sendNotification(
+
+        transaction.userId,
+
+        'Deposit Rejected',
+
+        `Your deposit of ${transaction.amount.toLocaleString()} ETB was rejected.`,
+
+        'deposit_rejected',
+
+        {
+
+          transactionId:
+            transaction._id,
+
+          amount:
+            transaction.amount,
+
+          reason:
+            transaction.failureReason
+        }
+      );
+
+      return res.json({
+
+        success: true,
+
+        message:
+          'Deposit rejected successfully',
+
+        transactionId:
+          transaction._id,
+
+        status:
+          transaction.status,
+
+        reason:
+          transaction.failureReason
+      });
+
+    } catch (error: any) {
+
+      console.error(
+        'Reject deposit error:',
+        error
+      );
+
+      return res.status(500).json({
+
+        success: false,
+
+        message:
+          error.message ||
+          'Failed to reject deposit'
+      });
+    }
+  }
+);
 
 export default router;
