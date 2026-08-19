@@ -1,88 +1,54 @@
 // ============================================
 // SHEBAODDS - WALLET ROUTES
-// Deposit / Withdrawal / Transactions
+// MOCK PAYMENT + ADMIN APPROVAL
 // ============================================
 
 import express, {
+  Request,
   Response,
   Router
 } from 'express';
 
 import mongoose from 'mongoose';
 
-import {
-  authenticate
-} from './authRoutes';
+import { authenticate } from './authRoutes';
 
 import {
   checkResponsibleGambling
 } from './responsibleGamblingMiddleware';
 
-import User, {
-  createDefaultWallet,
-  IUser
-} from './User';
+import User from './User';
 
 import {
   Transaction,
   TRANSACTION_TYPES,
+  PAYMENT_METHODS,
   TRANSACTION_STATUS
 } from './Transaction';
 
 const router: Router =
   express.Router();
 
-// ============================================
-// HELPERS
-// ============================================
+// ==================== WALLET DEFAULT ====================
 
-function ensureWallet(user: IUser) {
-  if (!user.wallet) {
-    user.wallet =
-      createDefaultWallet();
-  }
-
-  return user.wallet;
+function createDefaultWallet() {
+  return {
+    balance: 0,
+    bonusBalance: 0,
+    lockedBalance: 0,
+    totalDeposited: 0,
+    totalWithdrawn: 0,
+    totalWagered: 0,
+    totalWon: 0,
+    totalTaxPaid: 0,
+    currency: 'ETB'
+  };
 }
 
-function parsePositiveAmount(
-  value: unknown
-): number | null {
-  const amount =
-    typeof value === 'number'
-      ? value
-      : Number(value);
-
-  if (
-    !Number.isFinite(amount) ||
-    amount <= 0
-  ) {
-    return null;
-  }
-
-  return amount;
-}
-
-function getObjectId(
-  value: mongoose.Types.ObjectId | string
-): mongoose.Types.ObjectId {
-  if (
-    value instanceof mongoose.Types.ObjectId
-  ) {
-    return value;
-  }
-
-  return new mongoose.Types.ObjectId(
-    String(value)
-  );
-}
-
-// ============================================
-// PAYMENT SERVICE BOUNDARY
-// ============================================
+// ==================== MOCK PAYMENT SERVICE ====================
 
 export interface ProcessDepositOptions {
-  userId: mongoose.Types.ObjectId;
+  userId: any;
   amount: number;
   paymentMethod: string;
   paymentDetails: any;
@@ -93,34 +59,39 @@ export interface ProcessDepositOptions {
 export async function processDeposit(
   options: ProcessDepositOptions
 ) {
-  /*
-   * DEVELOPMENT / MOCK ONLY.
-   *
-   * Replace this with a licensed payment
-   * provider and verified webhook before
-   * production.
-   */
 
   console.log(
-    `[PaymentService] Deposit ${options.amount} ETB via ${options.paymentMethod}`
+    `[MOCK PAYMENT] Deposit created: ${options.amount} ETB`
   );
+
+  console.log(
+    `[MOCK PAYMENT] Method: ${options.paymentMethod}`
+  );
+
+  console.log(
+    `[MOCK PAYMENT] Reference: ${options.reference}`
+  );
+
+  // IMPORTANT:
+  // This does NOT credit the wallet.
+  // Admin approval is required.
 
   return {
     success: true,
-    instant: true,
+
+    instant: false,
+
+    requiresAdminApproval: true,
+
     gatewayReference:
-      `GW_DEP_${Date.now()}_${Math.floor(
-        1000 + Math.random() * 9000
-      )}`
+      `MOCK_DEP_${Date.now()}`
   };
 }
 
-// ============================================
-// WITHDRAWAL SERVICE
-// ============================================
+// ==================== MOCK WITHDRAWAL ====================
 
 export interface ProcessWithdrawalOptions {
-  userId: mongoose.Types.ObjectId;
+  userId: any;
   amount: number;
   paymentMethod: string;
   paymentDetails: any;
@@ -130,32 +101,31 @@ export interface ProcessWithdrawalOptions {
 export async function processWithdrawal(
   options: ProcessWithdrawalOptions
 ) {
-  /*
-   * DEVELOPMENT / MOCK ONLY.
-   *
-   * Replace this with actual disbursement
-   * and verified provider response.
-   */
 
   console.log(
-    `[PaymentService] Withdrawal ${options.amount} ETB via ${options.paymentMethod}`
+    `[MOCK PAYMENT] Withdrawal approved: ${options.amount} ETB`
+  );
+
+  console.log(
+    `[MOCK PAYMENT] Method: ${options.paymentMethod}`
+  );
+
+  console.log(
+    `[MOCK PAYMENT] Reference: ${options.reference}`
   );
 
   return {
     success: true,
+
     gatewayReference:
-      `GW_WDR_${Date.now()}_${Math.floor(
-        1000 + Math.random() * 9000
-      )}`
+      `MOCK_WDR_${Date.now()}`
   };
 }
 
-// ============================================
-// NOTIFICATION SERVICE
-// ============================================
+// ==================== NOTIFICATION ====================
 
 export interface SendNotificationOptions {
-  userId: mongoose.Types.ObjectId;
+  userId: any;
   title: string;
   message: string;
   type: string;
@@ -165,8 +135,9 @@ export interface SendNotificationOptions {
 export async function sendNotification(
   options: SendNotificationOptions
 ) {
+
   console.log(
-    `[NotificationService] ${options.title}: ${options.message}`
+    `[Notification] ${options.title}: ${options.message}`
   );
 
   return {
@@ -174,90 +145,69 @@ export async function sendNotification(
   };
 }
 
-// ============================================
-// BALANCE
-// ============================================
+// ==================== BALANCE ====================
 
 router.get(
   '/balance',
   authenticate,
-  async (
-    req: any,
-    res: Response
-  ) => {
+  async (req: any, res: Response) => {
+
     try {
-      const user =
-        req.user as IUser;
+
+      const user = req.user;
 
       const wallet =
-        ensureWallet(user);
+        user.wallet ||
+        createDefaultWallet();
 
       return res.json({
         success: true,
 
-        balance: wallet.balance,
+        balance: wallet.balance || 0,
+
         bonusBalance:
-          wallet.bonusBalance,
+          wallet.bonusBalance || 0,
 
         lockedBalance:
-          wallet.lockedBalance,
+          wallet.lockedBalance || 0,
 
         totalDeposited:
-          wallet.totalDeposited,
+          wallet.totalDeposited || 0,
 
         totalWithdrawn:
-          wallet.totalWithdrawn,
+          wallet.totalWithdrawn || 0,
 
         totalWagered:
-          wallet.totalWagered,
+          wallet.totalWagered || 0,
 
         totalWon:
-          wallet.totalWon,
-
-        totalLost:
-          wallet.totalLost,
+          wallet.totalWon || 0,
 
         totalTaxPaid:
-          wallet.totalTaxPaid,
-
-        totalBonusReceived:
-          wallet.totalBonusReceived,
-
-        totalCashbackReceived:
-          wallet.totalCashbackReceived,
+          wallet.totalTaxPaid || 0,
 
         currency:
-          wallet.currency
+          wallet.currency || 'ETB'
       });
+
     } catch (error: any) {
-      console.error(
-        'Balance error:',
-        error
-      );
 
       return res.status(500).json({
         success: false,
-        message:
-          'Unable to retrieve wallet balance'
+        message: error.message
       });
     }
   }
 );
 
-// ============================================
-// TRANSACTIONS
-// ============================================
+// ==================== TRANSACTIONS ====================
 
 router.get(
   '/transactions',
   authenticate,
-  async (
-    req: any,
-    res: Response
-  ) => {
+  async (req: any, res: Response) => {
+
     try {
-      const user =
-        req.user as IUser;
 
       const {
         limit = '50',
@@ -266,23 +216,10 @@ router.get(
         status,
         from,
         to
-      } = req.query as any;
-
-      const limitNum = Math.min(
-        Math.max(
-          parseInt(limit, 10) || 50,
-          1
-        ),
-        100
-      );
-
-      const pageNum = Math.max(
-        parseInt(page, 10) || 1,
-        1
-      );
+      } = req.query;
 
       const query: any = {
-        userId: user._id
+        userId: req.user._id
       };
 
       if (type) {
@@ -294,149 +231,119 @@ router.get(
       }
 
       if (from || to) {
+
         query.createdAt = {};
 
         if (from) {
-          const fromDate =
-            new Date(from);
-
-          if (
-            !Number.isNaN(
-              fromDate.getTime()
-            )
-          ) {
-            query.createdAt.$gte =
-              fromDate;
-          }
+          query.createdAt.$gte =
+            new Date(from as string);
         }
 
         if (to) {
-          const toDate =
-            new Date(to);
-
-          if (
-            !Number.isNaN(
-              toDate.getTime()
-            )
-          ) {
-            query.createdAt.$lte =
-              toDate;
-          }
+          query.createdAt.$lte =
+            new Date(to as string);
         }
       }
 
+      const limitNum =
+        Math.min(
+          parseInt(limit as string, 10) || 50,
+          100
+        );
+
+      const pageNum =
+        Math.max(
+          parseInt(page as string, 10) || 1,
+          1
+        );
+
       const skip =
-        (pageNum - 1) *
-        limitNum;
+        (pageNum - 1) * limitNum;
 
       const [
         transactions,
         total
       ] = await Promise.all([
-        Transaction.find(query)
-          .sort({
-            createdAt: -1
-          })
-          .skip(skip)
-          .limit(limitNum)
-          .exec(),
 
-        Transaction.countDocuments(
-          query
-        )
+        Transaction.find(query)
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limitNum),
+
+        Transaction.countDocuments(query)
       ]);
 
       return res.json({
         success: true,
+
         transactions,
 
         pagination: {
           total,
           page: pageNum,
           limit: limitNum,
-          pages: Math.ceil(
-            total / limitNum
-          )
+          pages:
+            Math.ceil(total / limitNum)
         }
       });
+
     } catch (error: any) {
-      console.error(
-        'Transactions error:',
-        error
-      );
 
       return res.status(500).json({
         success: false,
-        message:
-          'Unable to retrieve transactions'
+        message: error.message
       });
     }
   }
 );
 
-// ============================================
-// DEPOSIT
-// ============================================
+// ==================== DEPOSIT ====================
 
 router.post(
   '/deposit',
   authenticate,
   checkResponsibleGambling,
-  async (
-    req: any,
-    res: Response
-  ) => {
+  async (req: any, res: Response) => {
+
     try {
-      const user =
-        req.user as IUser;
 
       const {
         amount,
         paymentMethod,
         paymentDetails
-      } = req.body || {};
+      } = req.body;
+
+      const user = req.user;
 
       const depositAmount =
-        parsePositiveAmount(
-          amount
-        );
-
-      if (
-        depositAmount === null
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            'A valid deposit amount is required'
-        });
-      }
-
-      if (!paymentMethod) {
-        return res.status(400).json({
-          success: false,
-          message:
-            'Payment method is required'
-        });
-      }
+        Number(amount);
 
       const minDeposit =
         Number(
-          process.env
-            .DEPOSIT_MIN_AMOUNT ||
-            10
+          process.env.DEPOSIT_MIN_AMOUNT || 10
         );
 
       const maxDeposit =
         Number(
-          process.env
-            .DEPOSIT_MAX_AMOUNT ||
-            100000
+          process.env.DEPOSIT_MAX_AMOUNT ||
+          100000
         );
 
+      // ==================== VALIDATION ====================
+
       if (
-        depositAmount <
-        minDeposit
+        !Number.isFinite(depositAmount) ||
+        depositAmount <= 0
       ) {
+
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid deposit amount'
+        });
+      }
+
+      if (depositAmount < minDeposit) {
+
         return res.status(400).json({
           success: false,
           message:
@@ -444,10 +351,8 @@ router.post(
         });
       }
 
-      if (
-        depositAmount >
-        maxDeposit
-      ) {
+      if (depositAmount > maxDeposit) {
+
         return res.status(400).json({
           success: false,
           message:
@@ -455,15 +360,24 @@ router.post(
         });
       }
 
-      const wallet =
-        ensureWallet(user);
+      if (!paymentMethod) {
 
-      // ========================================
-      // DAILY DEPOSIT LIMIT
-      // ========================================
+        return res.status(400).json({
+          success: false,
+          message:
+            'Payment method is required'
+        });
+      }
 
-      const todayStart =
-        new Date();
+      // ==================== WALLET ====================
+
+      user.wallet =
+        user.wallet ||
+        createDefaultWallet();
+
+      // ==================== DAILY LIMIT ====================
+
+      const todayStart = new Date();
 
       todayStart.setHours(
         0,
@@ -472,18 +386,25 @@ router.post(
         0
       );
 
-      const userId =
-        getObjectId(user._id);
+      const userObjectId =
+        new mongoose.Types.ObjectId(
+          user._id.toString()
+        );
 
       const todayDeposits =
         await Transaction.aggregate([
+
           {
             $match: {
-              userId,
+
+              userId: userObjectId,
+
               type:
                 TRANSACTION_TYPES.DEPOSIT,
+
               status:
                 TRANSACTION_STATUS.COMPLETED,
+
               createdAt: {
                 $gte: todayStart
               }
@@ -493,6 +414,7 @@ router.post(
           {
             $group: {
               _id: null,
+
               total: {
                 $sum: '$amount'
               }
@@ -501,56 +423,46 @@ router.post(
         ]);
 
       const depositedToday =
-        todayDeposits[0]?.total ||
-        0;
+        todayDeposits[0]?.total || 0;
 
       const dailyLimit =
-        typeof user.getDepositLimit ===
-        'function'
+        typeof user.getDepositLimit === 'function'
           ? user.getDepositLimit()
           : (
               user.responsibleGambling
-                ?.depositLimit ||
-              50000
+                ?.depositLimit || 50000
             );
 
       if (
         depositedToday +
-          depositAmount >
+        depositAmount >
         dailyLimit
       ) {
+
         return res.status(400).json({
           success: false,
 
           message:
-            `Daily deposit limit of ${dailyLimit} ETB reached. ` +
-            `You have ${Math.max(
-              0,
-              dailyLimit -
-                depositedToday
-            )} ETB remaining today.`
+            `Daily deposit limit of ${dailyLimit} ETB reached.`
         });
       }
 
-      // ========================================
-      // CREATE TRANSACTION
-      // ========================================
+      // ==================== REFERENCE ====================
 
       const paymentReference =
-        `DEP_${Date.now()}_${cryptoRandomId()}`;
+        `DEP_${Date.now()}_${Math.random()
+          .toString(36)
+          .substring(2, 10)
+          .toUpperCase()}`;
 
-      const previousBalance =
-        wallet.balance || 0;
+      // ==================== CREATE PENDING TRANSACTION ====================
 
-      const previousBonusBalance =
-        wallet.bonusBalance || 0;
-
-      const newBalance =
-        previousBalance +
-        depositAmount;
+      const currentBalance =
+        Number(user.wallet.balance || 0);
 
       const transaction =
         new Transaction({
+
           userId: user._id,
 
           type:
@@ -560,241 +472,155 @@ router.post(
             depositAmount,
 
           fee: 0,
+
           taxAmount: 0,
 
           netAmount:
             depositAmount,
 
           paymentMethod,
+
           paymentReference,
+
           paymentDetails:
             paymentDetails || {},
 
-          previousBalance,
+          previousBalance:
+            currentBalance,
 
-          previousBonusBalance,
+          previousBonusBalance:
+            Number(
+              user.wallet.bonusBalance || 0
+            ),
 
-          newBalance,
+          // IMPORTANT:
+          // Balance does not change yet.
+
+          newBalance:
+            currentBalance,
 
           newBonusBalance:
-            previousBonusBalance,
+            Number(
+              user.wallet.bonusBalance || 0
+            ),
 
           status:
             TRANSACTION_STATUS.PENDING,
 
-          requiresApproval: false,
+          requiresApproval: true,
 
-          ipAddress: req.ip,
+          ipAddress:
+            req.ip,
 
           userAgent:
-            req.headers[
-              'user-agent'
-            ]
+            req.headers['user-agent']
         });
 
       await transaction.save();
 
-      // ========================================
-      // PROCESS PAYMENT
-      // ========================================
+      // ==================== MOCK PAYMENT ====================
 
       const paymentResult =
         await processDeposit({
-          userId,
+
+          userId: user._id,
+
           amount:
             depositAmount,
 
           paymentMethod,
-          paymentDetails:
-            paymentDetails || {},
+
+          paymentDetails,
 
           reference:
             paymentReference,
 
           callbackUrl:
-            `${
-              process.env.BASE_URL ||
-              'http://localhost:3000'
-            }/api/payments/callback`
+            `${process.env.BASE_URL || 'http://localhost:5000'}/api/payments/callback`
         });
 
-      if (
-        !paymentResult.success
-      ) {
-        await transaction.fail(
-          'Payment gateway rejected the deposit'
-        );
+      if (!paymentResult.success) {
+
+        transaction.status =
+          TRANSACTION_STATUS.FAILED;
+
+        transaction.failureReason =
+          'Mock payment failed';
+
+        await transaction.save();
 
         return res.status(400).json({
           success: false,
           message:
-            'Payment gateway rejected the deposit',
+            'Payment could not be initiated'
+        });
+      }
+
+      transaction.paymentGatewayReference =
+        paymentResult.gatewayReference;
+
+      transaction.requiresApproval =
+        true;
+
+      transaction.status =
+        TRANSACTION_STATUS.PENDING;
+
+      await transaction.save();
+
+      await sendNotification({
+
+        userId: user._id,
+
+        title:
+          'Deposit Submitted 💰',
+
+        message:
+          `${depositAmount.toLocaleString()} ETB deposit is waiting for admin approval.`,
+
+        type:
+          'deposit_pending',
+
+        data: {
+          amount:
+            depositAmount,
+
+          reference:
+            paymentReference,
+
           transactionId:
             transaction._id
-        });
-      }
-
-      // ========================================
-      // INSTANT PAYMENT
-      // ========================================
-
-      if (
-        paymentResult.instant
-      ) {
-        wallet.balance =
-          newBalance;
-
-        wallet.totalDeposited =
-          (wallet.totalDeposited ||
-            0) +
-          depositAmount;
-
-        transaction.status =
-          TRANSACTION_STATUS.COMPLETED;
-
-        transaction.completedAt =
-          new Date();
-
-        transaction.paymentGatewayReference =
-          paymentResult.gatewayReference;
-
-        transaction.newBalance =
-          wallet.balance;
-
-        await Promise.all([
-          user.save(),
-          transaction.save()
-        ]);
-
-        await sendNotification({
-          userId,
-
-          title:
-            'Deposit Successful',
-
-          message:
-            `${depositAmount.toLocaleString()} ETB has been added to your wallet.`,
-
-          type: 'deposit',
-
-          data: {
-            amount:
-              depositAmount,
-
-            newBalance:
-              wallet.balance
-          }
-        });
-
-        // ======================================
-        // FIRST DEPOSIT BONUS
-        // ======================================
-
-        const depositCount =
-          await Transaction.countDocuments({
-            userId,
-
-            type:
-              TRANSACTION_TYPES.DEPOSIT,
-
-            status:
-              TRANSACTION_STATUS.COMPLETED
-          });
-
-        if (
-          depositCount === 1
-        ) {
-          const bonusPercentage =
-            Number(
-              process.env
-                .DEPOSIT_BONUS_PERCENTAGE ||
-                50
-            );
-
-          const maxBonus =
-            Number(
-              process.env
-                .DEPOSIT_BONUS_MAX ||
-                500
-            );
-
-          const bonusAmount =
-            Math.min(
-              (
-                depositAmount *
-                bonusPercentage
-              ) / 100,
-              maxBonus
-            );
-
-          if (
-            bonusAmount > 0
-          ) {
-            wallet.bonusBalance =
-              (
-                wallet.bonusBalance ||
-                0
-              ) +
-              bonusAmount;
-
-            wallet.totalBonusReceived =
-              (
-                wallet.totalBonusReceived ||
-                0
-              ) +
-              bonusAmount;
-
-            await user.save();
-
-            await sendNotification({
-              userId,
-
-              title:
-                'First Deposit Bonus',
-
-              message:
-                `You received ${bonusAmount.toLocaleString()} ETB bonus.`,
-
-              type: 'bonus',
-
-              data: {
-                bonusAmount
-              }
-            });
-          }
         }
+      });
 
-        return res.json({
-          success: true,
+      // ==================== IMPORTANT ====================
 
-          message:
-            'Deposit successful!',
+      return res.status(201).json({
 
-          transactionId:
-            transaction._id,
-
-          newBalance:
-            wallet.balance,
-
-          bonusBalance:
-            wallet.bonusBalance
-        });
-      }
-
-      return res.json({
         success: true,
 
         message:
-          'Deposit initiated. Please complete the payment.',
+          'Deposit submitted successfully. Waiting for admin approval.',
 
         transactionId:
           transaction._id,
 
         reference:
-          paymentReference
+          paymentReference,
+
+        amount:
+          depositAmount,
+
+        status:
+          TRANSACTION_STATUS.PENDING,
+
+        requiresApproval: true,
+
+        balance:
+          currentBalance
       });
 
     } catch (error: any) {
+
       console.error(
         'Deposit error:',
         error
@@ -803,75 +629,61 @@ router.post(
       return res.status(500).json({
         success: false,
         message:
-          'Unable to process deposit'
+          error.message
       });
     }
   }
 );
 
-// ============================================
-// WITHDRAWAL
-// ============================================
+// ==================== WITHDRAWAL ====================
 
 router.post(
   '/withdraw',
   authenticate,
   checkResponsibleGambling,
-  async (
-    req: any,
-    res: Response
-  ) => {
+  async (req: any, res: Response) => {
+
     try {
-      const user =
-        req.user as IUser;
 
       const {
         amount,
         paymentMethod,
         paymentDetails
-      } = req.body || {};
+      } = req.body;
+
+      const user = req.user;
 
       const withdrawAmount =
-        parsePositiveAmount(
-          amount
-        );
-
-      if (
-        withdrawAmount === null
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            'A valid withdrawal amount is required'
-        });
-      }
-
-      if (!paymentMethod) {
-        return res.status(400).json({
-          success: false,
-          message:
-            'Payment method is required'
-        });
-      }
+        Number(amount);
 
       const minWithdraw =
         Number(
-          process.env
-            .WITHDRAWAL_MIN_AMOUNT ||
-            50
+          process.env.WITHDRAWAL_MIN_AMOUNT || 50
         );
 
       const maxWithdraw =
         Number(
-          process.env
-            .WITHDRAWAL_MAX_AMOUNT ||
-            50000
+          process.env.WITHDRAWAL_MAX_AMOUNT ||
+          50000
         );
+
+      if (
+        !Number.isFinite(withdrawAmount) ||
+        withdrawAmount <= 0
+      ) {
+
+        return res.status(400).json({
+          success: false,
+          message:
+            'Invalid withdrawal amount'
+        });
+      }
 
       if (
         withdrawAmount <
         minWithdraw
       ) {
+
         return res.status(400).json({
           success: false,
           message:
@@ -883,209 +695,65 @@ router.post(
         withdrawAmount >
         maxWithdraw
       ) {
+
         return res.status(400).json({
           success: false,
           message:
-            `Maximum withdrawal per transaction is ${maxWithdraw} ETB`
+            `Maximum withdrawal is ${maxWithdraw} ETB`
         });
       }
 
-      const wallet =
-        ensureWallet(user);
+      if (!paymentMethod) {
 
-      const currentBalance =
-        wallet.balance || 0;
+        return res.status(400).json({
+          success: false,
+          message:
+            'Payment method is required'
+        });
+      }
+
+      user.wallet =
+        user.wallet ||
+        createDefaultWallet();
+
+      const balance =
+        Number(user.wallet.balance || 0);
+
+      const lockedBalance =
+        Number(
+          user.wallet.lockedBalance || 0
+        );
+
+      const availableBalance =
+        balance - lockedBalance;
 
       if (
-        currentBalance <
+        availableBalance <
         withdrawAmount
       ) {
+
         return res.status(400).json({
           success: false,
           message:
-            'Insufficient balance'
+            'Insufficient available balance'
         });
       }
 
-      // ========================================
-      // DAILY LIMIT
-      // ========================================
+      // ==================== LOCK FUNDS ====================
 
-      const todayStart =
-        new Date();
-
-      todayStart.setHours(
-        0,
-        0,
-        0,
-        0
-      );
-
-      const userId =
-        getObjectId(user._id);
-
-      const todayWithdrawals =
-        await Transaction.aggregate([
-          {
-            $match: {
-              userId,
-              type:
-                TRANSACTION_TYPES.WITHDRAWAL,
-              status:
-                TRANSACTION_STATUS.COMPLETED,
-              createdAt: {
-                $gte: todayStart
-              }
-            }
-          },
-
-          {
-            $group: {
-              _id: null,
-              total: {
-                $sum: '$amount'
-              }
-            }
-          }
-        ]);
-
-      const withdrawnToday =
-        todayWithdrawals[0]?.total ||
-        0;
-
-      const dailyLimit =
-        Number(
-          process.env
-            .WITHDRAWAL_DAILY_LIMIT ||
-            100000
-        );
-
-      if (
-        withdrawnToday +
-          withdrawAmount >
-        dailyLimit
-      ) {
-        return res.status(400).json({
-          success: false,
-
-          message:
-            `Daily withdrawal limit of ${dailyLimit} ETB reached. ` +
-            `You have ${Math.max(
-              0,
-              dailyLimit -
-                withdrawnToday
-            )} ETB remaining today.`
-        });
-      }
-
-      // ========================================
-      // WEEKLY LIMIT
-      // ========================================
-
-      const weekStart =
-        new Date();
-
-      weekStart.setDate(
-        weekStart.getDate() -
-        weekStart.getDay()
-      );
-
-      weekStart.setHours(
-        0,
-        0,
-        0,
-        0
-      );
-
-      const weeklyWithdrawals =
-        await Transaction.aggregate([
-          {
-            $match: {
-              userId,
-              type:
-                TRANSACTION_TYPES.WITHDRAWAL,
-              status:
-                TRANSACTION_STATUS.COMPLETED,
-              createdAt: {
-                $gte: weekStart
-              }
-            }
-          },
-
-          {
-            $group: {
-              _id: null,
-              total: {
-                $sum: '$amount'
-              }
-            }
-          }
-        ]);
-
-      const withdrawnWeekly =
-        weeklyWithdrawals[0]?.total ||
-        0;
-
-      const weeklyLimit =
-        Number(
-          process.env
-            .WITHDRAWAL_WEEKLY_LIMIT ||
-            500000
-        );
-
-      if (
-        withdrawnWeekly +
-          withdrawAmount >
-        weeklyLimit
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            `Weekly withdrawal limit of ${weeklyLimit} ETB reached.`
-        });
-      }
-
-      // ========================================
-      // LOCK BALANCE
-      // ========================================
-
-      const previousBalance =
-        currentBalance;
-
-      const previousBonusBalance =
-        wallet.bonusBalance || 0;
-
-      wallet.balance =
-        previousBalance -
+      user.wallet.lockedBalance =
+        lockedBalance +
         withdrawAmount;
-
-      wallet.lockedBalance =
-        (wallet.lockedBalance ||
-          0) +
-        withdrawAmount;
-
-      const newBalance =
-        wallet.balance;
 
       const paymentReference =
-        `WDR_${Date.now()}_${cryptoRandomId()}`;
-
-      const isVipLevelHigh =
-        Boolean(
-          user.vip &&
-          user.vip.level >= 3
-        );
-
-      const requiresApproval =
-        withdrawAmount > 10000 ||
-        !isVipLevelHigh;
-
-      // ========================================
-      // TRANSACTION
-      // ========================================
+        `WDR_${Date.now()}_${Math.random()
+          .toString(36)
+          .substring(2, 10)
+          .toUpperCase()}`;
 
       const transaction =
         new Transaction({
+
           userId: user._id,
 
           type:
@@ -1095,79 +763,66 @@ router.post(
             withdrawAmount,
 
           fee: 0,
+
           taxAmount: 0,
 
           netAmount:
             withdrawAmount,
 
           paymentMethod,
+
           paymentReference,
 
           paymentDetails:
             paymentDetails || {},
 
-          previousBalance,
+          previousBalance:
+            balance,
 
-          previousBonusBalance,
+          previousBonusBalance:
+            Number(
+              user.wallet.bonusBalance || 0
+            ),
 
-          newBalance,
+          newBalance:
+            balance -
+
+            withdrawAmount,
 
           newBonusBalance:
-            previousBonusBalance,
+            Number(
+              user.wallet.bonusBalance || 0
+            ),
 
           status:
             TRANSACTION_STATUS.PENDING,
 
-          requiresApproval,
+          requiresApproval: true,
 
-          ipAddress: req.ip,
+          ipAddress:
+            req.ip,
 
           userAgent:
-            req.headers[
-              'user-agent'
-            ]
+            req.headers['user-agent']
         });
 
-      try {
-        await Promise.all([
-          user.save(),
-          transaction.save()
-        ]);
-      } catch (saveError) {
-        /*
-         * Do not leave the amount locked if
-         * transaction/user persistence fails.
-         */
-        wallet.balance =
-          previousBalance;
-
-        wallet.lockedBalance =
-          Math.max(
-            0,
-            (
-              wallet.lockedBalance ||
-              0
-            ) -
-            withdrawAmount
-          );
-
-        throw saveError;
-      }
-
-      // ========================================
-      // NOTIFICATION
-      // ========================================
+      await Promise.all([
+        user.save(),
+        transaction.save()
+      ]);
 
       await sendNotification({
-        userId,
+
+        userId: user._id,
 
         title:
-          'Withdrawal Request Submitted',
+          'Withdrawal Submitted 💸',
 
         message:
-          `Your withdrawal request of ${withdrawAmount.toLocaleString()} ETB has been submitted.`,
+          `${withdrawAmount.toLocaleString()} ETB withdrawal is waiting for admin approval.`,
 
-        type: 'withdrawal',
+        type:
+          'withdrawal_pending',
 
         data: {
           amount:
@@ -1178,161 +833,32 @@ router.post(
         }
       });
 
-      // ========================================
-      // AUTO PROCESS
-      // ========================================
+      return res.status(201).json({
 
-      if (!requiresApproval) {
-        const result =
-          await processWithdrawal({
-            userId,
-
-            amount:
-              withdrawAmount,
-
-            paymentMethod,
-
-            paymentDetails:
-              paymentDetails || {},
-
-            reference:
-              paymentReference
-          });
-
-        if (
-          result.success
-        ) {
-          wallet.lockedBalance =
-            Math.max(
-              0,
-              (
-                wallet.lockedBalance ||
-                0
-              ) -
-              withdrawAmount
-            );
-
-          wallet.totalWithdrawn =
-            (
-              wallet.totalWithdrawn ||
-              0
-            ) +
-            withdrawAmount;
-
-          transaction.status =
-            TRANSACTION_STATUS.COMPLETED;
-
-          transaction.completedAt =
-            new Date();
-
-          transaction.processedAt =
-            new Date();
-
-          transaction.paymentGatewayReference =
-            result.gatewayReference;
-
-          await Promise.all([
-            user.save(),
-            transaction.save()
-          ]);
-
-          await sendNotification({
-            userId,
-
-            title:
-              'Withdrawal Completed',
-
-            message:
-              `Your withdrawal of ${withdrawAmount.toLocaleString()} ETB has been processed.`,
-
-            type: 'withdrawal',
-
-            data: {
-              amount:
-                withdrawAmount
-            }
-          });
-
-          return res.json({
-            success: true,
-
-            message:
-              'Withdrawal processed successfully!',
-
-            transactionId:
-              transaction._id,
-
-            newBalance:
-              wallet.balance
-          });
-        }
-
-        // ======================================
-        // WITHDRAWAL FAILED
-        // ======================================
-
-        wallet.balance =
-          (
-            wallet.balance ||
-            0
-          ) +
-          withdrawAmount;
-
-        wallet.lockedBalance =
-          Math.max(
-            0,
-            (
-              wallet.lockedBalance ||
-              0
-            ) -
-            withdrawAmount
-          );
-
-        transaction.status =
-          TRANSACTION_STATUS.FAILED;
-
-        transaction.failureReason =
-          'Withdrawal processing failed';
-
-        transaction.processedAt =
-          new Date();
-
-        await Promise.all([
-          user.save(),
-          transaction.save()
-        ]);
-
-        return res.status(400).json({
-          success: false,
-
-          message:
-            'Withdrawal could not be processed',
-
-          transactionId:
-            transaction._id
-        });
-      }
-
-      // ========================================
-      // MANUAL APPROVAL
-      // ========================================
-
-      return res.json({
         success: true,
 
         message:
-          'Withdrawal request submitted for review.',
+          'Withdrawal submitted. Waiting for admin approval.',
 
         transactionId:
           transaction._id,
 
+        reference:
+          paymentReference,
+
+        amount:
+          withdrawAmount,
+
+        status:
+          TRANSACTION_STATUS.PENDING,
+
         requiresApproval: true,
 
-        reference:
-          paymentReference
+        balance
       });
 
     } catch (error: any) {
+
       console.error(
         'Withdrawal error:',
         error
@@ -1341,236 +867,161 @@ router.post(
       return res.status(500).json({
         success: false,
         message:
-          'Unable to process withdrawal'
+          error.message
       });
     }
   }
 );
 
-// ============================================
-// WALLET SUMMARY
-// ============================================
+// ==================== SUMMARY ====================
 
 router.get(
   '/summary',
   authenticate,
-  async (
-    req: any,
-    res: Response
-  ) => {
+  async (req: any, res: Response) => {
+
     try {
-      const user =
-        req.user as IUser;
 
       const userId =
-        getObjectId(user._id);
+        new mongoose.Types.ObjectId(
+          req.user._id.toString()
+        );
 
-      const todayStart =
+      const today =
         new Date();
 
-      todayStart.setHours(
+      today.setHours(
         0,
         0,
         0,
         0
       );
 
-      const weekStart =
-        new Date();
+      const result =
+        await Transaction.aggregate([
 
-      weekStart.setDate(
-        weekStart.getDate() -
-        weekStart.getDay()
-      );
+          {
+            $match: {
+              userId,
 
-      weekStart.setHours(
-        0,
-        0,
-        0,
-        0
-      );
+              status:
+                TRANSACTION_STATUS.COMPLETED,
 
-      const monthStart =
-        new Date();
+              createdAt: {
+                $gte: today
+              }
+            }
+          },
 
-      monthStart.setDate(1);
+          {
+            $group: {
 
-      monthStart.setHours(
-        0,
-        0,
-        0,
-        0
-      );
+              _id: null,
 
-      const buildSummary =
-        async (
-          startDate: Date
-        ) => {
-          const result =
-            await Transaction.aggregate([
-              {
-                $match: {
-                  userId,
-
-                  status:
-                    TRANSACTION_STATUS.COMPLETED,
-
-                  createdAt: {
-                    $gte: startDate
-                  }
+              deposits: {
+                $sum: {
+                  $cond: [
+                    {
+                      $eq: [
+                        '$type',
+                        TRANSACTION_TYPES.DEPOSIT
+                      ]
+                    },
+                    '$amount',
+                    0
+                  ]
                 }
               },
 
-              {
-                $group: {
-                  _id: null,
-
-                  deposits: {
-                    $sum: {
-                      $cond: [
-                        {
-                          $eq: [
-                            '$type',
-                            TRANSACTION_TYPES.DEPOSIT
-                          ]
-                        },
-
-                        '$amount',
-
-                        0
+              withdrawals: {
+                $sum: {
+                  $cond: [
+                    {
+                      $eq: [
+                        '$type',
+                        TRANSACTION_TYPES.WITHDRAWAL
                       ]
-                    }
-                  },
+                    },
+                    '$amount',
+                    0
+                  ]
+                }
+              },
 
-                  withdrawals: {
-                    $sum: {
-                      $cond: [
-                        {
-                          $eq: [
-                            '$type',
-                            TRANSACTION_TYPES.WITHDRAWAL
-                          ]
-                        },
-
-                        '$amount',
-
-                        0
+              wins: {
+                $sum: {
+                  $cond: [
+                    {
+                      $eq: [
+                        '$type',
+                        TRANSACTION_TYPES.BET_WIN
                       ]
-                    }
-                  },
+                    },
+                    '$amount',
+                    0
+                  ]
+                }
+              },
 
-                  wins: {
-                    $sum: {
-                      $cond: [
-                        {
-                          $eq: [
-                            '$type',
-                            TRANSACTION_TYPES.BET_WIN
-                          ]
-                        },
-
-                        '$amount',
-
-                        0
+              losses: {
+                $sum: {
+                  $cond: [
+                    {
+                      $eq: [
+                        '$type',
+                        TRANSACTION_TYPES.BET_LOSS
                       ]
-                    }
-                  },
-
-                  losses: {
-                    $sum: {
-                      $cond: [
-                        {
-                          $eq: [
-                            '$type',
-                            TRANSACTION_TYPES.BET_LOSS
-                          ]
-                        },
-
-                        '$amount',
-
-                        0
-                      ]
-                    }
-                  }
+                    },
+                    '$amount',
+                    0
+                  ]
                 }
               }
-            ]);
+            }
+          }
+        ]);
 
-          const row =
-            result[0] || {};
-
-          return {
-            deposits:
-              row.deposits || 0,
-
-            withdrawals:
-              row.withdrawals || 0,
-
-            wins:
-              row.wins || 0,
-
-            losses:
-              row.losses || 0,
-
-            netProfit:
-              (row.wins || 0) -
-              (row.losses || 0)
-          };
+      const stats =
+        result[0] || {
+          deposits: 0,
+          withdrawals: 0,
+          wins: 0,
+          losses: 0
         };
 
-      const [
-        today,
-        weekly,
-        monthly
-      ] = await Promise.all([
-        buildSummary(
-          todayStart
-        ),
-
-        buildSummary(
-          weekStart
-        ),
-
-        buildSummary(
-          monthStart
-        )
-      ]);
-
       return res.json({
+
         success: true,
-        today,
-        weekly,
-        monthly
+
+        today: {
+
+          deposits:
+            stats.deposits || 0,
+
+          withdrawals:
+            stats.withdrawals || 0,
+
+          wins:
+            stats.wins || 0,
+
+          losses:
+            stats.losses || 0,
+
+          netProfit:
+            (stats.wins || 0) -
+            (stats.losses || 0)
+        }
       });
 
     } catch (error: any) {
-      console.error(
-        'Wallet summary error:',
-        error
-      );
 
       return res.status(500).json({
         success: false,
         message:
-          'Unable to retrieve wallet summary'
+          error.message
       });
     }
   }
 );
-
-// ============================================
-// RANDOM REFERENCE ID
-// ============================================
-
-function cryptoRandomId(): string {
-  return Math.random()
-    .toString(36)
-    .substring(2, 10)
-    .toUpperCase();
-}
-
-// ============================================
-// EXPORT
-// ============================================
 
 export default router;
