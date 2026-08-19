@@ -1,17 +1,19 @@
 // ============================================
 // SHEBAODDS - USER MODEL
-// Enterprise Grade User Schema
+// Mongoose 8 + TypeScript
+// Production-ready user schema
 // ============================================
 
 import mongoose, {
-  Schema,
   Document,
-  Model
+  Model,
+  Schema,
+  Types,
 } from 'mongoose';
+
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-
-const speakeasy = require('speakeasy');
+import speakeasy from 'speakeasy';
 
 // ============================================
 // WALLET
@@ -34,25 +36,27 @@ export interface IUserWallet {
   totalCashbackReceived: number;
 }
 
-export const createDefaultWallet = (): IUserWallet => ({
-  balance: 0,
-  bonusBalance: 0,
-  lockedBalance: 0,
-  currency: 'ETB',
+export function createDefaultWallet(): IUserWallet {
+  return {
+    balance: 0,
+    bonusBalance: 0,
+    lockedBalance: 0,
+    currency: 'ETB',
 
-  totalDeposited: 0,
-  totalWithdrawn: 0,
-  totalWagered: 0,
-  totalWon: 0,
-  totalLost: 0,
-  totalTaxPaid: 0,
+    totalDeposited: 0,
+    totalWithdrawn: 0,
+    totalWagered: 0,
+    totalWon: 0,
+    totalLost: 0,
+    totalTaxPaid: 0,
 
-  totalBonusReceived: 0,
-  totalCashbackReceived: 0
-});
+    totalBonusReceived: 0,
+    totalCashbackReceived: 0,
+  };
+}
 
 // ============================================
-// TYPES
+// ENUMS / TYPES
 // ============================================
 
 export type KYCDocumentType =
@@ -88,12 +92,145 @@ export type SavedPaymentMethodType =
   | 'bank_transfer';
 
 // ============================================
-// USER INTERFACE
+// SUBDOCUMENT TYPES
+// ============================================
+
+export interface IUserStatistics {
+  totalBets: number;
+  totalWins: number;
+  totalLosses: number;
+  winningPercentage: number;
+  currentWinStreak: number;
+  longestWinStreak: number;
+  biggestWin: number;
+  biggestLoss: number;
+  averageOdds: number;
+}
+
+export interface IUserVIP {
+  level: number;
+  name: string;
+  loyaltyPoints: number;
+  cashbackPercentage: number;
+  personalManager: boolean;
+  higherLimits: boolean;
+  exclusivePromotions: boolean;
+  fasterWithdrawals: boolean;
+}
+
+export interface IUserTaxProfile {
+  taxExempt: boolean;
+  taxId?: string;
+  taxRegistrationNumber?: string;
+  isTaxRegistered: boolean;
+  totalTaxPaid: number;
+  totalWinningsTaxed: number;
+  lastTaxCalculation?: Date;
+}
+
+export interface IResponsibleGambling {
+  depositLimit: number;
+  lossLimit: number;
+  wagerLimit: number;
+  sessionTimeout: number;
+  realityCheckInterval: number;
+
+  selfExcluded: boolean;
+  selfExclusionEndDate?: Date;
+  coolingOffPeriodEnd?: Date;
+  lastRealityCheck?: Date;
+}
+
+export interface IUserNotifications {
+  email: boolean;
+  push: boolean;
+  sms: boolean;
+  betSettlements: boolean;
+  promotions: boolean;
+  aiTips: boolean;
+  systemUpdates: boolean;
+  securityAlerts: boolean;
+}
+
+export interface IUserDevice {
+  deviceId: string;
+  deviceName?: string;
+  platform?: Platform;
+  browser?: string;
+  os?: string;
+  ipAddress?: string;
+  location?: string;
+  pushToken?: string;
+
+  biometricEnabled: boolean;
+  biometricPublicKey?: string;
+
+  lastUsed: Date;
+  isActive: boolean;
+}
+
+export interface IUserSession {
+  sessionId: string;
+
+  ipAddress?: string;
+  userAgent?: string;
+  deviceId?: string;
+
+  loginAt: Date;
+  lastActivity: Date;
+  expiresAt?: Date;
+
+  /**
+   * SHA-256 hash of the refresh token.
+   * Never expose this field through JSON.
+   */
+  refreshTokenHash?: string;
+}
+
+export interface ISavedPaymentMethod {
+  type: SavedPaymentMethodType;
+
+  identifier?: string;
+  last4?: string;
+  brand?: string;
+
+  isDefault: boolean;
+  addedAt: Date;
+
+  metadata?: mongoose.Schema.Types.Mixed;
+}
+
+export interface IBettingPreferences {
+  defaultStake: number;
+  autoCashoutMultiplier: number;
+
+  favoriteLeagues: string[];
+  favoriteTeams: string[];
+  excludedMarkets: string[];
+}
+
+export interface IAffiliate {
+  partnerId?: string;
+
+  commissionRate: number;
+  totalCommission: number;
+  paidCommission: number;
+}
+
+export interface IUserNote {
+  note?: string;
+  createdBy?: Types.ObjectId;
+  createdAt: Date;
+}
+
+// ============================================
+// USER DOCUMENT
 // ============================================
 
 export interface IUser extends Document {
   username: string;
   email: string;
+
   password?: string;
   passwordHistory?: string[];
 
@@ -113,38 +250,9 @@ export interface IUser extends Document {
 
   wallet: IUserWallet;
 
-  statistics: {
-    totalBets: number;
-    totalWins: number;
-    totalLosses: number;
-    winningPercentage: number;
-    currentWinStreak: number;
-    longestWinStreak: number;
-    biggestWin: number;
-    biggestLoss: number;
-    averageOdds: number;
-  };
-
-  vip: {
-    level: number;
-    name: string;
-    loyaltyPoints: number;
-    cashbackPercentage: number;
-    personalManager: boolean;
-    higherLimits: boolean;
-    exclusivePromotions: boolean;
-    fasterWithdrawals: boolean;
-  };
-
-  taxProfile: {
-    taxExempt: boolean;
-    taxId?: string;
-    taxRegistrationNumber?: string;
-    isTaxRegistered: boolean;
-    totalTaxPaid: number;
-    totalWinningsTaxed: number;
-    lastTaxCalculation?: Date;
-  };
+  statistics: IUserStatistics;
+  vip: IUserVIP;
+  taxProfile: IUserTaxProfile;
 
   isActive: boolean;
   isAdmin: boolean;
@@ -159,11 +267,15 @@ export interface IUser extends Document {
     type: KYCDocumentType;
     documentUrl?: string;
     documentNumber?: string;
+
     status: KYCReviewStatus;
+
     submittedAt: Date;
     reviewedAt?: Date;
     reviewedBy?: string;
+
     rejectionReason?: string;
+
     verifiedAt?: Date;
     verifiedBy?: string;
   }>;
@@ -200,94 +312,25 @@ export interface IUser extends Document {
   resetPasswordExpires?: Date;
 
   referralCode?: string;
-  referredBy?: mongoose.Types.ObjectId;
+  referredBy?: Types.ObjectId;
 
   referralCount: number;
   referralEarnings: number;
   referralTier: number;
 
-  responsibleGambling: {
-    depositLimit: number;
-    lossLimit: number;
-    wagerLimit: number;
-    sessionTimeout: number;
-    realityCheckInterval: number;
+  responsibleGambling: IResponsibleGambling;
+  notifications: IUserNotifications;
 
-    selfExcluded: boolean;
-    selfExclusionEndDate?: Date;
-    coolingOffPeriodEnd?: Date;
-    lastRealityCheck?: Date;
-  };
+  devices: IUserDevice[];
+  sessions: IUserSession[];
 
-  notifications: {
-    email: boolean;
-    push: boolean;
-    sms: boolean;
-    betSettlements: boolean;
-    promotions: boolean;
-    aiTips: boolean;
-    systemUpdates: boolean;
-    securityAlerts: boolean;
-  };
+  savedPaymentMethods: ISavedPaymentMethod[];
 
-  devices: Array<{
-    deviceId: string;
-    deviceName?: string;
-    platform?: Platform;
-    browser?: string;
-    os?: string;
-    ipAddress?: string;
-    location?: string;
-    pushToken?: string;
+  bettingPreferences: IBettingPreferences;
 
-    biometricEnabled: boolean;
-    biometricPublicKey?: string;
+  affiliate: IAffiliate;
 
-    lastUsed: Date;
-    isActive: boolean;
-  }>;
-
-  sessions: Array<{
-    sessionId: string;
-    ipAddress?: string;
-    userAgent?: string;
-    deviceId?: string;
-
-    loginAt: Date;
-    lastActivity: Date;
-    expiresAt?: Date;
-  }>;
-
-  savedPaymentMethods: Array<{
-    type: SavedPaymentMethodType;
-    identifier?: string;
-    last4?: string;
-    brand?: string;
-    isDefault: boolean;
-    addedAt: Date;
-    metadata?: any;
-  }>;
-
-  bettingPreferences: {
-    defaultStake: number;
-    autoCashoutMultiplier: number;
-    favoriteLeagues: string[];
-    favoriteTeams: string[];
-    excludedMarkets: string[];
-  };
-
-  affiliate: {
-    partnerId?: string;
-    commissionRate: number;
-    totalCommission: number;
-    paidCommission: number;
-  };
-
-  notes: Array<{
-    note?: string;
-    createdBy?: mongoose.Types.ObjectId;
-    createdAt: Date;
-  }>;
+  notes: IUserNote[];
 
   lastLogin?: Date;
   lastActive: Date;
@@ -301,7 +344,7 @@ export interface IUser extends Document {
 
   generateReferralCode(): string;
 
-  generateTwoFactorSecret(): any;
+  generateTwoFactorSecret(): speakeasy.GeneratedSecret;
 
   verifyTwoFactorToken(
     token: string
@@ -323,7 +366,7 @@ export interface IUser extends Document {
 }
 
 // ============================================
-// MODEL INTERFACE
+// MODEL METHODS
 // ============================================
 
 export interface IUserModel extends Model<IUser> {
@@ -344,56 +387,79 @@ export interface IUserModel extends Model<IUser> {
 
 const userSchema = new Schema<IUser, IUserModel>(
   {
+    // ==========================================
+    // BASIC
+    // ==========================================
+
     username: {
       type: String,
-      unique: true,
       required: [true, 'Username is required'],
+      unique: true,
       trim: true,
       lowercase: true,
-      minlength: [3, 'Username must be at least 3 characters'],
-      maxlength: [20, 'Username cannot exceed 20 characters'],
+
+      minlength: [
+        3,
+        'Username must be at least 3 characters',
+      ],
+
+      maxlength: [
+        20,
+        'Username cannot exceed 20 characters',
+      ],
+
       match: [
         /^[a-zA-Z0-9_]+$/,
-        'Username can only contain letters, numbers and underscore'
+        'Username can only contain letters, numbers and underscore',
       ],
-      index: true
+
+      index: true,
     },
 
     email: {
       type: String,
-      unique: true,
       required: [true, 'Email is required'],
+      unique: true,
       trim: true,
       lowercase: true,
+
       match: [
-        /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
-        'Please provide a valid email'
+        /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+        'Please provide a valid email',
       ],
-      index: true
+
+      index: true,
     },
 
     password: {
       type: String,
       required: [true, 'Password is required'],
-      minlength: [8, 'Password must be at least 8 characters'],
-      select: false
+
+      minlength: [
+        8,
+        'Password must be at least 8 characters',
+      ],
+
+      select: false,
     },
 
     passwordHistory: {
       type: [String],
       default: [],
-      select: false
+      select: false,
     },
 
     phone: {
       type: String,
       required: [true, 'Phone number is required'],
       unique: true,
+      trim: true,
       index: true,
+
       match: [
         /^\+?[0-9]{10,15}$/,
-        'Please provide a valid phone number'
-      ]
+        'Please provide a valid phone number',
+      ],
     },
 
     fullName: {
@@ -401,26 +467,37 @@ const userSchema = new Schema<IUser, IUserModel>(
       trim: true,
       maxlength: [
         100,
-        'Full name cannot exceed 100 characters'
-      ]
+        'Full name cannot exceed 100 characters',
+      ],
     },
 
     dateOfBirth: {
-      type: Date
+      type: Date,
     },
 
     country: {
       type: String,
-      default: 'Ethiopia'
+      default: 'Ethiopia',
+      trim: true,
     },
 
-    city: String,
-    address: String,
-    postalCode: String,
+    city: {
+      type: String,
+      trim: true,
+    },
+
+    address: {
+      type: String,
+      trim: true,
+    },
+
+    postalCode: {
+      type: String,
+      trim: true,
+    },
 
     language: {
       type: String,
-      default: 'en',
       enum: [
         'en',
         'am',
@@ -431,19 +508,19 @@ const userSchema = new Schema<IUser, IUserModel>(
         'it',
         'pt',
         'ru',
-        'zh'
-      ]
+        'zh',
+      ],
+      default: 'en',
     },
 
     theme: {
       type: String,
       enum: ['light', 'dark'],
-      default: 'dark'
+      default: 'dark',
     },
 
     currency: {
       type: String,
-      default: 'ETB',
       enum: [
         'ETB',
         'USD',
@@ -451,259 +528,269 @@ const userSchema = new Schema<IUser, IUserModel>(
         'GBP',
         'BTC',
         'ETH',
-        'USDT'
-      ]
+        'USDT',
+      ],
+      default: 'ETB',
     },
 
     timezone: {
       type: String,
-      default: 'Africa/Addis_Ababa'
+      default: 'Africa/Addis_Ababa',
     },
 
-    // ============================================
+    // ==========================================
     // WALLET
-    // ============================================
+    // ==========================================
 
     wallet: {
       balance: {
         type: Number,
         default: 0,
-        min: 0
+        min: 0,
       },
 
       bonusBalance: {
         type: Number,
         default: 0,
-        min: 0
+        min: 0,
       },
 
       lockedBalance: {
         type: Number,
         default: 0,
-        min: 0
+        min: 0,
       },
 
       currency: {
         type: String,
-        default: 'ETB'
+        default: 'ETB',
       },
 
       totalDeposited: {
         type: Number,
-        default: 0
+        default: 0,
+        min: 0,
       },
 
       totalWithdrawn: {
         type: Number,
-        default: 0
+        default: 0,
+        min: 0,
       },
 
       totalWagered: {
         type: Number,
-        default: 0
+        default: 0,
+        min: 0,
       },
 
       totalWon: {
         type: Number,
-        default: 0
+        default: 0,
+        min: 0,
       },
 
       totalLost: {
         type: Number,
-        default: 0
+        default: 0,
+        min: 0,
       },
 
       totalTaxPaid: {
         type: Number,
-        default: 0
+        default: 0,
+        min: 0,
       },
 
       totalBonusReceived: {
         type: Number,
-        default: 0
+        default: 0,
+        min: 0,
       },
 
       totalCashbackReceived: {
         type: Number,
-        default: 0
-      }
+        default: 0,
+        min: 0,
+      },
     },
 
-    // ============================================
+    // ==========================================
     // STATISTICS
-    // ============================================
+    // ==========================================
 
     statistics: {
       totalBets: {
         type: Number,
-        default: 0
+        default: 0,
       },
 
       totalWins: {
         type: Number,
-        default: 0
+        default: 0,
       },
 
       totalLosses: {
         type: Number,
-        default: 0
+        default: 0,
       },
 
       winningPercentage: {
         type: Number,
-        default: 0
+        default: 0,
       },
 
       currentWinStreak: {
         type: Number,
-        default: 0
+        default: 0,
       },
 
       longestWinStreak: {
         type: Number,
-        default: 0
+        default: 0,
       },
 
       biggestWin: {
         type: Number,
-        default: 0
+        default: 0,
       },
 
       biggestLoss: {
         type: Number,
-        default: 0
+        default: 0,
       },
 
       averageOdds: {
         type: Number,
-        default: 0
-      }
+        default: 0,
+      },
     },
 
-    // ============================================
+    // ==========================================
     // VIP
-    // ============================================
+    // ==========================================
 
     vip: {
       level: {
         type: Number,
         default: 0,
-        enum: [0, 1, 2, 3, 4, 5, 6, 7, 8]
+        enum: [0, 1, 2, 3, 4, 5, 6, 7, 8],
       },
 
       name: {
         type: String,
-        default: 'Bronze'
+        default: 'Bronze',
       },
 
       loyaltyPoints: {
         type: Number,
-        default: 0
+        default: 0,
       },
 
       cashbackPercentage: {
         type: Number,
-        default: 0
+        default: 0,
       },
 
       personalManager: {
         type: Boolean,
-        default: false
+        default: false,
       },
 
       higherLimits: {
         type: Boolean,
-        default: false
+        default: false,
       },
 
       exclusivePromotions: {
         type: Boolean,
-        default: false
+        default: false,
       },
 
       fasterWithdrawals: {
         type: Boolean,
-        default: false
-      }
+        default: false,
+      },
     },
 
-    // ============================================
+    // ==========================================
     // TAX
-    // ============================================
+    // ==========================================
 
     taxProfile: {
       taxExempt: {
         type: Boolean,
-        default: false
+        default: false,
       },
 
       taxId: {
         type: String,
-        sparse: true
+        sparse: true,
       },
 
       taxRegistrationNumber: {
         type: String,
-        sparse: true
+        sparse: true,
       },
 
       isTaxRegistered: {
         type: Boolean,
-        default: false
+        default: false,
       },
 
       totalTaxPaid: {
         type: Number,
-        default: 0
+        default: 0,
       },
 
       totalWinningsTaxed: {
         type: Number,
-        default: 0
+        default: 0,
       },
 
-      lastTaxCalculation: Date
+      lastTaxCalculation: Date,
     },
 
-    // ============================================
+    // ==========================================
     // STATUS
-    // ============================================
+    // ==========================================
 
     isActive: {
       type: Boolean,
       default: true,
-      index: true
+      index: true,
     },
 
     isAdmin: {
       type: Boolean,
       default: false,
-      index: true
+      index: true,
     },
 
     isVerified: {
       type: Boolean,
       default: false,
-      index: true
+      index: true,
     },
 
     isBlocked: {
       type: Boolean,
       default: false,
-      index: true
+      index: true,
     },
 
     isSuspended: {
       type: Boolean,
-      default: false
+      default: false,
     },
 
     suspensionReason: String,
+
     suspensionEndDate: Date,
 
-    // ============================================
+    // ==========================================
     // KYC
-    // ============================================
+    // ==========================================
 
     kycDocuments: [
       {
@@ -714,8 +801,8 @@ const userSchema = new Schema<IUser, IUserModel>(
             'passport',
             'drivers_license',
             'proof_of_address',
-            'selfie'
-          ]
+            'selfie',
+          ],
         },
 
         documentUrl: String,
@@ -726,22 +813,23 @@ const userSchema = new Schema<IUser, IUserModel>(
           enum: [
             'pending',
             'approved',
-            'rejected'
+            'rejected',
           ],
-          default: 'pending'
+          default: 'pending',
         },
 
         submittedAt: {
           type: Date,
-          default: Date.now
+          default: Date.now,
         },
 
         reviewedAt: Date,
         reviewedBy: String,
         rejectionReason: String,
+
         verifiedAt: Date,
-        verifiedBy: String
-      }
+        verifiedBy: String,
+      },
     ],
 
     kycStatus: {
@@ -750,201 +838,226 @@ const userSchema = new Schema<IUser, IUserModel>(
         'unverified',
         'pending',
         'verified',
-        'rejected'
+        'rejected',
       ],
-      default: 'unverified'
+      default: 'unverified',
     },
 
     kycLevel: {
       type: Number,
       default: 0,
-      enum: [0, 1, 2, 3]
+      enum: [0, 1, 2, 3],
     },
 
-    // ============================================
+    // ==========================================
     // 2FA
-    // ============================================
+    // ==========================================
 
     twoFactorEnabled: {
       type: Boolean,
-      default: false
+      default: false,
     },
 
     twoFactorSecret: {
       type: String,
-      select: false
+      select: false,
     },
 
-    twoFactorBackupCodes: [
-      {
-        type: String,
-        select: false
-      }
-    ],
+    twoFactorBackupCodes: {
+      type: [String],
+      default: [],
+      select: false,
+    },
+
+    // ==========================================
+    // VERIFICATION
+    // ==========================================
 
     emailVerified: {
       type: Boolean,
-      default: false
+      default: false,
     },
 
     phoneVerified: {
       type: Boolean,
-      default: false
+      default: false,
     },
 
-    emailVerificationToken: String,
+    emailVerificationToken: {
+      type: String,
+      select: false,
+    },
+
     emailVerificationExpires: Date,
 
-    phoneVerificationCode: String,
+    phoneVerificationCode: {
+      type: String,
+      select: false,
+    },
+
     phoneVerificationExpires: Date,
 
-    // ============================================
+    // ==========================================
     // LOGIN SECURITY
-    // ============================================
+    // ==========================================
 
     loginAttempts: {
       type: Number,
-      default: 0
+      default: 0,
     },
 
     lockedUntil: Date,
+
     lastLoginIP: String,
 
     lastLoginLocation: {
       city: String,
       country: String,
       lat: Number,
-      lng: Number
+      lng: Number,
     },
 
-    resetPasswordToken: String,
+    // ==========================================
+    // PASSWORD RESET
+    // ==========================================
+
+    resetPasswordToken: {
+      type: String,
+      select: false,
+    },
+
     resetPasswordExpires: Date,
 
-    // ============================================
+    // ==========================================
     // REFERRALS
-    // ============================================
+    // ==========================================
 
     referralCode: {
       type: String,
       unique: true,
-      sparse: true
+      sparse: true,
+      uppercase: true,
+      index: true,
     },
 
     referredBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User'
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      index: true,
     },
 
     referralCount: {
       type: Number,
-      default: 0
+      default: 0,
     },
 
     referralEarnings: {
       type: Number,
-      default: 0
+      default: 0,
     },
 
     referralTier: {
       type: Number,
-      default: 1
+      default: 1,
     },
 
-    // ============================================
+    // ==========================================
     // RESPONSIBLE GAMBLING
-    // ============================================
+    // ==========================================
 
     responsibleGambling: {
       depositLimit: {
         type: Number,
-        default: 10000
+        default: 10000,
       },
 
       lossLimit: {
         type: Number,
-        default: 5000
+        default: 5000,
       },
 
       wagerLimit: {
         type: Number,
-        default: 50000
+        default: 50000,
       },
 
       sessionTimeout: {
         type: Number,
-        default: 120
+        default: 120,
       },
 
       realityCheckInterval: {
         type: Number,
-        default: 60
+        default: 60,
       },
 
       selfExcluded: {
         type: Boolean,
-        default: false
+        default: false,
       },
 
       selfExclusionEndDate: Date,
+
       coolingOffPeriodEnd: Date,
-      lastRealityCheck: Date
+
+      lastRealityCheck: Date,
     },
 
-    // ============================================
+    // ==========================================
     // NOTIFICATIONS
-    // ============================================
+    // ==========================================
 
     notifications: {
       email: {
         type: Boolean,
-        default: true
+        default: true,
       },
 
       push: {
         type: Boolean,
-        default: true
+        default: true,
       },
 
       sms: {
         type: Boolean,
-        default: false
+        default: false,
       },
 
       betSettlements: {
         type: Boolean,
-        default: true
+        default: true,
       },
 
       promotions: {
         type: Boolean,
-        default: true
+        default: true,
       },
 
       aiTips: {
         type: Boolean,
-        default: true
+        default: true,
       },
 
       systemUpdates: {
         type: Boolean,
-        default: true
+        default: true,
       },
 
       securityAlerts: {
         type: Boolean,
-        default: true
-      }
+        default: true,
+      },
     },
 
-    // ============================================
+    // ==========================================
     // DEVICES
-    // ============================================
+    // ==========================================
 
     devices: [
       {
         deviceId: {
           type: String,
-          required: true
+          required: true,
         },
 
         deviceName: String,
@@ -955,8 +1068,8 @@ const userSchema = new Schema<IUser, IUserModel>(
             'web',
             'ios',
             'android',
-            'admin'
-          ]
+            'admin',
+          ],
         },
 
         browser: String,
@@ -967,32 +1080,32 @@ const userSchema = new Schema<IUser, IUserModel>(
 
         biometricEnabled: {
           type: Boolean,
-          default: false
+          default: false,
         },
 
         biometricPublicKey: String,
 
         lastUsed: {
           type: Date,
-          default: Date.now
+          default: Date.now,
         },
 
         isActive: {
           type: Boolean,
-          default: true
-        }
-      }
+          default: true,
+        },
+      },
     ],
 
-    // ============================================
+    // ==========================================
     // SESSIONS
-    // ============================================
+    // ==========================================
 
     sessions: [
       {
         sessionId: {
           type: String,
-          required: true
+          required: true,
         },
 
         ipAddress: String,
@@ -1001,21 +1114,26 @@ const userSchema = new Schema<IUser, IUserModel>(
 
         loginAt: {
           type: Date,
-          default: Date.now
+          default: Date.now,
         },
 
         lastActivity: {
           type: Date,
-          default: Date.now
+          default: Date.now,
         },
 
-        expiresAt: Date
-      }
+        expiresAt: Date,
+
+        refreshTokenHash: {
+          type: String,
+          select: false,
+        },
+      },
     ],
 
-    // ============================================
+    // ==========================================
     // PAYMENT METHODS
-    // ============================================
+    // ==========================================
 
     savedPaymentMethods: [
       {
@@ -1027,8 +1145,8 @@ const userSchema = new Schema<IUser, IUserModel>(
             'card',
             'paypal',
             'crypto',
-            'bank_transfer'
-          ]
+            'bank_transfer',
+          ],
         },
 
         identifier: String,
@@ -1037,113 +1155,143 @@ const userSchema = new Schema<IUser, IUserModel>(
 
         isDefault: {
           type: Boolean,
-          default: false
+          default: false,
         },
 
         addedAt: {
           type: Date,
-          default: Date.now
+          default: Date.now,
         },
 
-        metadata: mongoose.Schema.Types.Mixed
-      }
+        metadata: Schema.Types.Mixed,
+      },
     ],
 
-    // ============================================
+    // ==========================================
     // BETTING PREFERENCES
-    // ============================================
+    // ==========================================
 
     bettingPreferences: {
       defaultStake: {
         type: Number,
-        default: 10
+        default: 10,
       },
 
       autoCashoutMultiplier: {
         type: Number,
-        default: 0
+        default: 0,
       },
 
-      favoriteLeagues: [
-        {
-          type: String
-        }
-      ],
+      favoriteLeagues: {
+        type: [String],
+        default: [],
+      },
 
-      favoriteTeams: [
-        {
-          type: String
-        }
-      ],
+      favoriteTeams: {
+        type: [String],
+        default: [],
+      },
 
-      excludedMarkets: [
-        {
-          type: String
-        }
-      ]
+      excludedMarkets: {
+        type: [String],
+        default: [],
+      },
     },
 
-    // ============================================
+    // ==========================================
     // AFFILIATE
-    // ============================================
+    // ==========================================
 
     affiliate: {
       partnerId: String,
 
       commissionRate: {
         type: Number,
-        default: 0
+        default: 0,
       },
 
       totalCommission: {
         type: Number,
-        default: 0
+        default: 0,
       },
 
       paidCommission: {
         type: Number,
-        default: 0
-      }
+        default: 0,
+      },
     },
 
-    // ============================================
+    // ==========================================
     // NOTES
-    // ============================================
+    // ==========================================
 
     notes: [
       {
         note: String,
 
         createdBy: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: 'User'
+          type: Schema.Types.ObjectId,
+          ref: 'User',
         },
 
         createdAt: {
           type: Date,
-          default: Date.now
-        }
-      }
+          default: Date.now,
+        },
+      },
     ],
 
-    // Timestamps are handled by Mongoose.
+    // ==========================================
+    // ACTIVITY
+    // ==========================================
+
     lastLogin: Date,
 
     lastActive: {
       type: Date,
-      default: Date.now
-    }
+      default: Date.now,
+      index: true,
+    },
   },
+
   {
     timestamps: true,
 
     toJSON: {
-      virtuals: true
+      virtuals: true,
+
+      transform: (_doc, ret) => {
+        delete ret.password;
+        delete ret.passwordHistory;
+
+        delete ret.twoFactorSecret;
+        delete ret.twoFactorBackupCodes;
+
+        delete ret.resetPasswordToken;
+        delete ret.emailVerificationToken;
+        delete ret.phoneVerificationCode;
+
+        if (Array.isArray(ret.sessions)) {
+          ret.sessions = ret.sessions.map(
+            (session: Record<string, unknown>) => {
+              const clean = {
+                ...session,
+              };
+
+              delete clean.refreshTokenHash;
+
+              return clean;
+            }
+          );
+        }
+
+        return ret;
+      },
     },
 
     toObject: {
-      virtuals: true
-    }
+      virtuals: true,
+    },
   }
 );
 
@@ -1151,22 +1299,51 @@ const userSchema = new Schema<IUser, IUserModel>(
 // INDEXES
 // ============================================
 
-userSchema.index({ createdAt: -1 });
-userSchema.index({ lastActive: -1 });
-userSchema.index({ 'wallet.balance': -1 });
-userSchema.index({ 'vip.level': -1 });
-userSchema.index({ 'vip.loyaltyPoints': -1 });
-userSchema.index({ referralCode: 1 });
-userSchema.index({ referredBy: 1 });
-userSchema.index({ 'devices.deviceId': 1 });
-userSchema.index({ 'sessions.sessionId': 1 });
-userSchema.index({ kycStatus: 1 });
+userSchema.index({
+  createdAt: -1,
+});
+
+userSchema.index({
+  lastActive: -1,
+});
+
+userSchema.index({
+  'wallet.balance': -1,
+});
+
+userSchema.index({
+  'vip.level': -1,
+});
+
+userSchema.index({
+  'vip.loyaltyPoints': -1,
+});
+
+userSchema.index({
+  referralCode: 1,
+});
+
+userSchema.index({
+  referredBy: 1,
+});
+
+userSchema.index({
+  'devices.deviceId': 1,
+});
+
+userSchema.index({
+  'sessions.sessionId': 1,
+});
+
+userSchema.index({
+  kycStatus: 1,
+});
 
 // ============================================
-// PASSWORD HASH
+// PASSWORD HASHING
 // ============================================
 
-userSchema.pre('save', async function(next) {
+userSchema.pre('save', async function (next) {
   try {
     if (!this.isModified('password')) {
       return next();
@@ -1183,26 +1360,26 @@ userSchema.pre('save', async function(next) {
       12
     );
 
-    if (!this.passwordHistory) {
-      this.passwordHistory = [];
-    }
+    const history = Array.isArray(
+      this.passwordHistory
+    )
+      ? [...this.passwordHistory]
+      : [];
 
-    /*
-     * Avoid adding the same hash twice.
-     * The history contains hashes, not plaintext.
-     */
-    this.passwordHistory.unshift(hashedPassword);
+    history.unshift(hashedPassword);
 
-    if (this.passwordHistory.length > 5) {
-      this.passwordHistory =
-        this.passwordHistory.slice(0, 5);
-    }
+    this.passwordHistory =
+      history.slice(0, 5);
 
     this.password = hashedPassword;
 
     next();
   } catch (error) {
-    next(error as Error);
+    next(
+      error instanceof Error
+        ? error
+        : new Error('Password hashing failed')
+    );
   }
 });
 
@@ -1210,10 +1387,11 @@ userSchema.pre('save', async function(next) {
 // NORMALIZATION
 // ============================================
 
-userSchema.pre('save', function(next) {
+userSchema.pre('save', function (next) {
   try {
     if (!this.wallet) {
-      this.wallet = createDefaultWallet();
+      this.wallet =
+        createDefaultWallet();
     }
 
     if (!this.referralCode && this.isNew) {
@@ -1223,19 +1401,26 @@ userSchema.pre('save', function(next) {
 
     next();
   } catch (error) {
-    next(error as Error);
+    next(
+      error instanceof Error
+        ? error
+        : new Error('User normalization failed')
+    );
   }
 });
 
 // ============================================
-// PASSWORD
+// PASSWORD COMPARISON
 // ============================================
 
 userSchema.methods.comparePassword =
-  async function(
+  async function (
     candidatePassword: string
   ): Promise<boolean> {
-    if (!this.password) {
+    if (
+      !candidatePassword ||
+      !this.password
+    ) {
       return false;
     }
 
@@ -1250,11 +1435,12 @@ userSchema.methods.comparePassword =
 // ============================================
 
 userSchema.methods.generateReferralCode =
-  function(): string {
-    const random = crypto
-      .randomBytes(4)
-      .toString('hex')
-      .toUpperCase();
+  function (): string {
+    const random =
+      crypto
+        .randomBytes(5)
+        .toString('hex')
+        .toUpperCase();
 
     return `SHB${random}`;
   };
@@ -1264,11 +1450,16 @@ userSchema.methods.generateReferralCode =
 // ============================================
 
 userSchema.methods.generateTwoFactorSecret =
-  function(): any {
+  function (): speakeasy.GeneratedSecret {
     const secret =
       speakeasy.generateSecret({
         length: 20,
-        name: `SHEBAODDS (${this.email})`
+
+        name:
+          `SHEBAODDS (${this.email})`,
+
+        issuer:
+          'SHEBAODDS',
       });
 
     this.twoFactorSecret =
@@ -1282,17 +1473,27 @@ userSchema.methods.generateTwoFactorSecret =
 // ============================================
 
 userSchema.methods.verifyTwoFactorToken =
-  function(token: string): boolean {
-    if (!this.twoFactorSecret) {
+  function (
+    token: string
+  ): boolean {
+    if (
+      !this.twoFactorSecret ||
+      !/^\d{6}$/.test(token)
+    ) {
       return false;
     }
 
     return Boolean(
       speakeasy.totp.verify({
-        secret: this.twoFactorSecret,
-        encoding: 'base32',
+        secret:
+          this.twoFactorSecret,
+
+        encoding:
+          'base32',
+
         token,
-        window: 2
+
+        window: 1,
       })
     );
   };
@@ -1302,7 +1503,7 @@ userSchema.methods.verifyTwoFactorToken =
 // ============================================
 
 userSchema.methods.generateBackupCodes =
-  function(): string[] {
+  function (): string[] {
     const codes: string[] = [];
 
     for (let i = 0; i < 10; i++) {
@@ -1315,8 +1516,8 @@ userSchema.methods.generateBackupCodes =
     }
 
     this.twoFactorBackupCodes =
-      codes.map(code =>
-        bcrypt.hashSync(code, 10)
+      codes.map((code) =>
+        bcrypt.hashSync(code, 12)
       );
 
     return codes;
@@ -1327,31 +1528,37 @@ userSchema.methods.generateBackupCodes =
 // ============================================
 
 userSchema.methods.verifyBackupCode =
-  async function(
+  async function (
     code: string
   ): Promise<boolean> {
     if (
-      !this.twoFactorBackupCodes ||
-      this.twoFactorBackupCodes.length === 0
+      !code ||
+      !Array.isArray(
+        this.twoFactorBackupCodes
+      )
     ) {
       return false;
     }
 
     for (
       let i = 0;
-      i < this.twoFactorBackupCodes.length;
+      i <
+      this.twoFactorBackupCodes.length;
       i++
     ) {
       const hash =
         this.twoFactorBackupCodes[i];
 
       if (
-        await bcrypt.compare(code, hash)
+        await bcrypt.compare(
+          code,
+          hash
+        )
       ) {
-        /*
-         * Backup codes are one-time-use.
-         */
-        this.twoFactorBackupCodes.splice(i, 1);
+        this.twoFactorBackupCodes.splice(
+          i,
+          1
+        );
 
         await this.save();
 
@@ -1363,24 +1570,35 @@ userSchema.methods.verifyBackupCode =
   };
 
 // ============================================
-// EMAIL VERIFICATION
+// EMAIL VERIFICATION TOKEN
 // ============================================
 
 userSchema.methods.generateEmailVerificationToken =
-  function(): string {
-    const token =
-      crypto.randomBytes(32).toString('hex');
+  function (): string {
+    const rawToken =
+      crypto
+        .randomBytes(32)
+        .toString('hex');
+
+    const hashedToken =
+      crypto
+        .createHash('sha256')
+        .update(rawToken)
+        .digest('hex');
 
     this.emailVerificationToken =
-      token;
+      hashedToken;
 
     this.emailVerificationExpires =
       new Date(
         Date.now() +
-        24 * 60 * 60 * 1000
+          24 *
+            60 *
+            60 *
+            1000
       );
 
-    return token;
+    return rawToken;
   };
 
 // ============================================
@@ -1388,7 +1606,7 @@ userSchema.methods.generateEmailVerificationToken =
 // ============================================
 
 userSchema.methods.updateVipLevel =
-  function(): void {
+  function (): void {
     const totalWagered =
       this.wallet?.totalWagered || 0;
 
@@ -1428,12 +1646,21 @@ userSchema.methods.updateVipLevel =
 
     this.vip.level = level;
     this.vip.name = name;
-    this.vip.cashbackPercentage = cashback;
 
-    this.vip.personalManager = level >= 6;
-    this.vip.higherLimits = level >= 4;
-    this.vip.exclusivePromotions = level >= 3;
-    this.vip.fasterWithdrawals = level >= 5;
+    this.vip.cashbackPercentage =
+      cashback;
+
+    this.vip.personalManager =
+      level >= 6;
+
+    this.vip.higherLimits =
+      level >= 4;
+
+    this.vip.exclusivePromotions =
+      level >= 3;
+
+    this.vip.fasterWithdrawals =
+      level >= 5;
   };
 
 // ============================================
@@ -1441,7 +1668,9 @@ userSchema.methods.updateVipLevel =
 // ============================================
 
 userSchema.methods.canPlaceBet =
-  function(amount: number): boolean {
+  function (
+    amount: number
+  ): boolean {
     if (
       !Number.isFinite(amount) ||
       amount <= 0
@@ -1457,25 +1686,32 @@ userSchema.methods.canPlaceBet =
       return false;
     }
 
-    const now = new Date();
+    const now =
+      new Date();
+
+    const rg =
+      this.responsibleGambling;
 
     if (
-      this.responsibleGambling?.selfExcluded &&
-      this.responsibleGambling.selfExclusionEndDate &&
-      this.responsibleGambling.selfExclusionEndDate > now
+      rg?.selfExcluded &&
+      rg.selfExclusionEndDate &&
+      rg.selfExclusionEndDate >
+        now
     ) {
       return false;
     }
 
     if (
-      this.responsibleGambling?.coolingOffPeriodEnd &&
-      this.responsibleGambling.coolingOffPeriodEnd > now
+      rg?.coolingOffPeriodEnd &&
+      rg.coolingOffPeriodEnd >
+        now
     ) {
       return false;
     }
 
     return (
-      (this.wallet?.balance || 0) >= amount
+      (this.wallet?.balance || 0) >=
+      amount
     );
   };
 
@@ -1484,16 +1720,20 @@ userSchema.methods.canPlaceBet =
 // ============================================
 
 userSchema.methods.getDepositLimit =
-  function(): number {
+  function (): number {
     let limit =
       this.responsibleGambling
         ?.depositLimit || 0;
 
-    if (this.vip?.higherLimits) {
+    if (
+      this.vip?.higherLimits
+    ) {
       limit *= 2;
     }
 
-    if ((this.vip?.level || 0) >= 7) {
+    if (
+      (this.vip?.level || 0) >= 7
+    ) {
       limit *= 5;
     }
 
@@ -1501,40 +1741,27 @@ userSchema.methods.getDepositLimit =
   };
 
 // ============================================
-// SAFE JSON
-// ============================================
-
-userSchema.methods.toJSON =
-  function(): any {
-    const obj = this.toObject();
-
-    delete obj.password;
-    delete obj.passwordHistory;
-    delete obj.twoFactorSecret;
-    delete obj.twoFactorBackupCodes;
-    delete obj.resetPasswordToken;
-    delete obj.emailVerificationToken;
-    delete obj.phoneVerificationCode;
-
-    return obj;
-  };
-
-// ============================================
 // STATIC: FIND USER
 // ============================================
 
 userSchema.statics.findByEmailOrUsername =
-  function(
+  function (
     identifier: string
   ): Promise<IUser | null> {
     const normalized =
-      identifier.trim().toLowerCase();
+      identifier
+        .trim()
+        .toLowerCase();
 
     return this.findOne({
       $or: [
-        { email: normalized },
-        { username: normalized }
-      ]
+        {
+          email: normalized,
+        },
+        {
+          username: normalized,
+        },
+      ],
     }).exec();
   };
 
@@ -1543,17 +1770,23 @@ userSchema.statics.findByEmailOrUsername =
 // ============================================
 
 userSchema.statics.getTopWagered =
-  function(
+  function (
     limit = 100
   ): Promise<IUser[]> {
     const safeLimit =
-      Math.min(Math.max(limit, 1), 1000);
+      Math.min(
+        Math.max(
+          Number(limit) || 100,
+          1
+        ),
+        1000
+      );
 
     return this.find({
-      isActive: true
+      isActive: true,
     })
       .sort({
-        'wallet.totalWagered': -1
+        'wallet.totalWagered': -1,
       })
       .limit(safeLimit)
       .select(
@@ -1567,17 +1800,19 @@ userSchema.statics.getTopWagered =
 // ============================================
 
 userSchema.statics.getOnlineUsers =
-  function(): Promise<number> {
+  function (): Promise<number> {
     const fiveMinutesAgo =
       new Date(
         Date.now() -
-        5 * 60 * 1000
+          5 *
+            60 *
+            1000
       );
 
     return this.countDocuments({
       lastActive: {
-        $gte: fiveMinutesAgo
-      }
+        $gte: fiveMinutesAgo,
+      },
     }).exec();
   };
 
@@ -1585,16 +1820,15 @@ userSchema.statics.getOnlineUsers =
 // MODEL
 // ============================================
 
-const existingUserModel =
-  mongoose.models.User as
-    | IUserModel
-    | undefined;
-
-export const User: IUserModel =
-  existingUserModel ||
+const User =
+  (mongoose.models.User as IUserModel | undefined) ??
   mongoose.model<IUser, IUserModel>(
     'User',
     userSchema
   );
+
+export {
+  User,
+};
 
 export default User;
