@@ -4,13 +4,11 @@
 // Production-ready typed Bet model
 // ============================================================
 
-import {
+import mongoose, {
   HydratedDocument,
   Model,
   Schema,
   Types,
-  model,
-  models,
 } from 'mongoose';
 
 // ============================================================
@@ -29,7 +27,8 @@ export const BET_STATUSES = [
   'push',
 ] as const;
 
-export type BetStatus = (typeof BET_STATUSES)[number];
+export type BetStatus =
+  (typeof BET_STATUSES)[number];
 
 export const BET_TYPES = [
   'single',
@@ -39,7 +38,8 @@ export const BET_TYPES = [
   'bet_builder',
 ] as const;
 
-export type BetType = (typeof BET_TYPES)[number];
+export type BetType =
+  (typeof BET_TYPES)[number];
 
 export const BET_PERIODS = [
   'full',
@@ -49,7 +49,8 @@ export const BET_PERIODS = [
   'penalties',
 ] as const;
 
-export type BetPeriod = (typeof BET_PERIODS)[number];
+export type BetPeriod =
+  (typeof BET_PERIODS)[number];
 
 // ============================================================
 // ACCUMULATOR SELECTION
@@ -88,8 +89,9 @@ export interface IBetStatusHistory {
 // ============================================================
 
 export interface IBet {
+
   // ----------------------------------------------------------
-  // User / Match
+  // USER / MATCH
   // ----------------------------------------------------------
 
   userId: Types.ObjectId;
@@ -97,7 +99,7 @@ export interface IBet {
   matchId: Types.ObjectId;
 
   // ----------------------------------------------------------
-  // Bet Details
+  // BET DETAILS
   // ----------------------------------------------------------
 
   betType: BetType;
@@ -115,7 +117,7 @@ export interface IBet {
   actualWin: number;
 
   // ----------------------------------------------------------
-  // Tax
+  // TAX
   // ----------------------------------------------------------
 
   taxAmount: number;
@@ -127,27 +129,29 @@ export interface IBet {
   taxTransactionId?: Types.ObjectId;
 
   // ----------------------------------------------------------
-  // Accumulator
+  // ACCUMULATOR
   // ----------------------------------------------------------
 
   isAccumulator: boolean;
 
   accumulatorId?: string;
 
-  accumulatorSelections: IAccumulatorSelection[];
+  accumulatorSelections:
+    IAccumulatorSelection[];
 
   combinedOdds: number;
 
   // ----------------------------------------------------------
-  // Bet Builder
+  // BET BUILDER
   // ----------------------------------------------------------
 
   isBetBuilder: boolean;
 
-  betBuilderSelections: IBetBuilderSelection[];
+  betBuilderSelections:
+    IBetBuilderSelection[];
 
   // ----------------------------------------------------------
-  // Live Betting
+  // LIVE BETTING
   // ----------------------------------------------------------
 
   isLive: boolean;
@@ -155,7 +159,7 @@ export interface IBet {
   betPlacedAtMinute?: number;
 
   // ----------------------------------------------------------
-  // Cash Out
+  // CASH OUT
   // ----------------------------------------------------------
 
   cashOutAvailable: boolean;
@@ -171,7 +175,7 @@ export interface IBet {
   autoCashOutTriggered: boolean;
 
   // ----------------------------------------------------------
-  // Status
+  // STATUS
   // ----------------------------------------------------------
 
   status: BetStatus;
@@ -179,7 +183,7 @@ export interface IBet {
   statusHistory: IBetStatusHistory[];
 
   // ----------------------------------------------------------
-  // Settlement
+  // SETTLEMENT
   // ----------------------------------------------------------
 
   settledAt?: Date;
@@ -191,7 +195,7 @@ export interface IBet {
   winAmount: number;
 
   // ----------------------------------------------------------
-  // Partial Settlement
+  // PARTIAL SETTLEMENT
   // ----------------------------------------------------------
 
   isHalfWin: boolean;
@@ -201,13 +205,13 @@ export interface IBet {
   isPush: boolean;
 
   // ----------------------------------------------------------
-  // Period
+  // PERIOD
   // ----------------------------------------------------------
 
   period: BetPeriod;
 
   // ----------------------------------------------------------
-  // Metadata
+  // METADATA
   // ----------------------------------------------------------
 
   deviceInfo?: string;
@@ -215,7 +219,7 @@ export interface IBet {
   ipAddress?: string;
 
   // ----------------------------------------------------------
-  // Timestamps
+  // TIMESTAMPS
   // ----------------------------------------------------------
 
   createdAt: Date;
@@ -224,12 +228,57 @@ export interface IBet {
 }
 
 // ============================================================
+// BET STATIC METHODS
+// ============================================================
+
+export interface IBetModelStatics {
+
+  findUserBets(
+    userId: Types.ObjectId | string,
+    options?: {
+      status?: BetStatus;
+      limit?: number;
+      skip?: number;
+    }
+  ): ReturnType<Model<IBet>['find']>;
+
+  findPendingForMatch(
+    matchId: Types.ObjectId | string
+  ): ReturnType<Model<IBet>['find']>;
+}
+
+// ============================================================
+// BET METHODS
+// ============================================================
+
+export interface IBetMethods {
+
+  setStatus(
+    status: BetStatus,
+    reason?: string
+  ): Promise<BetDocument>;
+}
+
+// ============================================================
+// DOCUMENT TYPE
+// ============================================================
+
+export type BetDocument =
+  HydratedDocument<
+    IBet,
+    IBetMethods
+  >;
+
+// ============================================================
 // MODEL TYPE
 // ============================================================
 
-export type BetDocument = HydratedDocument<IBet>;
-
-export type BetModel = Model<IBet>;
+export type BetModel =
+  Model<
+    IBet,
+    IBetModelStatics,
+    IBetMethods
+  >;
 
 // ============================================================
 // ACCUMULATOR SCHEMA
@@ -268,7 +317,7 @@ const accumulatorSelectionSchema =
     },
     {
       _id: false,
-    },
+    }
   );
 
 // ============================================================
@@ -298,7 +347,7 @@ const betBuilderSelectionSchema =
     },
     {
       _id: false,
-    },
+    }
   );
 
 // ============================================================
@@ -326,353 +375,364 @@ const betStatusHistorySchema =
     },
     {
       _id: false,
-    },
+    }
   );
 
 // ============================================================
 // BET SCHEMA
 // ============================================================
 
-const betSchema = new Schema<IBet>(
-  {
-    // ========================================================
-    // USER
-    // ========================================================
+const betSchema =
+  new Schema<
+    IBet,
+    BetModel,
+    IBetMethods
+  >(
+    {
 
-    userId: {
-      type: Schema.Types.ObjectId,
-      ref: 'User',
-      required: true,
-      index: true,
+      // ========================================================
+      // USER
+      // ========================================================
+
+      userId: {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+        required: true,
+        index: true,
+      },
+
+      // ========================================================
+      // MATCH
+      // ========================================================
+
+      matchId: {
+        type: Schema.Types.ObjectId,
+        ref: 'Match',
+        required: true,
+        index: true,
+      },
+
+      // ========================================================
+      // BET DETAILS
+      // ========================================================
+
+      betType: {
+        type: String,
+        enum: BET_TYPES,
+        required: true,
+        default: 'single',
+        index: true,
+      },
+
+      marketType: {
+        type: String,
+        required: true,
+        trim: true,
+        maxlength: 100,
+      },
+
+      selection: {
+        type: String,
+        required: true,
+        trim: true,
+        maxlength: 200,
+      },
+
+      odds: {
+        type: Number,
+        required: true,
+        min: 1,
+        max: 100000,
+      },
+
+      stake: {
+        type: Number,
+        required: true,
+        min: 0.01,
+        max: 100000000,
+      },
+
+      potentialWin: {
+        type: Number,
+        required: true,
+        min: 0,
+      },
+
+      actualWin: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+
+      // ========================================================
+      // TAX
+      // ========================================================
+
+      taxAmount: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+
+      taxRate: {
+        type: Number,
+        default: 0.15,
+        min: 0,
+        max: 1,
+      },
+
+      netWin: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+
+      taxTransactionId: {
+        type: Schema.Types.ObjectId,
+        ref: 'TaxTransaction',
+      },
+
+      // ========================================================
+      // ACCUMULATOR
+      // ========================================================
+
+      isAccumulator: {
+        type: Boolean,
+        default: false,
+        index: true,
+      },
+
+      accumulatorId: {
+        type: String,
+        trim: true,
+        index: true,
+      },
+
+      accumulatorSelections: {
+        type: [
+          accumulatorSelectionSchema,
+        ],
+        default: [],
+      },
+
+      combinedOdds: {
+        type: Number,
+        default: 1,
+        min: 1,
+      },
+
+      // ========================================================
+      // BET BUILDER
+      // ========================================================
+
+      isBetBuilder: {
+        type: Boolean,
+        default: false,
+        index: true,
+      },
+
+      betBuilderSelections: {
+        type: [
+          betBuilderSelectionSchema,
+        ],
+        default: [],
+      },
+
+      // ========================================================
+      // LIVE BETTING
+      // ========================================================
+
+      isLive: {
+        type: Boolean,
+        default: false,
+        index: true,
+      },
+
+      betPlacedAtMinute: {
+        type: Number,
+        min: 0,
+        max: 300,
+      },
+
+      // ========================================================
+      // CASH OUT
+      // ========================================================
+
+      cashOutAvailable: {
+        type: Boolean,
+        default: false,
+        index: true,
+      },
+
+      cashOutAmount: {
+        type: Number,
+        min: 0,
+      },
+
+      cashOutMultiplier: {
+        type: Number,
+        min: 0,
+      },
+
+      cashedOutAt: {
+        type: Date,
+      },
+
+      autoCashOutMultiplier: {
+        type: Number,
+        min: 0,
+      },
+
+      autoCashOutTriggered: {
+        type: Boolean,
+        default: false,
+      },
+
+      // ========================================================
+      // STATUS
+      // ========================================================
+
+      status: {
+        type: String,
+        enum: BET_STATUSES,
+        default: 'pending',
+        required: true,
+        index: true,
+      },
+
+      statusHistory: {
+        type: [
+          betStatusHistorySchema,
+        ],
+        default: [],
+      },
+
+      // ========================================================
+      // SETTLEMENT
+      // ========================================================
+
+      settledAt: {
+        type: Date,
+      },
+
+      settledScore: {
+        type: String,
+        trim: true,
+        maxlength: 100,
+      },
+
+      actualOutcome: {
+        type: String,
+        trim: true,
+        maxlength: 200,
+      },
+
+      winAmount: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+
+      // ========================================================
+      // PARTIAL SETTLEMENT
+      // ========================================================
+
+      isHalfWin: {
+        type: Boolean,
+        default: false,
+      },
+
+      isHalfLoss: {
+        type: Boolean,
+        default: false,
+      },
+
+      isPush: {
+        type: Boolean,
+        default: false,
+      },
+
+      // ========================================================
+      // PERIOD
+      // ========================================================
+
+      period: {
+        type: String,
+        enum: BET_PERIODS,
+        default: 'full',
+        required: true,
+      },
+
+      // ========================================================
+      // METADATA
+      // ========================================================
+
+      deviceInfo: {
+        type: String,
+        trim: true,
+        maxlength: 1000,
+      },
+
+      ipAddress: {
+        type: String,
+        trim: true,
+        maxlength: 100,
+      },
+
     },
+    {
+      timestamps: true,
 
-    // ========================================================
-    // MATCH
-    // ========================================================
+      id: false,
 
-    matchId: {
-      type: Schema.Types.ObjectId,
-      ref: 'Match',
-      required: true,
-      index: true,
-    },
+      strict: true,
 
-    // ========================================================
-    // BET DETAILS
-    // ========================================================
+      versionKey: false,
 
-    betType: {
-      type: String,
-      enum: BET_TYPES,
-      required: true,
-      default: 'single',
-      index: true,
-    },
+      toJSON: {
+        virtuals: true,
+      },
 
-    marketType: {
-      type: String,
-      required: true,
-      trim: true,
-      maxlength: 100,
-    },
-
-    selection: {
-      type: String,
-      required: true,
-      trim: true,
-      maxlength: 200,
-    },
-
-    odds: {
-      type: Number,
-      required: true,
-      min: 1,
-      max: 100000,
-    },
-
-    stake: {
-      type: Number,
-      required: true,
-      min: 0.01,
-      max: 100000000,
-    },
-
-    potentialWin: {
-      type: Number,
-      required: true,
-      min: 0,
-    },
-
-    actualWin: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
-
-    // ========================================================
-    // TAX
-    // ========================================================
-
-    taxAmount: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
-
-    taxRate: {
-      type: Number,
-      default: 0.15,
-      min: 0,
-      max: 1,
-    },
-
-    netWin: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
-
-    taxTransactionId: {
-      type: Schema.Types.ObjectId,
-      ref: 'TaxTransaction',
-    },
-
-    // ========================================================
-    // ACCUMULATOR
-    // ========================================================
-
-    isAccumulator: {
-      type: Boolean,
-      default: false,
-      index: true,
-    },
-
-    accumulatorId: {
-      type: String,
-      trim: true,
-      index: true,
-    },
-
-    accumulatorSelections: {
-      type: [accumulatorSelectionSchema],
-      default: [],
-    },
-
-    combinedOdds: {
-      type: Number,
-      default: 1,
-      min: 1,
-    },
-
-    // ========================================================
-    // BET BUILDER
-    // ========================================================
-
-    isBetBuilder: {
-      type: Boolean,
-      default: false,
-      index: true,
-    },
-
-    betBuilderSelections: {
-      type: [betBuilderSelectionSchema],
-      default: [],
-    },
-
-    // ========================================================
-    // LIVE BETTING
-    // ========================================================
-
-    isLive: {
-      type: Boolean,
-      default: false,
-      index: true,
-    },
-
-    betPlacedAtMinute: {
-      type: Number,
-      min: 0,
-      max: 300,
-    },
-
-    // ========================================================
-    // CASH OUT
-    // ========================================================
-
-    cashOutAvailable: {
-      type: Boolean,
-      default: false,
-      index: true,
-    },
-
-    cashOutAmount: {
-      type: Number,
-      min: 0,
-    },
-
-    cashOutMultiplier: {
-      type: Number,
-      min: 0,
-    },
-
-    cashedOutAt: {
-      type: Date,
-    },
-
-    autoCashOutMultiplier: {
-      type: Number,
-      min: 0,
-    },
-
-    autoCashOutTriggered: {
-      type: Boolean,
-      default: false,
-    },
-
-    // ========================================================
-    // STATUS
-    // ========================================================
-
-    status: {
-      type: String,
-      enum: BET_STATUSES,
-      default: 'pending',
-      required: true,
-      index: true,
-    },
-
-    statusHistory: {
-      type: [betStatusHistorySchema],
-      default: [],
-    },
-
-    // ========================================================
-    // SETTLEMENT
-    // ========================================================
-
-    settledAt: {
-      type: Date,
-    },
-
-    settledScore: {
-      type: String,
-      trim: true,
-      maxlength: 100,
-    },
-
-    actualOutcome: {
-      type: String,
-      trim: true,
-      maxlength: 200,
-    },
-
-    winAmount: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
-
-    // ========================================================
-    // PARTIAL SETTLEMENT
-    // ========================================================
-
-    isHalfWin: {
-      type: Boolean,
-      default: false,
-    },
-
-    isHalfLoss: {
-      type: Boolean,
-      default: false,
-    },
-
-    isPush: {
-      type: Boolean,
-      default: false,
-    },
-
-    // ========================================================
-    // BET PERIOD
-    // ========================================================
-
-    period: {
-      type: String,
-      enum: BET_PERIODS,
-      default: 'full',
-      required: true,
-    },
-
-    // ========================================================
-    // METADATA
-    // ========================================================
-
-    deviceInfo: {
-      type: String,
-      trim: true,
-      maxlength: 1000,
-    },
-
-    ipAddress: {
-      type: String,
-      trim: true,
-      maxlength: 100,
-    },
-  },
-  {
-    timestamps: true,
-
-    // Do not automatically create an `id` virtual.
-    id: false,
-
-    // Prevent accidental fields from being persisted.
-    strict: true,
-
-    // Avoid returning version key in API responses.
-    versionKey: false,
-  },
-);
+      toObject: {
+        virtuals: true,
+      },
+    }
+  );
 
 // ============================================================
 // INDEXES
 // ============================================================
 
-// User's bets by status and newest first.
 betSchema.index({
   userId: 1,
   status: 1,
   createdAt: -1,
 });
 
-// User's betting history.
 betSchema.index({
   userId: 1,
   createdAt: -1,
 });
 
-// Match settlement queries.
 betSchema.index({
   matchId: 1,
   status: 1,
 });
 
-// Live pending bets.
 betSchema.index({
   isLive: 1,
   status: 1,
 });
 
-// Accumulator lookup.
 betSchema.index({
   accumulatorId: 1,
 });
 
-// Settlement queue.
 betSchema.index({
   status: 1,
   createdAt: 1,
 });
 
-// Cash-out queries.
 betSchema.index({
   cashOutAvailable: 1,
   status: 1,
@@ -682,128 +742,231 @@ betSchema.index({
 // VALIDATION
 // ============================================================
 
-betSchema.pre('validate', function (next) {
-  // Single bets should not require accumulator selections.
-  if (!this.isAccumulator) {
-    this.accumulatorSelections = [];
-    this.accumulatorId = undefined;
-  }
+betSchema.pre(
+  'validate',
+  function (next) {
 
-  // Non-builder bets should not retain builder selections.
-  if (!this.isBetBuilder) {
-    this.betBuilderSelections = [];
-  }
+    // --------------------------------------------------------
+    // Non accumulator
+    // --------------------------------------------------------
 
-  // Calculate potential win if it was not supplied correctly.
-  if (
-    Number.isFinite(this.stake) &&
-    Number.isFinite(this.odds) &&
-    this.stake > 0 &&
-    this.odds >= 1 &&
-    (!Number.isFinite(this.potentialWin) || this.potentialWin < 0)
-  ) {
-    this.potentialWin = this.stake * this.odds;
-  }
+    if (!this.isAccumulator) {
 
-  // Keep combined odds consistent for normal single bets.
-  if (!this.isAccumulator && this.combinedOdds <= 0) {
-    this.combinedOdds = this.odds;
-  }
+      this.accumulatorSelections = [];
 
-  next();
-});
+      this.accumulatorId =
+        undefined;
+    }
+
+    // --------------------------------------------------------
+    // Non builder
+    // --------------------------------------------------------
+
+    if (!this.isBetBuilder) {
+
+      this.betBuilderSelections = [];
+    }
+
+    // --------------------------------------------------------
+    // Potential win
+    // --------------------------------------------------------
+
+    if (
+      Number.isFinite(this.stake) &&
+      Number.isFinite(this.odds) &&
+      this.stake > 0 &&
+      this.odds >= 1
+    ) {
+
+      const calculatedPotentialWin =
+        this.stake * this.odds;
+
+      if (
+        !Number.isFinite(
+          this.potentialWin
+        ) ||
+        this.potentialWin < 0
+      ) {
+
+        this.potentialWin =
+          calculatedPotentialWin;
+      }
+    }
+
+    // --------------------------------------------------------
+    // Combined odds
+    // --------------------------------------------------------
+
+    if (
+      !this.isAccumulator &&
+      (
+        !Number.isFinite(
+          this.combinedOdds
+        ) ||
+        this.combinedOdds < 1
+      )
+    ) {
+
+      this.combinedOdds =
+        this.odds;
+    }
+
+    next();
+  }
+);
 
 // ============================================================
 // STATUS HISTORY
 // ============================================================
 
-betSchema.pre('save', function (next) {
-  if (this.isNew) {
-    this.statusHistory.push({
-      status: this.status,
-      timestamp: new Date(),
-      reason: 'Bet created',
-    });
+betSchema.pre(
+  'save',
+  function (next) {
+
+    if (this.isNew) {
+
+      this.statusHistory.push({
+
+        status:
+          this.status,
+
+        timestamp:
+          new Date(),
+
+        reason:
+          'Bet created',
+      });
+    }
+
+    next();
   }
-
-  next();
-});
+);
 
 // ============================================================
-// HELPER METHODS
+// INSTANCE METHODS
 // ============================================================
 
-betSchema.methods.setStatus = function (
-  status: BetStatus,
-  reason?: string,
-): Promise<BetDocument> {
-  this.status = status;
+betSchema.methods.setStatus =
+  function (
+    this: BetDocument,
+    status: BetStatus,
+    reason?: string
+  ): Promise<BetDocument> {
 
-  this.statusHistory.push({
-    status,
-    timestamp: new Date(),
-    reason,
-  });
+    this.status =
+      status;
 
-  return this.save();
-};
+    this.statusHistory.push({
 
-// ============================================================
-// STATIC HELPERS
-// ============================================================
+      status,
 
-betSchema.statics.findUserBets = function (
-  userId: Types.ObjectId | string,
-  options: {
-    status?: BetStatus;
-    limit?: number;
-    skip?: number;
-  } = {},
-) {
-  const query: Record<string, unknown> = {
-    userId,
+      timestamp:
+        new Date(),
+
+      reason,
+    });
+
+    return this.save();
   };
 
-  if (options.status) {
-    query.status = options.status;
-  }
+// ============================================================
+// STATIC: FIND USER BETS
+// ============================================================
 
-  const limit = Math.min(
-    Math.max(options.limit ?? 50, 1),
-    100,
-  );
+betSchema.statics.findUserBets =
+  function (
+    this: BetModel,
+    userId:
+      | Types.ObjectId
+      | string,
 
-  const skip = Math.max(options.skip ?? 0, 0);
+    options: {
+      status?: BetStatus;
+      limit?: number;
+      skip?: number;
+    } = {}
+  ) {
 
-  return this.find(query)
-    .sort({ createdAt: -1 })
-    .skip(skip)
-    .limit(limit);
-};
+    const query: Record<
+      string,
+      unknown
+    > = {
+      userId,
+    };
 
-betSchema.statics.findPendingForMatch = function (
-  matchId: Types.ObjectId | string,
-) {
-  return this.find({
-    matchId,
-    status: 'pending',
-  }).sort({ createdAt: 1 });
-};
+    if (options.status) {
+
+      query.status =
+        options.status;
+    }
+
+    const limit =
+      Math.min(
+        Math.max(
+          Math.floor(
+            options.limit ?? 50
+          ),
+          1
+        ),
+        100
+      );
+
+    const skip =
+      Math.max(
+        Math.floor(
+          options.skip ?? 0
+        ),
+        0
+      );
+
+    return this.find(query)
+      .sort({
+        createdAt: -1,
+      })
+      .skip(skip)
+      .limit(limit);
+  };
+
+// ============================================================
+// STATIC: FIND PENDING BETS FOR MATCH
+// ============================================================
+
+betSchema.statics.findPendingForMatch =
+  function (
+    this: BetModel,
+    matchId:
+      | Types.ObjectId
+      | string
+  ) {
+
+    return this.find({
+
+      matchId,
+
+      status:
+        'pending',
+
+    }).sort({
+      createdAt: 1,
+    });
+  };
 
 // ============================================================
 // MODEL
 // ============================================================
 
-// Important for hot reload / ts-node / tests.
-// This prevents:
-// OverwriteModelError: Cannot overwrite `Bet` model once compiled.
-const Bet: BetModel =
-  (models.Bet as BetModel | undefined) ??
-  model<IBet, BetModel>('Bet', betSchema);
+export const Bet: BetModel =
+  (
+    mongoose.models.Bet as
+      | BetModel
+      | undefined
+  ) ??
+  mongoose.model<
+    IBet,
+    BetModel
+  >(
+    'Bet',
+    betSchema
+  );
 
 export default Bet;
-
-// Named export for code that uses:
-// import { Bet } from './Bet';
-
-export { Bet };
