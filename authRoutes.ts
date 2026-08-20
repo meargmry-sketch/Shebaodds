@@ -1,908 +1,446 @@
-import { Router, Request, Response, NextFunction } from "express";
-import jwt, { JwtPayload } from "jsonwebtoken";
-import crypto from "crypto";
+// ============================================
+// SHEBAODDS - AUTH ROUTES
+// Mongoose 8 + TypeScript
+// ============================================
+
+import express, {
+  NextFunction,
+  Request,
+  Response,
+  Router,
+} from 'express';
+
+import jwt, {
+  JwtPayload,
+  SignOptions,
+} from 'jsonwebtoken';
+
+import crypto from 'crypto';
+
 import User, {
-  IUser,
-  Platform,
   UserDocument,
-} from "./User";
+} from '../models/User';
 
-const router = Router();
+import {
+  PasswordHistory,
+  validatePasswordStrength,
+} from '../utils/passwordValidator';
 
-/*
-|--------------------------------------------------------------------------
-| Environment
-|--------------------------------------------------------------------------
-*/
+// speakeasy has incomplete typings.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const speakeasy = require('speakeasy');
 
-const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET;
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const QRCode = require('qrcode');
 
-if (!JWT_ACCESS_SECRET) {
-  throw new Error("JWT_ACCESS_SECRET is not configured");
-}
+// ============================================================
+// ROUTER
+// ============================================================
 
-if (!JWT_REFRESH_SECRET) {
-  throw new Error("JWT_REFRESH_SECRET is not configured");
-}
+const router: Router =
+  express.Router();
+
+// ============================================================
+// CONFIGURATION
+// ============================================================
 
 const ACCESS_TOKEN_EXPIRES_IN =
-  process.env.JWT_ACCESS_EXPIRES_IN || "15m";
+  (process.env.JWT_ACCESS_EXPIRES_IN ||
+    '24h') as SignOptions['expiresIn'];
 
-const REFRESH_TOKEN_EXPIRES_DAYS = Number(
-  process.env.JWT_REFRESH_EXPIRES_DAYS || 30
-);
+const REFRESH_TOKEN_EXPIRES_IN =
+  (process.env.JWT_REFRESH_EXPIRES_IN ||
+    '7d') as SignOptions['expiresIn'];
+
+const SESSION_TTL_MS =
+  7 * 24 * 60 * 60 * 1000;
 
 const MAX_LOGIN_ATTEMPTS = 5;
 
-const LOGIN_LOCK_MINUTES = 15;
+const LOGIN_LOCK_MS =
+  30 * 60 * 1000;
 
-/*
-|--------------------------------------------------------------------------
-| Types
-|--------------------------------------------------------------------------
-*/
+// ============================================================
+// TYPES
+// ============================================================
 
-interface AuthRequest extends Request {
+export interface AuthRequest
+  extends Request {
   user?: UserDocument;
-}
 
-interface AccessTokenPayload extends JwtPayload {
-  userId: string;
-  role: string;
-  type: "access";
-}
-
-interface RefreshTokenPayload extends JwtPayload {
-  userId: string;
-  type: "refresh";
-}
-
-/*
-|--------------------------------------------------------------------------
-| Helpers
-|--------------------------------------------------------------------------
-*/
-
-function hashToken(token: string): string {
-  return crypto
-    .createHash("sha256")
-    .update(token)
-    .digest("hex");
-}
-
-function createAccessToken(user: UserDocument): string {
-  return jwt.sign(
-    {
-      userId: user._id.toString(),
-      role: user.role,
-      type: "access",
-    },
-    JWT_ACCESS_SECRET as string,
-    {
-      expiresIn: ACCESS_TOKEN_EXPIRES_IN,
-      issuer: "shebaodds",
-      audience: "shebaodds-api",
-    }
-  );
-}
-
-function createRefreshToken(user: UserDocument): string {
-  return jwt.sign(
-    {
-      userId: user._id.toString(),
-      type: "refresh",
-    },
-    JWT_REFRESH_SECRET as string,
-    {
-      expiresIn: `${REFRESH_TOKEN_EXPIRES_DAYS}d`,
-      issuer: "shebaodds",
-      audience: "shebaodds-api",
-    }
-  );
-}
-
-function getRefreshExpiry(): Date {
-  return new Date(
-    Date.now() +
-      REFRESH_TOKEN_EXPIRES_DAYS *
-        24 *
-        60 *
-        60 *
-        1000
-  );
-}
-
-function sanitizeUser(user: UserDocument) {
-  return {
-    id: user._id.toString(),
-    username: user.username,
-    email: user.email,
-    phone: user.phone,
-    firstName: user.firstName,
-    lastName: user.lastName,
-    avatar: user.avatar,
-    role: user.role,
-    status: user.status,
-    isEmailVerified: user.isEmailVerified,
-    isPhoneVerified: user.isPhoneVerified,
-    twoFactorEnabled: user.twoFactorEnabled,
-    referralCode: user.referralCode,
-    balance: user.balance,
-    bonusBalance: user.bonusBalance,
-    createdAt: user.createdAt,
-    updatedAt: user.updatedAt,
+  auth?: {
+    userId: string;
+    sessionId?: string;
+    role?: 'Player' | 'SuperAdmin';
   };
 }
 
-function getPlatform(value: unknown): Platform | undefined {
+interface TokenPayload
+  extends JwtPayload {
+  userId: string;
+  email?: string;
+  role?: 'Player' | 'SuperAdmin';
+  sessionId?: string;
+  type?: 'refresh';
+}
+
+// ============================================================
+// JWT SECRETS
+// ============================================================
+
+function requiredSecret(
+  name:
+    | 'JWT_SECRET'
+    | 'JWT_REFRESH_SECRET'
+): string {
+  const value =
+    process.env[name];
+
   if (
-    value === "web" ||
-    value === "android" ||
-    value === "ios" ||
-    value === "mobile"
+    !value ||
+    value.length < 32
   ) {
-    return value;
+    throw new Error(
+      `${name} must be configured and contain at least 32 characters`
+    );
   }
 
-  return undefined;
+  return value;
 }
 
-function normalizeEmail(email: string): string {
-  return email.trim().toLowerCase();
-}
-
-function normalizeUsername(username: string): string {
-  return username.trim().toLowerCase();
-}
-
-function isStrongPassword(password: string): boolean {
-  return (
-    password.length >= 8 &&
-    /[A-Z]/.test(password) &&
-    /[a-z]/.test(password) &&
-    /\d/.test(password)
+function getAccessSecret(): string {
+  return requiredSecret(
+    'JWT_SECRET'
   );
 }
 
-/*
-|--------------------------------------------------------------------------
-| Register
-|--------------------------------------------------------------------------
-*/
+function getRefreshSecret(): string {
+  return requiredSecret(
+    'JWT_REFRESH_SECRET'
+  );
+}
 
-router.post(
-  "/register",
-  async (
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ) => {
-    try {
-      const {
-        username,
-        email,
-        password,
-        phone,
-        firstName,
-        lastName,
-        referralCode,
-      } = req.body;
+// ============================================================
+// HELPERS
+// ============================================================
 
-      if (!username || !email || !password) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Username, email and password are required",
-        });
-      }
+function hashToken(
+  token: string
+): string {
+  return crypto
+    .createHash('sha256')
+    .update(token)
+    .digest('hex');
+}
 
-      const normalizedUsername =
-        normalizeUsername(username);
+function normalizeEmail(
+  value: unknown
+): string {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase();
+}
 
-      const normalizedEmail =
-        normalizeEmail(email);
+function normalizeUsername(
+  value: unknown
+): string {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase();
+}
 
-      if (!isStrongPassword(password)) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Password must be at least 8 characters and contain uppercase, lowercase and a number",
-        });
-      }
+function isValidEmail(
+  value: string
+): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+    value
+  );
+}
 
-      const existingUser = await User.findOne({
-        $or: [
-          { username: normalizedUsername },
-          { email: normalizedEmail },
-        ],
-      }).lean();
+function isValidPhone(
+  value: string
+): boolean {
+  return /^\+?[0-9]{10,15}$/.test(
+    value
+  );
+}
 
-      if (existingUser) {
-        return res.status(409).json({
-          success: false,
-          message:
-            existingUser.username === normalizedUsername
-              ? "Username already exists"
-              : "Email already exists",
-        });
-      }
+function validationError(
+  message: string,
+  path?: string
+) {
+  return {
+    msg: message,
+    path,
+    value: undefined,
+  };
+}
 
-      let referredBy: IUser["referredBy"];
+// ============================================================
+// REGISTRATION VALIDATION
+// ============================================================
 
-      if (referralCode) {
-        const referrer = await User.findOne({
-          referralCode: String(referralCode)
-            .trim()
-            .toUpperCase(),
-        }).select("_id");
+function validateRegistration(
+  body: Record<string, unknown>
+) {
+  const errors: Array<
+    Record<string, unknown>
+  > = [];
 
-        if (referrer) {
-          referredBy = referrer._id;
-        }
-      }
+  const username =
+    normalizeUsername(
+      body.username
+    );
 
-      const user = new User({
-        username: normalizedUsername,
-        email: normalizedEmail,
-        password,
-        phone,
-        firstName,
-        lastName,
-        referredBy,
-        status: "active",
-      });
+  const email =
+    normalizeEmail(
+      body.email
+    );
 
-      user.generateReferralCode();
+  const password =
+    String(
+      body.password ?? ''
+    );
 
-      const verificationToken =
-        user.generateEmailVerificationToken();
+  const phone =
+    String(
+      body.phone ?? ''
+    ).trim();
 
-      await user.save();
-
-      /*
-       * Send verification email from your email service here.
-       *
-       * Example:
-       *
-       * await sendVerificationEmail(
-       *   user.email,
-       *   verificationToken
-       * );
-       */
-
-      return res.status(201).json({
-        success: true,
-        message:
-          "Registration successful. Please verify your email.",
-        user: sanitizeUser(user),
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
-
-/*
-|--------------------------------------------------------------------------
-| Login
-|--------------------------------------------------------------------------
-*/
-
-router.post(
-  "/login",
-  async (
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ) => {
-    try {
-      const {
-        email,
-        username,
-        password,
-        deviceId,
-        platform,
-      } = req.body;
-
-      const loginIdentifier =
-        email || username;
-
-      if (!loginIdentifier || !password) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Email/username and password are required",
-        });
-      }
-
-      const identifier =
-        String(loginIdentifier).trim().toLowerCase();
-
-      const user = await User.findOne({
-        $or: [
-          { email: identifier },
-          { username: identifier },
-        ],
-      })
-        .select(
-          "+password +refreshTokens +twoFactorSecret +backupCodes"
-        )
-        .exec();
-
-      if (!user) {
-        return res.status(401).json({
-          success: false,
-          message: "Invalid credentials",
-        });
-      }
-
-      if (
-        user.lockUntil &&
-        user.lockUntil.getTime() > Date.now()
-      ) {
-        return res.status(423).json({
-          success: false,
-          message:
-            "Account temporarily locked. Please try again later.",
-        });
-      }
-
-      if (user.status === "suspended") {
-        return res.status(403).json({
-          success: false,
-          message: "Account is suspended",
-        });
-      }
-
-      if (user.status === "inactive") {
-        return res.status(403).json({
-          success: false,
-          message: "Account is inactive",
-        });
-      }
-
-      const passwordValid =
-        await user.comparePassword(password);
-
-      if (!passwordValid) {
-        user.loginAttempts =
-          (user.loginAttempts || 0) + 1;
-
-        if (
-          user.loginAttempts >=
-          MAX_LOGIN_ATTEMPTS
-        ) {
-          user.lockUntil = new Date(
-            Date.now() +
-              LOGIN_LOCK_MINUTES *
-                60 *
-                1000
-          );
-
-          user.loginAttempts = 0;
-        }
-
-        await user.save();
-
-        return res.status(401).json({
-          success: false,
-          message: "Invalid credentials",
-        });
-      }
-
-      user.loginAttempts = 0;
-      user.lockUntil = undefined;
-      user.lastLoginAt = new Date();
-      user.lastLoginIp = req.ip;
-
-      /*
-       * If 2FA is enabled, stop here and require OTP.
-       */
-      if (user.twoFactorEnabled) {
-        await user.save();
-
-        return res.status(200).json({
-          success: true,
-          requiresTwoFactor: true,
-          userId: user._id.toString(),
-          message:
-            "Two-factor authentication required",
-        });
-      }
-
-      const accessToken =
-        createAccessToken(user);
-
-      const refreshToken =
-        createRefreshToken(user);
-
-      const refreshTokenHash =
-        hashToken(refreshToken);
-
-      await user.addRefreshToken(
-        refreshTokenHash,
-        {
-          deviceId:
-            typeof deviceId === "string"
-              ? deviceId
-              : undefined,
-
-          platform:
-            getPlatform(platform),
-
-          ip: req.ip,
-
-          userAgent:
-            req.get("user-agent"),
-
-          expiresAt:
-            getRefreshExpiry(),
-        }
-      );
-
-      return res.status(200).json({
-        success: true,
-        message: "Login successful",
-        accessToken,
-        refreshToken,
-        user: sanitizeUser(user),
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
-
-/*
-|--------------------------------------------------------------------------
-| Verify email
-|--------------------------------------------------------------------------
-*/
-
-router.get(
-  "/verify-email",
-  async (
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ) => {
-    try {
-      const token =
-        typeof req.query.token === "string"
-          ? req.query.token
-          : "";
-
-      if (!token) {
-        return res.status(400).json({
-          success: false,
-          message: "Verification token is required",
-        });
-      }
-
-      const tokenHash = hashToken(token);
-
-      const user = await User.findOne({
-        emailVerificationTokenHash: tokenHash,
-        emailVerificationExpires: {
-          $gt: new Date(),
-        },
-      }).exec();
-
-      if (!user) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Invalid or expired verification token",
-        });
-      }
-
-      user.isEmailVerified = true;
-      user.emailVerificationTokenHash = undefined;
-      user.emailVerificationExpires = undefined;
-
-      await user.save();
-
-      return res.status(200).json({
-        success: true,
-        message: "Email verified successfully",
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
-
-/*
-|--------------------------------------------------------------------------
-| Refresh token
-|--------------------------------------------------------------------------
-*/
-
-router.post(
-  "/refresh",
-  async (
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ) => {
-    try {
-      const { refreshToken } = req.body;
-
-      if (!refreshToken) {
-        return res.status(401).json({
-          success: false,
-          message: "Refresh token is required",
-        });
-      }
-
-      let decoded: RefreshTokenPayload;
-
-      try {
-        decoded =
-          jwt.verify(
-            refreshToken,
-            JWT_REFRESH_SECRET,
-            {
-              issuer: "shebaodds",
-              audience: "shebaodds-api",
-            }
-          ) as RefreshTokenPayload;
-      } catch {
-        return res.status(401).json({
-          success: false,
-          message: "Invalid or expired refresh token",
-        });
-      }
-
-      if (
-        decoded.type !== "refresh" ||
-        !decoded.userId
-      ) {
-        return res.status(401).json({
-          success: false,
-          message: "Invalid refresh token",
-        });
-      }
-
-      const tokenHash =
-        hashToken(refreshToken);
-
-      const user = await User.findById(
-        decoded.userId
+  if (
+    !/^[a-zA-Z0-9_]{3,20}$/.test(
+      username
+    )
+  ) {
+    errors.push(
+      validationError(
+        'Username must be 3-20 characters and contain only letters, numbers and underscore',
+        'username'
       )
-        .select("+refreshTokens")
-        .exec();
-
-      if (!user) {
-        return res.status(401).json({
-          success: false,
-          message: "User not found",
-        });
-      }
-
-      if (
-        user.status !== "active"
-      ) {
-        return res.status(403).json({
-          success: false,
-          message: "Account is not active",
-        });
-      }
-
-      if (
-        !user.hasActiveSession(tokenHash)
-      ) {
-        return res.status(401).json({
-          success: false,
-          message:
-            "Refresh session is invalid or revoked",
-        });
-      }
-
-      /*
-       * Rotate refresh token.
-       */
-      await user.revokeSession(tokenHash);
-
-      const newAccessToken =
-        createAccessToken(user);
-
-      const newRefreshToken =
-        createRefreshToken(user);
-
-      await user.addRefreshToken(
-        hashToken(newRefreshToken),
-        {
-          ip: req.ip,
-          userAgent:
-            req.get("user-agent"),
-          expiresAt:
-            getRefreshExpiry(),
-        }
-      );
-
-      return res.status(200).json({
-        success: true,
-        accessToken: newAccessToken,
-        refreshToken: newRefreshToken,
-      });
-    } catch (error) {
-      next(error);
-    }
+    );
   }
-);
 
-/*
-|--------------------------------------------------------------------------
-| Logout
-|--------------------------------------------------------------------------
-*/
-
-router.post(
-  "/logout",
-  async (
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ) => {
-    try {
-      const { refreshToken } = req.body;
-
-      if (refreshToken) {
-        try {
-          const decoded =
-            jwt.verify(
-              refreshToken,
-              JWT_REFRESH_SECRET
-            ) as RefreshTokenPayload;
-
-          if (decoded.userId) {
-            const user = await User.findById(
-              decoded.userId
-            )
-              .select("+refreshTokens")
-              .exec();
-
-            if (user) {
-              await user.revokeSession(
-                hashToken(refreshToken)
-              );
-            }
-          }
-        } catch {
-          /*
-           * Logout should remain idempotent.
-           */
-        }
-      }
-
-      return res.status(200).json({
-        success: true,
-        message: "Logged out successfully",
-      });
-    } catch (error) {
-      next(error);
-    }
+  if (!isValidEmail(email)) {
+    errors.push(
+      validationError(
+        'Email must be a valid email',
+        'email'
+      )
+    );
   }
-);
 
-/*
-|--------------------------------------------------------------------------
-| Logout all devices
-|--------------------------------------------------------------------------
-*/
-
-router.post(
-  "/logout-all",
-  authenticate,
-  async (
-    req: AuthRequest,
-    res: Response,
-    next: NextFunction
-  ) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({
-          success: false,
-          message: "Authentication required",
-        });
-      }
-
-      await req.user.revokeAllSessions();
-
-      return res.status(200).json({
-        success: true,
-        message:
-          "Logged out from all devices",
-      });
-    } catch (error) {
-      next(error);
-    }
+  if (!isValidPhone(phone)) {
+    errors.push(
+      validationError(
+        'Phone must be a valid phone number',
+        'phone'
+      )
+    );
   }
-);
 
-/*
-|--------------------------------------------------------------------------
-| Forgot password
-|--------------------------------------------------------------------------
-*/
+  if (!password) {
+    errors.push(
+      validationError(
+        'Password is required',
+        'password'
+      )
+    );
+  }
 
-router.post(
-  "/forgot-password",
-  async (
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ) => {
-    try {
-      const { email } = req.body;
+  if (
+    body.fullName !==
+      undefined &&
+    body.fullName !== null &&
+    String(body.fullName)
+      .length > 100
+  ) {
+    errors.push(
+      validationError(
+        'Full name cannot exceed 100 characters',
+        'fullName'
+      )
+    );
+  }
 
-      /*
-       * Always return the same response to avoid
-       * revealing whether an account exists.
-       */
-      const genericResponse = {
-        success: true,
-        message:
-          "If the account exists, a password reset link has been sent.",
-      };
-
-      if (!email) {
-        return res.status(200).json(
-          genericResponse
-        );
-      }
-
-      const user = await User.findOne({
-        email: normalizeEmail(email),
-      })
-        .select(
-          "+passwordResetTokenHash +passwordResetExpires"
+  if (
+    body.dateOfBirth !==
+      undefined &&
+    body.dateOfBirth !== null &&
+    Number.isNaN(
+      Date.parse(
+        String(
+          body.dateOfBirth
         )
-        .exec();
-
-      if (!user) {
-        return res.status(200).json(
-          genericResponse
-        );
-      }
-
-      const resetToken =
-        user.generatePasswordResetToken();
-
-      await user.save();
-
-      /*
-       * Send reset email here.
-       *
-       * await sendPasswordResetEmail(
-       *   user.email,
-       *   resetToken
-       * );
-       */
-
-      return res.status(200).json(
-        genericResponse
-      );
-    } catch (error) {
-      next(error);
-    }
+      )
+    )
+  ) {
+    errors.push(
+      validationError(
+        'Date of birth must be a valid date',
+        'dateOfBirth'
+      )
+    );
   }
-);
 
-/*
-|--------------------------------------------------------------------------
-| Reset password
-|--------------------------------------------------------------------------
-*/
-
-router.post(
-  "/reset-password",
-  async (
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ) => {
-    try {
-      const {
-        token,
-        password,
-      } = req.body;
-
-      if (!token || !password) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Reset token and password are required",
-        });
-      }
-
-      if (!isStrongPassword(password)) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Password must be at least 8 characters and contain uppercase, lowercase and a number",
-        });
-      }
-
-      const tokenHash =
-        hashToken(token);
-
-      const user = await User.findOne({
-        passwordResetTokenHash: tokenHash,
-        passwordResetExpires: {
-          $gt: new Date(),
-        },
-      })
-        .select(
-          "+password +passwordHistory +refreshTokens"
-        )
-        .exec();
-
-      if (!user) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Invalid or expired reset token",
-        });
-      }
-
-      await user.setPassword(password);
-
-      user.passwordResetTokenHash = undefined;
-      user.passwordResetExpires = undefined;
-
-      await user.revokeAllSessions();
-
-      return res.status(200).json({
-        success: true,
-        message:
-          "Password reset successfully",
-      });
-    } catch (error) {
-      next(error);
-    }
+  if (
+    body.referralCode !==
+      undefined &&
+    body.referralCode !== null &&
+    typeof body.referralCode !==
+      'string'
+  ) {
+    errors.push(
+      validationError(
+        'Referral code must be a string',
+        'referralCode'
+      )
+    );
   }
-);
 
-/*
-|--------------------------------------------------------------------------
-| Current user
-|--------------------------------------------------------------------------
-*/
+  return {
+    errors,
+    username,
+    email,
+    password,
+    phone,
+  };
+}
 
-router.get(
-  "/me",
-  authenticate,
-  async (
-    req: AuthRequest,
-    res: Response,
-    next: NextFunction
-  ) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({
-          success: false,
-          message: "Authentication required",
-        });
-      }
+// ============================================================
+// LOGIN VALIDATION
+// ============================================================
 
-      return res.status(200).json({
-        success: true,
-        user: sanitizeUser(req.user),
-      });
-    } catch (error) {
-      next(error);
-    }
+function validateLogin(
+  body: Record<string, unknown>
+) {
+  const errors: Array<
+    Record<string, unknown>
+  > = [];
+
+  const email =
+    normalizeEmail(
+      body.email
+    );
+
+  const password =
+    String(
+      body.password ?? ''
+    );
+
+  if (!isValidEmail(email)) {
+    errors.push(
+      validationError(
+        'Email must be a valid email',
+        'email'
+      )
+    );
   }
-);
 
-/*
-|--------------------------------------------------------------------------
-| Authentication middleware
-|--------------------------------------------------------------------------
-*/
+  if (!password) {
+    errors.push(
+      validationError(
+        'Password is required',
+        'password'
+      )
+    );
+  }
+
+  return {
+    errors,
+    email,
+    password,
+  };
+}
+
+// ============================================================
+// TOKEN GENERATION
+// ============================================================
+
+export function generateToken(
+  user: UserDocument,
+  sessionId?: string
+): string {
+  const payload: Record<
+    string,
+    unknown
+  > = {
+    userId:
+      user._id.toString(),
+
+    email: user.email,
+
+    role: user.isAdmin
+      ? 'SuperAdmin'
+      : 'Player',
+  };
+
+  if (sessionId) {
+    payload.sessionId =
+      sessionId;
+  }
+
+  return jwt.sign(
+    payload,
+    getAccessSecret(),
+    {
+      expiresIn:
+        ACCESS_TOKEN_EXPIRES_IN,
+    }
+  );
+}
+
+export function generateRefreshToken(
+  user: UserDocument,
+  sessionId: string
+): string {
+  return jwt.sign(
+    {
+      userId:
+        user._id.toString(),
+
+      sessionId,
+
+      type: 'refresh',
+    },
+    getRefreshSecret(),
+    {
+      expiresIn:
+        REFRESH_TOKEN_EXPIRES_IN,
+    }
+  );
+}
+
+// ============================================================
+// BEARER TOKEN
+// ============================================================
+
+function getBearerToken(
+  req: Request
+): string | null {
+  const header =
+    req.get('authorization');
+
+  if (!header) {
+    return null;
+  }
+
+  const parts =
+    header.split(' ');
+
+  if (
+    parts.length !== 2 ||
+    parts[0].toLowerCase() !==
+      'bearer'
+  ) {
+    return null;
+  }
+
+  return parts[1].trim();
+}
+
+// ============================================================
+// AUTHENTICATION MIDDLEWARE
+// ============================================================
 
 export async function authenticate(
   req: AuthRequest,
@@ -910,124 +448,2432 @@ export async function authenticate(
   next: NextFunction
 ): Promise<void> {
   try {
-    const authorization =
-      req.headers.authorization;
+    const token =
+      getBearerToken(req);
 
-    if (!authorization) {
+    if (!token) {
       res.status(401).json({
         success: false,
-        message: "Authentication required",
+        error:
+          'Access Token Missing',
+        message:
+          'Authentication bearer token is required.',
       });
+
       return;
     }
 
-    const [scheme, token] =
-      authorization.split(" ");
+    const decoded =
+      jwt.verify(
+        token,
+        getAccessSecret()
+      ) as TokenPayload;
+
+    if (!decoded.userId) {
+      res.status(401).json({
+        success: false,
+        message:
+          'Invalid access token',
+      });
+
+      return;
+    }
+
+    const user =
+      await User.findById(
+        decoded.userId
+      );
 
     if (
-      scheme !== "Bearer" ||
-      !token
+      !user ||
+      !user.isActive ||
+      user.isBlocked
     ) {
       res.status(401).json({
         success: false,
         message:
-          "Invalid authorization header",
+          'User is not authorized',
       });
+
       return;
     }
 
-    let decoded: AccessTokenPayload;
-
-    try {
-      decoded =
-        jwt.verify(
-          token,
-          JWT_ACCESS_SECRET,
-          {
-            issuer: "shebaodds",
-            audience: "shebaodds-api",
-          }
-        ) as AccessTokenPayload;
-    } catch {
-      res.status(401).json({
-        success: false,
-        message:
-          "Invalid or expired access token",
-      });
-      return;
-    }
+    const now =
+      new Date();
 
     if (
-      decoded.type !== "access" ||
-      !decoded.userId
+      user.isSuspended &&
+      (
+        !user.suspensionEndDate ||
+        user.suspensionEndDate >
+          now
+      )
     ) {
-      res.status(401).json({
-        success: false,
-        message: "Invalid access token",
-      });
-      return;
-    }
-
-    const user = await User.findById(
-      decoded.userId
-    ).exec();
-
-    if (!user) {
-      res.status(401).json({
-        success: false,
-        message: "User not found",
-      });
-      return;
-    }
-
-    if (user.status !== "active") {
       res.status(403).json({
         success: false,
-        message: "Account is not active",
+        message:
+          'Account is suspended',
       });
+
       return;
+    }
+
+    if (decoded.sessionId) {
+      const session =
+        user.sessions.find(
+          (item) =>
+            item.sessionId ===
+              decoded.sessionId &&
+            (
+              !item.expiresAt ||
+              item.expiresAt > now
+            )
+        );
+
+      if (!session) {
+        res.status(401).json({
+          success: false,
+          message:
+            'Session has expired or been revoked',
+        });
+
+        return;
+      }
+
+      session.lastActivity =
+        now;
+
+      user.lastActive =
+        now;
+
+      await user.save();
     }
 
     req.user = user;
 
+    req.auth = {
+      userId:
+        user._id.toString(),
+
+      sessionId:
+        decoded.sessionId,
+
+      role:
+        decoded.role,
+    };
+
     next();
   } catch (error) {
-    next(error);
+    if (
+      error instanceof
+      jwt.TokenExpiredError
+    ) {
+      res.status(401).json({
+        success: false,
+        message:
+          'Access token expired',
+      });
+
+      return;
+    }
+
+    res.status(401).json({
+      success: false,
+      message:
+        'Invalid access token',
+    });
   }
 }
 
-/*
-|--------------------------------------------------------------------------
-| Role middleware
-|--------------------------------------------------------------------------
-*/
+// ============================================================
+// COMPATIBILITY HELPERS
+// ============================================================
 
-export function requireRole(
-  ...roles: string[]
-) {
-  return (
-    req: AuthRequest,
-    res: Response,
-    next: NextFunction
-  ): void => {
-    if (!req.user) {
-      res.status(401).json({
-        success: false,
-        message: "Authentication required",
-      });
-      return;
+export async function sendEmail({
+  to,
+  subject,
+  template,
+  data,
+  attachments,
+}: {
+  to: string;
+  subject: string;
+  template: string;
+  data: unknown;
+  attachments?: unknown[];
+}) {
+  console.log(
+    '[NotificationService] Email',
+    {
+      to,
+      subject,
+      template,
     }
+  );
 
-    if (!roles.includes(req.user.role)) {
-      res.status(403).json({
-        success: false,
-        message: "Insufficient permissions",
-      });
-      return;
-    }
-
-    next();
+  return {
+    success: true,
+    to,
+    subject,
+    template,
+    data,
+    attachmentsCount:
+      attachments?.length ?? 0,
   };
 }
+
+export async function sendSMS({
+  to,
+  message,
+}: {
+  to: string;
+  message: string;
+}) {
+  console.log(
+    '[NotificationService] SMS',
+    {
+      to,
+      message,
+    }
+  );
+
+  return {
+    success: true,
+  };
+}
+
+export async function logSecurityEvent({
+  userId,
+  eventType,
+  ipAddress,
+  userAgent,
+  metadata,
+}: {
+  userId?: unknown;
+  eventType: string;
+  ipAddress?: string;
+  userAgent?: string;
+  metadata?: unknown;
+}) {
+  console.log(
+    '[SecurityService]',
+    {
+      userId,
+      eventType,
+      ipAddress,
+      userAgent,
+      metadata,
+    }
+  );
+
+  return {
+    success: true,
+  };
+}
+
+export function rateLimiter(
+  _req: Request,
+  _res: Response,
+  next: NextFunction
+) {
+  next();
+}
+
+// ============================================================
+// PUBLIC USER
+// ============================================================
+
+function publicUser(
+  user: UserDocument
+) {
+  return user.toJSON();
+}
+
+// ============================================================
+// AGE
+// ============================================================
+
+function calculateAge(
+  dateOfBirth: Date
+): number {
+  const today =
+    new Date();
+
+  let age =
+    today.getFullYear() -
+    dateOfBirth.getFullYear();
+
+  const month =
+    today.getMonth() -
+    dateOfBirth.getMonth();
+
+  if (
+    month < 0 ||
+    (
+      month === 0 &&
+      today.getDate() <
+        dateOfBirth.getDate()
+    )
+  ) {
+    age--;
+  }
+
+  return age;
+}
+
+// ============================================================
+// SESSION
+// ============================================================
+
+function createSession(
+  user: UserDocument,
+  req: Request,
+  deviceId?: string,
+  deviceName?: string
+): string {
+  const now =
+    new Date();
+
+  const sessionId =
+    crypto
+      .randomBytes(32)
+      .toString('hex');
+
+  // ----------------------------------------------------------
+  // DEVICE
+  // ----------------------------------------------------------
+
+  if (deviceId) {
+    const existing =
+      user.devices.find(
+        (device) =>
+          device.deviceId ===
+          deviceId
+      );
+
+    if (existing) {
+      existing.lastUsed =
+        now;
+
+      if (deviceName) {
+        existing.deviceName =
+          deviceName;
+      }
+
+      existing.ipAddress =
+        req.ip;
+
+      existing.isActive =
+        true;
+    } else {
+      const ua =
+        req.get(
+          'user-agent'
+        ) || '';
+
+      let platform:
+        | 'web'
+        | 'ios'
+        | 'android'
+        | 'admin' = 'web';
+
+      if (
+        /android/i.test(ua)
+      ) {
+        platform =
+          'android';
+      } else if (
+        /iphone|ipad|ipod/i.test(
+          ua
+        )
+      ) {
+        platform =
+          'ios';
+      } else if (
+        user.isAdmin
+      ) {
+        platform =
+          'admin';
+      }
+
+      user.devices.push({
+        deviceId,
+        deviceName:
+          deviceName ||
+          'Unknown Device',
+        platform,
+        ipAddress:
+          req.ip,
+        lastUsed: now,
+        biometricEnabled:
+          false,
+        isActive: true,
+      });
+    }
+  }
+
+  // ----------------------------------------------------------
+  // CLEAN OLD SESSIONS
+  // ----------------------------------------------------------
+
+  user.sessions =
+    user.sessions.filter(
+      (session) =>
+        !session.expiresAt ||
+        session.expiresAt >
+          now
+    );
+
+  // ----------------------------------------------------------
+  // CREATE SESSION
+  // ----------------------------------------------------------
+
+  user.sessions.push({
+    sessionId,
+
+    ipAddress:
+      req.ip,
+
+    userAgent:
+      req.get(
+        'user-agent'
+      ) || undefined,
+
+    deviceId,
+
+    loginAt: now,
+
+    lastActivity: now,
+
+    expiresAt:
+      new Date(
+        now.getTime() +
+          SESSION_TTL_MS
+      ),
+  });
+
+  // ----------------------------------------------------------
+  // LIMIT SESSIONS
+  // ----------------------------------------------------------
+
+  if (
+    user.sessions.length >
+    10
+  ) {
+    user.sessions.sort(
+      (a, b) =>
+        b.lastActivity.getTime() -
+        a.lastActivity.getTime()
+    );
+
+    user.sessions =
+      user.sessions.slice(
+        0,
+        10
+      );
+  }
+
+  return sessionId;
+}
+
+// ============================================================
+// ISSUE TOKENS
+// ============================================================
+
+function issueTokens(
+  user: UserDocument,
+  sessionId: string
+) {
+  return {
+    token:
+      generateToken(
+        user,
+        sessionId
+      ),
+
+    refreshToken:
+      generateRefreshToken(
+        user,
+        sessionId
+      ),
+  };
+}
+
+// ============================================================
+// REGISTER
+// ============================================================
+
+router.post(
+  '/register',
+  async (
+    req: Request,
+    res: Response
+  ) => {
+    try {
+      const body =
+        (
+          req.body ||
+          {}
+        ) as Record<
+          string,
+          unknown
+        >;
+
+      const {
+        errors,
+        username,
+        email,
+        password,
+        phone,
+      } =
+        validateRegistration(
+          body
+        );
+
+      if (
+        errors.length > 0
+      ) {
+        res.status(400).json({
+          success: false,
+          errors,
+        });
+
+        return;
+      }
+
+      const fullName =
+        body.fullName;
+
+      const dateOfBirth =
+        body.dateOfBirth;
+
+      const referralCode =
+        body.referralCode;
+
+      // ------------------------------------------------------
+      // PASSWORD
+      // ------------------------------------------------------
+
+      const passwordValidation =
+        validatePasswordStrength(
+          password,
+          {
+            username,
+            email,
+            fullName:
+              fullName
+                ? String(
+                    fullName
+                  )
+                : undefined,
+            phone,
+          }
+        );
+
+      if (
+        !passwordValidation
+          .isValid
+      ) {
+        res.status(400).json({
+          success: false,
+          message:
+            'Password does not meet security requirements',
+          errors:
+            passwordValidation.errors,
+          strength:
+            passwordValidation.strength,
+        });
+
+        return;
+      }
+
+      // ------------------------------------------------------
+      // EXISTING USER
+      // ------------------------------------------------------
+
+      const existingUser =
+        await User.findOne({
+          $or: [
+            { email },
+            { username },
+            { phone },
+          ],
+        })
+          .select(
+            '_id email username phone'
+          )
+          .exec();
+
+      if (existingUser) {
+        res.status(409).json({
+          success: false,
+          message:
+            'An account already exists with this email, username, or phone number',
+        });
+
+        return;
+      }
+
+      // ------------------------------------------------------
+      // DATE OF BIRTH
+      // ------------------------------------------------------
+
+      let parsedDateOfBirth:
+        | Date
+        | undefined;
+
+      if (dateOfBirth) {
+        parsedDateOfBirth =
+          new Date(
+            String(
+              dateOfBirth
+            )
+          );
+
+        if (
+          Number.isNaN(
+            parsedDateOfBirth.getTime()
+          )
+        ) {
+          res.status(400).json({
+            success: false,
+            message:
+              'Invalid date of birth',
+          });
+
+          return;
+        }
+
+        if (
+          calculateAge(
+            parsedDateOfBirth
+          ) < 18
+        ) {
+          res.status(400).json({
+            success: false,
+            message:
+              'You must be at least 18 years old',
+          });
+
+          return;
+        }
+      }
+
+      // ------------------------------------------------------
+      // REFERRAL
+      // ------------------------------------------------------
+
+      let referredByUser:
+        | UserDocument
+        | null = null;
+
+      if (
+        referralCode
+      ) {
+        referredByUser =
+          await User.findOne({
+            referralCode:
+              String(
+                referralCode
+              )
+                .trim()
+                .toUpperCase(),
+          })
+            .select(
+              '_id email username'
+            )
+            .exec();
+      }
+
+      // ------------------------------------------------------
+      // WELCOME BONUS
+      // ------------------------------------------------------
+
+      const parsedWelcomeBonus =
+        Number(
+          process.env
+            .WELCOME_BONUS_AMOUNT ??
+            100
+        );
+
+      const welcomeBonus =
+        Number.isFinite(
+          parsedWelcomeBonus
+        )
+          ? Math.max(
+              0,
+              parsedWelcomeBonus
+            )
+          : 100;
+
+      // ------------------------------------------------------
+      // CREATE USER
+      // ------------------------------------------------------
+
+      const user =
+        new User({
+          username,
+          email,
+          password,
+          phone,
+
+          fullName:
+            fullName
+              ? String(
+                  fullName
+                ).trim()
+              : undefined,
+
+          dateOfBirth:
+            parsedDateOfBirth,
+
+          referredBy:
+            referredByUser?._id,
+
+          wallet: {
+            balance:
+              welcomeBonus,
+
+            bonusBalance:
+              welcomeBonus,
+
+            totalBonusReceived:
+              welcomeBonus,
+
+            currency: 'ETB',
+          },
+        });
+
+      // ------------------------------------------------------
+      // SESSION
+      // ------------------------------------------------------
+
+      const sessionId =
+        createSession(
+          user,
+          req
+        );
+
+      user.lastLogin =
+        new Date();
+
+      user.lastActive =
+        new Date();
+
+      user.lastLoginIP =
+        req.ip;
+
+      await user.save();
+
+      // ------------------------------------------------------
+      // REFERRAL BONUS
+      // ------------------------------------------------------
+
+      if (
+        referredByUser
+      ) {
+        const parsedReferralBonus =
+          Number(
+            process.env
+              .REFERRAL_BONUS_AMOUNT ??
+              50
+          );
+
+        const referralBonus =
+          Number.isFinite(
+            parsedReferralBonus
+          )
+            ? Math.max(
+                0,
+                parsedReferralBonus
+              )
+            : 50;
+
+        if (
+          referralBonus > 0
+        ) {
+          await User.updateOne(
+            {
+              _id:
+                referredByUser._id,
+            },
+            {
+              $inc: {
+                'wallet.balance':
+                  referralBonus,
+
+                'wallet.bonusBalance':
+                  referralBonus,
+
+                'wallet.totalBonusReceived':
+                  referralBonus,
+
+                referralCount: 1,
+
+                referralEarnings:
+                  referralBonus,
+              },
+            }
+          ).exec();
+        }
+      }
+
+      // ------------------------------------------------------
+      // TOKENS
+      // ------------------------------------------------------
+
+      const tokens =
+        issueTokens(
+          user,
+          sessionId
+        );
+
+      // ------------------------------------------------------
+      // NOTIFICATIONS
+      // ------------------------------------------------------
+
+      await Promise.allSettled([
+        sendEmail({
+          to: user.email,
+          subject:
+            'Welcome to SHEBAODDS!',
+          template:
+            'welcome',
+          data: {
+            username:
+              user.username,
+            bonusAmount:
+              welcomeBonus,
+            tagline:
+              'Smart Bets. Real Wins.',
+          },
+        }),
+
+        sendSMS({
+          to: user.phone,
+          message:
+            `Welcome to SHEBAODDS! You've received ${welcomeBonus} ETB bonus.`,
+        }),
+
+        logSecurityEvent({
+          userId:
+            user._id,
+          eventType:
+            'user_registered',
+          ipAddress:
+            req.ip,
+          userAgent:
+            req.get(
+              'user-agent'
+            ),
+        }),
+      ]);
+
+      res.status(201).json({
+        success: true,
+        message:
+          'Registration successful! Welcome to SHEBAODDS.',
+        ...tokens,
+        user:
+          publicUser(user),
+      });
+    } catch (error: unknown) {
+      const err =
+        error as {
+          code?: number;
+          message?: string;
+        };
+
+      if (
+        err.code === 11000
+      ) {
+        res.status(409).json({
+          success: false,
+          message:
+            'Email, username, phone, or referral code is already in use',
+        });
+
+        return;
+      }
+
+      console.error(
+        'Registration error:',
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          'Registration failed',
+      });
+    }
+  }
+);
+
+// ============================================================
+// LOGIN
+// ============================================================
+
+router.post(
+  '/login',
+  async (
+    req: Request,
+    res: Response
+  ) => {
+    try {
+      const body =
+        (
+          req.body ||
+          {}
+        ) as Record<
+          string,
+          unknown
+        >;
+
+      const {
+        errors,
+        email,
+        password,
+      } =
+        validateLogin(
+          body
+        );
+
+      if (
+        errors.length > 0
+      ) {
+        res.status(400).json({
+          success: false,
+          errors,
+        });
+
+        return;
+      }
+
+      const twoFactorCode =
+        body.twoFactorCode;
+
+      const deviceId =
+        body.deviceId;
+
+      const deviceName =
+        body.deviceName;
+
+      // IMPORTANT:
+      // Password is select:false in User schema.
+      const user =
+        await User.findOne({
+          email,
+        })
+          .select(
+            '+password +passwordHistory +twoFactorSecret +twoFactorBackupCodes'
+          )
+          .exec();
+
+      // ------------------------------------------------------
+      // INVALID CREDENTIALS
+      // ------------------------------------------------------
+
+      if (
+        !user ||
+        !(await user.comparePassword(
+          password
+        ))
+      ) {
+        if (user) {
+          user.loginAttempts =
+            (
+              user.loginAttempts ||
+              0
+            ) + 1;
+
+          if (
+            user.loginAttempts >=
+            MAX_LOGIN_ATTEMPTS
+          ) {
+            user.lockedUntil =
+              new Date(
+                Date.now() +
+                  LOGIN_LOCK_MS
+              );
+          }
+
+          await user.save();
+        }
+
+        res.status(401).json({
+          success: false,
+          message:
+            'Invalid email or password',
+        });
+
+        return;
+      }
+
+      // ------------------------------------------------------
+      // ACCOUNT LOCK
+      // ------------------------------------------------------
+
+      const now =
+        new Date();
+
+      if (
+        user.lockedUntil &&
+        user.lockedUntil > now
+      ) {
+        const remainingMinutes =
+          Math.ceil(
+            (
+              user.lockedUntil.getTime() -
+              now.getTime()
+            ) /
+              60000
+          );
+
+        res.status(423).json({
+          success: false,
+          message:
+            `Account locked. Please try again in ${remainingMinutes} minutes.`,
+        });
+
+        return;
+      }
+
+      // ------------------------------------------------------
+      // ACCOUNT STATUS
+      // ------------------------------------------------------
+
+      if (
+        !user.isActive ||
+        user.isBlocked
+      ) {
+        res.status(403).json({
+          success: false,
+          message:
+            'Account is not active',
+        });
+
+        return;
+      }
+
+      if (
+        user.isSuspended &&
+        (
+          !user.suspensionEndDate ||
+          user.suspensionEndDate >
+            now
+        )
+      ) {
+        res.status(403).json({
+          success: false,
+          message:
+            'Account is suspended',
+        });
+
+        return;
+      }
+
+      // ------------------------------------------------------
+      // SELF EXCLUSION
+      // ------------------------------------------------------
+
+      if (
+        user.responsibleGambling
+          ?.selfExcluded &&
+        (
+          !user.responsibleGambling
+            .selfExclusionEndDate ||
+          user.responsibleGambling
+            .selfExclusionEndDate >
+            now
+        )
+      ) {
+        res.status(403).json({
+          success: false,
+          message:
+            'Self-exclusion is currently active',
+        });
+
+        return;
+      }
+
+      // ------------------------------------------------------
+      // 2FA
+      // ------------------------------------------------------
+
+      if (
+        user.twoFactorEnabled
+      ) {
+        if (
+          !twoFactorCode
+        ) {
+          res.status(401).json({
+            success: false,
+            requiresTwoFactor:
+              true,
+            message:
+              '2FA code required',
+          });
+
+          return;
+        }
+
+        const code =
+          String(
+            twoFactorCode
+          );
+
+        const validTotp =
+          user.verifyTwoFactorToken(
+            code
+          );
+
+        let validBackup =
+          false;
+
+        if (!validTotp) {
+          validBackup =
+            await user.verifyBackupCode(
+              code
+            );
+        }
+
+        if (
+          !validTotp &&
+          !validBackup
+        ) {
+          res.status(401).json({
+            success: false,
+            message:
+              'Invalid 2FA code',
+          });
+
+          return;
+        }
+      }
+
+      // ------------------------------------------------------
+      // UPDATE LOGIN STATE
+      // ------------------------------------------------------
+
+      user.loginAttempts =
+        0;
+
+      user.lockedUntil =
+        undefined;
+
+      user.lastLogin =
+        now;
+
+      user.lastActive =
+        now;
+
+      user.lastLoginIP =
+        req.ip;
+
+      const sessionId =
+        createSession(
+          user,
+          req,
+          deviceId
+            ? String(deviceId)
+            : undefined,
+          deviceName
+            ? String(deviceName)
+            : undefined
+        );
+
+      await user.save();
+
+      // ------------------------------------------------------
+      // TOKENS
+      // ------------------------------------------------------
+
+      const tokens =
+        issueTokens(
+          user,
+          sessionId
+        );
+
+      await logSecurityEvent({
+        userId:
+          user._id,
+        eventType:
+          'user_login',
+        ipAddress:
+          req.ip,
+        userAgent:
+          req.get(
+            'user-agent'
+          ),
+        metadata: {
+          deviceId,
+          deviceName,
+          sessionId,
+        },
+      });
+
+      res.json({
+        success: true,
+        message:
+          `Welcome back to SHEBAODDS, ${user.username}!`,
+        ...tokens,
+        user:
+          publicUser(user),
+      });
+    } catch (error) {
+      console.error(
+        'Login error:',
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          'Login failed',
+      });
+    }
+  }
+);
+
+// ============================================================
+// REFRESH TOKEN
+// ============================================================
+
+router.post(
+  '/refresh-token',
+  async (
+    req: Request,
+    res: Response
+  ) => {
+    try {
+      const refreshToken =
+        String(
+          req.body?.refreshToken ??
+            ''
+        );
+
+      if (!refreshToken) {
+        res.status(401).json({
+          success: false,
+          message:
+            'Refresh token required',
+        });
+
+        return;
+      }
+
+      const decoded =
+        jwt.verify(
+          refreshToken,
+          getRefreshSecret()
+        ) as TokenPayload;
+
+      if (
+        !decoded.userId ||
+        !decoded.sessionId ||
+        decoded.type !==
+          'refresh'
+      ) {
+        res.status(401).json({
+          success: false,
+          message:
+            'Invalid refresh token',
+        });
+
+        return;
+      }
+
+      const user =
+        await User.findById(
+          decoded.userId
+        ).exec();
+
+      if (
+        !user ||
+        !user.isActive ||
+        user.isBlocked
+      ) {
+        res.status(401).json({
+          success: false,
+          message:
+            'Invalid refresh token',
+        });
+
+        return;
+      }
+
+      const now =
+        new Date();
+
+      const session =
+        user.sessions.find(
+          (item) =>
+            item.sessionId ===
+              decoded.sessionId &&
+            (
+              !item.expiresAt ||
+              item.expiresAt > now
+            )
+        );
+
+      if (!session) {
+        res.status(401).json({
+          success: false,
+          message:
+            'Session expired or revoked',
+        });
+
+        return;
+      }
+
+      session.lastActivity =
+        now;
+
+      session.expiresAt =
+        new Date(
+          now.getTime() +
+            SESSION_TTL_MS
+        );
+
+      user.lastActive =
+        now;
+
+      await user.save();
+
+      const tokens =
+        issueTokens(
+          user,
+          session.sessionId
+        );
+
+      res.json({
+        success: true,
+        ...tokens,
+      });
+    } catch {
+      res.status(401).json({
+        success: false,
+        message:
+          'Invalid refresh token',
+      });
+    }
+  }
+);
+
+// ============================================================
+// LOGOUT
+// ============================================================
+
+router.post(
+  '/logout',
+  authenticate,
+  async (
+    req: AuthRequest,
+    res: Response
+  ) => {
+    try {
+      if (!req.user) {
+        res.status(401).json({
+          success: false,
+          message:
+            'Unauthorized',
+        });
+
+        return;
+      }
+
+      const sessionId =
+        String(
+          req.body?.sessionId ??
+            req.auth?.sessionId ??
+            ''
+        );
+
+      if (sessionId) {
+        req.user.sessions =
+          req.user.sessions.filter(
+            (session) =>
+              session.sessionId !==
+              sessionId
+          );
+
+        await req.user.save();
+      }
+
+      await logSecurityEvent({
+        userId:
+          req.user._id,
+        eventType:
+          'user_logout',
+        ipAddress:
+          req.ip,
+      });
+
+      res.json({
+        success: true,
+        message:
+          'Logged out successfully',
+      });
+    } catch {
+      res.status(500).json({
+        success: false,
+        message:
+          'Logout failed',
+      });
+    }
+  }
+);
+
+// ============================================================
+// GET CURRENT USER
+// ============================================================
+
+router.get(
+  '/me',
+  authenticate,
+  async (
+    req: AuthRequest,
+    res: Response
+  ) => {
+    res.json({
+      success: true,
+      user: req.user
+        ? publicUser(
+            req.user
+          )
+        : null,
+    });
+  }
+);
+
+// ============================================================
+// UPDATE PROFILE
+// ============================================================
+
+router.put(
+  '/profile',
+  authenticate,
+  async (
+    req: AuthRequest,
+    res: Response
+  ) => {
+    try {
+      if (!req.user) {
+        res.status(401).json({
+          success: false,
+          message:
+            'Unauthorized',
+        });
+
+        return;
+      }
+
+      const user =
+        req.user;
+
+      const {
+        fullName,
+        phone,
+        address,
+        city,
+        country,
+        language,
+        timezone,
+        currency,
+      } =
+        req.body || {};
+
+      if (
+        fullName !==
+        undefined
+      ) {
+        user.fullName =
+          String(
+            fullName
+          ).trim();
+      }
+
+      if (
+        phone !==
+        undefined
+      ) {
+        const normalizedPhone =
+          String(
+            phone
+          ).trim();
+
+        if (
+          !isValidPhone(
+            normalizedPhone
+          )
+        ) {
+          res.status(400).json({
+            success: false,
+            message:
+              'Invalid phone number',
+          });
+
+          return;
+        }
+
+        const existing =
+          await User.findOne({
+            phone:
+              normalizedPhone,
+
+            _id: {
+              $ne: user._id,
+            },
+          })
+            .select('_id')
+            .exec();
+
+        if (existing) {
+          res.status(409).json({
+            success: false,
+            message:
+              'Phone number already in use',
+          });
+
+          return;
+        }
+
+        user.phone =
+          normalizedPhone;
+      }
+
+      if (
+        address !==
+        undefined
+      ) {
+        user.address =
+          String(
+            address
+          );
+      }
+
+      if (
+        city !==
+        undefined
+      ) {
+        user.city =
+          String(
+            city
+          );
+      }
+
+      if (
+        country !==
+        undefined
+      ) {
+        user.country =
+          String(
+            country
+          );
+      }
+
+      if (
+        language !==
+        undefined
+      ) {
+        user.language =
+          String(
+            language
+          ) as typeof user.language;
+      }
+
+      if (
+        timezone !==
+        undefined
+      ) {
+        user.timezone =
+          String(
+            timezone
+          );
+      }
+
+      if (
+        currency !==
+        undefined
+      ) {
+        user.currency =
+          String(
+            currency
+          ) as typeof user.currency;
+      }
+
+      user.lastActive =
+        new Date();
+
+      await user.save();
+
+      res.json({
+        success: true,
+        message:
+          'Profile updated successfully',
+        user:
+          publicUser(user),
+      });
+    } catch (error) {
+      const err =
+        error as {
+          code?: number;
+        };
+
+      if (
+        err.code === 11000
+      ) {
+        res.status(409).json({
+          success: false,
+          message:
+            'Phone number already in use',
+        });
+
+        return;
+      }
+
+      res.status(500).json({
+        success: false,
+        message:
+          'Failed to update profile',
+      });
+    }
+  }
+);
+
+// ============================================================
+// CHANGE PASSWORD
+// ============================================================
+
+router.put(
+  '/change-password',
+  authenticate,
+  async (
+    req: AuthRequest,
+    res: Response
+  ) => {
+    try {
+      if (!req.user) {
+        res.status(401).json({
+          success: false,
+          message:
+            'Unauthorized',
+        });
+
+        return;
+      }
+
+      const currentPassword =
+        String(
+          req.body
+            ?.currentPassword ??
+            ''
+        );
+
+      const newPassword =
+        String(
+          req.body
+            ?.newPassword ??
+            ''
+        );
+
+      if (
+        !currentPassword ||
+        !newPassword
+      ) {
+        res.status(400).json({
+          success: false,
+          message:
+            'Current and new passwords are required',
+        });
+
+        return;
+      }
+
+      const user =
+        await User.findById(
+          req.user._id
+        )
+          .select(
+            '+password +passwordHistory'
+          )
+          .exec();
+
+      if (
+        !user ||
+        !(await user.comparePassword(
+          currentPassword
+        ))
+      ) {
+        res.status(401).json({
+          success: false,
+          message:
+            'Current password is incorrect',
+        });
+
+        return;
+      }
+
+      const passwordValidation =
+        validatePasswordStrength(
+          newPassword,
+          user
+        );
+
+      if (
+        !passwordValidation
+          .isValid
+      ) {
+        res.status(400).json({
+          success: false,
+          message:
+            'Password does not meet security requirements',
+          errors:
+            passwordValidation.errors,
+          strength:
+            passwordValidation.strength,
+        });
+
+        return;
+      }
+
+      const history =
+        new PasswordHistory(
+          user._id.toString(),
+          user.passwordHistory ||
+            []
+        );
+
+      const reused =
+        await history.isPasswordReused(
+          newPassword
+        );
+
+      const samePassword =
+        await user.comparePassword(
+          newPassword
+        );
+
+      if (
+        reused ||
+        samePassword
+      ) {
+        res.status(400).json({
+          success: false,
+          message:
+            'You cannot reuse one of your recent passwords',
+        });
+
+        return;
+      }
+
+      user.password =
+        newPassword;
+
+      // Revoke every other session.
+      user.sessions =
+        req.auth?.sessionId
+          ? user.sessions.filter(
+              (session) =>
+                session.sessionId ===
+                req.auth?.sessionId
+            )
+          : [];
+
+      await user.save();
+
+      await sendEmail({
+        to: user.email,
+        subject:
+          'Password Changed',
+        template:
+          'password_changed',
+        data: {
+          username:
+            user.username,
+        },
+      });
+
+      res.json({
+        success: true,
+        message:
+          'Password changed successfully',
+      });
+    } catch {
+      res.status(500).json({
+        success: false,
+        message:
+          'Failed to change password',
+      });
+    }
+  }
+);
+
+// ============================================================
+// FORGOT PASSWORD
+// ============================================================
+
+router.post(
+  '/forgot-password',
+  async (
+    req: Request,
+    res: Response
+  ) => {
+    const generic = {
+      success: true,
+      message:
+        'If your email is registered, you will receive a reset link',
+    };
+
+    try {
+      const email =
+        normalizeEmail(
+          req.body?.email
+        );
+
+      if (
+        !isValidEmail(email)
+      ) {
+        res.json(
+          generic
+        );
+
+        return;
+      }
+
+      const user =
+        await User.findOne({
+          email,
+        }).exec();
+
+      if (!user) {
+        res.json(
+          generic
+        );
+
+        return;
+      }
+
+      const rawToken =
+        crypto
+          .randomBytes(32)
+          .toString('hex');
+
+      user.resetPasswordToken =
+        hashToken(
+          rawToken
+        );
+
+      user.resetPasswordExpires =
+        new Date(
+          Date.now() +
+            60 * 60 * 1000
+        );
+
+      await user.save();
+
+      const baseUrl =
+        process.env.BASE_URL ||
+        'http://localhost:3000';
+
+      const resetUrl =
+        `${baseUrl.replace(
+          /\/$/,
+          ''
+        )}/reset-password?token=${encodeURIComponent(
+          rawToken
+        )}`;
+
+      await sendEmail({
+        to: user.email,
+        subject:
+          'Reset Your SHEBAODDS Password',
+        template:
+          'reset_password',
+        data: {
+          username:
+            user.username,
+          resetUrl,
+          tagline:
+            'Smart Bets. Real Wins.',
+        },
+      });
+
+      res.json(
+        generic
+      );
+    } catch {
+      res.json(
+        generic
+      );
+    }
+  }
+);
+
+// ============================================================
+// RESET PASSWORD
+// ============================================================
+
+router.post(
+  '/reset-password',
+  async (
+    req: Request,
+    res: Response
+  ) => {
+    try {
+      const token =
+        String(
+          req.body?.token ??
+            ''
+        );
+
+      const newPassword =
+        String(
+          req.body
+            ?.newPassword ??
+            ''
+        );
+
+      if (
+        !token ||
+        !newPassword
+      ) {
+        res.status(400).json({
+          success: false,
+          message:
+            'Token and new password are required',
+        });
+
+        return;
+      }
+
+      const user =
+        await User.findOne({
+          resetPasswordToken:
+            hashToken(
+              token
+            ),
+
+          resetPasswordExpires:
+            {
+              $gt: new Date(),
+            },
+        })
+          .select(
+            '+password +passwordHistory'
+          )
+          .exec();
+
+      if (!user) {
+        res.status(400).json({
+          success: false,
+          message:
+            'Invalid or expired reset token',
+        });
+
+        return;
+      }
+
+      const passwordValidation =
+        validatePasswordStrength(
+          newPassword,
+          user
+        );
+
+      if (
+        !passwordValidation
+          .isValid
+      ) {
+        res.status(400).json({
+          success: false,
+          message:
+            'Password does not meet security requirements',
+          errors:
+            passwordValidation.errors,
+          strength:
+            passwordValidation.strength,
+        });
+
+        return;
+      }
+
+      const history =
+        new PasswordHistory(
+          user._id.toString(),
+          user.passwordHistory ||
+            []
+        );
+
+      const reused =
+        await history.isPasswordReused(
+          newPassword
+        );
+
+      const samePassword =
+        await user.comparePassword(
+          newPassword
+        );
+
+      if (
+        reused ||
+        samePassword
+      ) {
+        res.status(400).json({
+          success: false,
+          message:
+            'You cannot reuse one of your recent passwords',
+        });
+
+        return;
+      }
+
+      user.password =
+        newPassword;
+
+      user.resetPasswordToken =
+        undefined;
+
+      user.resetPasswordExpires =
+        undefined;
+
+      user.loginAttempts =
+        0;
+
+      user.lockedUntil =
+        undefined;
+
+      // Reset all sessions.
+      user.sessions =
+        [];
+
+      await user.save();
+
+      res.json({
+        success: true,
+        message:
+          'Password reset successfully',
+      });
+    } catch {
+      res.status(500).json({
+        success: false,
+        message:
+          'Failed to reset password',
+      });
+    }
+  }
+);
+
+// ============================================================
+// 2FA SETUP
+// ============================================================
+
+router.post(
+  '/2fa/setup',
+  authenticate,
+  async (
+    req: AuthRequest,
+    res: Response
+  ) => {
+    try {
+      if (!req.user) {
+        res.status(401).json({
+          success: false,
+          message:
+            'Unauthorized',
+        });
+
+        return;
+      }
+
+      const user =
+        req.user;
+
+      if (
+        user.twoFactorEnabled
+      ) {
+        res.status(400).json({
+          success: false,
+          message:
+            '2FA is already enabled',
+        });
+
+        return;
+      }
+
+      const secret =
+        user.generateTwoFactorSecret();
+
+      const backupCodes =
+        user.generateBackupCodes();
+
+      await user.save();
+
+      const otpauthUrl =
+        speakeasy.otpauthURL({
+          secret:
+            secret.base32,
+
+          label:
+            `SHEBAODDS (${user.email})`,
+
+          issuer:
+            'SHEBAODDS',
+        });
+
+      const qrCode =
+        await QRCode.toDataURL(
+          otpauthUrl
+        );
+
+      res.json({
+        success: true,
+        secret:
+          secret.base32,
+        qrCode,
+        backupCodes,
+      });
+    } catch (error) {
+      console.error(
+        '2FA setup error:',
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          'Failed to setup 2FA',
+      });
+    }
+  }
+);
+
+// ============================================================
+// 2FA VERIFY
+// ============================================================
+
+router.post(
+  '/2fa/verify',
+  authenticate,
+  async (
+    req: AuthRequest,
+    res: Response
+  ) => {
+    try {
+      if (!req.user) {
+        res.status(401).json({
+          success: false,
+          message:
+            'Unauthorized',
+        });
+
+        return;
+      }
+
+      const token =
+        String(
+          req.body?.token ??
+            ''
+        );
+
+      if (
+        !req.user.verifyTwoFactorToken(
+          token
+        )
+      ) {
+        res.status(400).json({
+          success: false,
+          message:
+            'Invalid 2FA code',
+        });
+
+        return;
+      }
+
+      req.user.twoFactorEnabled =
+        true;
+
+      await req.user.save();
+
+      res.json({
+        success: true,
+        message:
+          '2FA enabled successfully',
+      });
+    } catch {
+      res.status(500).json({
+        success: false,
+        message:
+          'Failed to verify 2FA',
+      });
+    }
+  }
+);
+
+// ============================================================
+// 2FA DISABLE
+// ============================================================
+
+router.post(
+  '/2fa/disable',
+  authenticate,
+  async (
+    req: AuthRequest,
+    res: Response
+  ) => {
+    try {
+      if (!req.user) {
+        res.status(401).json({
+          success: false,
+          message:
+            'Unauthorized',
+        });
+
+        return;
+      }
+
+      const token =
+        String(
+          req.body?.token ??
+            ''
+        );
+
+      const validTotp =
+        req.user.verifyTwoFactorToken(
+          token
+        );
+
+      let validBackup =
+        false;
+
+      if (!validTotp) {
+        validBackup =
+          await req.user.verifyBackupCode(
+            token
+          );
+      }
+
+      if (
+        !validTotp &&
+        !validBackup
+      ) {
+        res.status(400).json({
+          success: false,
+          message:
+            'Invalid 2FA code',
+        });
+
+        return;
+      }
+
+      req.user.twoFactorEnabled =
+        false;
+
+      req.user.twoFactorSecret =
+        undefined;
+
+      req.user.twoFactorBackupCodes =
+        undefined;
+
+      await req.user.save();
+
+      res.json({
+        success: true,
+        message:
+          '2FA disabled successfully',
+      });
+    } catch {
+      res.status(500).json({
+        success: false,
+        message:
+          'Failed to disable 2FA',
+      });
+    }
+  }
+);
+
+// ============================================================
+// VERIFY EMAIL
+// ============================================================
+
+router.get(
+  '/verify-email/:token',
+  async (
+    req: Request,
+    res: Response
+  ) => {
+    try {
+      const token =
+        String(
+          req.params.token ??
+            ''
+        );
+
+      const tokenHash =
+        hashToken(
+          token
+        );
+
+      const user =
+        await User.findOneAndUpdate(
+          {
+            emailVerificationToken:
+              tokenHash,
+
+            emailVerificationExpires:
+              {
+                $gt: new Date(),
+              },
+
+            emailVerified:
+              false,
+          },
+
+          {
+            $set: {
+              emailVerified:
+                true,
+            },
+
+            $unset: {
+              emailVerificationToken:
+                1,
+
+              emailVerificationExpires:
+                1,
+            },
+
+            $inc: {
+              'wallet.balance':
+                50,
+
+              'wallet.bonusBalance':
+                50,
+
+              'wallet.totalBonusReceived':
+                50,
+            },
+          },
+
+          {
+            new: true,
+          }
+        ).exec();
+
+      if (!user) {
+        res.status(400).json({
+          success: false,
+          message:
+            'Invalid or expired verification token',
+        });
+
+        return;
+      }
+
+      res.json({
+        success: true,
+        message:
+          'Email verified successfully! You received 50 ETB bonus.',
+      });
+    } catch {
+      res.status(500).json({
+        success: false,
+        message:
+          'Failed to verify email',
+      });
+    }
+  }
+);
+
+// ============================================================
+// RESEND EMAIL VERIFICATION
+// ============================================================
+
+router.post(
+  '/resend-verification',
+  authenticate,
+  async (
+    req: AuthRequest,
+    res: Response
+  ) => {
+    try {
+      if (!req.user) {
+        res.status(401).json({
+          success: false,
+          message:
+            'Unauthorized',
+        });
+
+        return;
+      }
+
+      if (
+        req.user.emailVerified
+      ) {
+        res.status(400).json({
+          success: false,
+          message:
+            'Email already verified',
+        });
+
+        return;
+      }
+
+      const token =
+        req.user.generateEmailVerificationToken();
+
+      await req.user.save();
+
+      const baseUrl =
+        process.env.BASE_URL ||
+        'http://localhost:3000';
+
+      const verificationUrl =
+        `${baseUrl.replace(
+          /\/$/,
+          ''
+        )}/verify-email/${encodeURIComponent(
+          token
+        )}`;
+
+      await sendEmail({
+        to:
+          req.user.email,
+
+        subject:
+          'Verify Your SHEBAODDS Email',
+
+        template:
+          'verify_email',
+
+        data: {
+          username:
+            req.user.username,
+
+          verificationUrl,
+
+          tagline:
+            'Smart Bets. Real Wins.',
+        },
+      });
+
+      res.json({
+        success: true,
+        message:
+          'Verification email sent',
+      });
+    } catch {
+      res.status(500).json({
+        success: false,
+        message:
+          'Failed to send verification email',
+      });
+    }
+  }
+);
+
+// ============================================================
+// EXPORT
+// ============================================================
 
 export default router;
