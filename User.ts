@@ -1,242 +1,861 @@
+// ============================================
+// SHEBAODDS - USER MODEL
+// Mongoose 8 + TypeScript
+// ============================================
+
 import mongoose, {
-  CallbackWithoutResultAndOptionalError,
   HydratedDocument,
   Model,
   Schema,
-} from "mongoose";
-import bcrypt from "bcryptjs";
-import crypto from "crypto";
+  Types,
+} from 'mongoose';
+import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 
-export type UserRole =
-  | "user"
-  | "admin"
-  | "superadmin"
-  | "agent"
-  | "manager";
+// speakeasy has incomplete typings in this project.
+// Keep the untyped boundary isolated here.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const speakeasy = require('speakeasy');
 
-export type UserStatus = "active" | "inactive" | "suspended" | "pending";
+// ============================================================
+// TYPES
+// ============================================================
 
-export type Platform = "web" | "android" | "ios" | "mobile";
+export type Language =
+  | 'en'
+  | 'am'
+  | 'ar'
+  | 'fr'
+  | 'es'
+  | 'de'
+  | 'it'
+  | 'pt'
+  | 'ru'
+  | 'zh';
+
+export type Theme = 'light' | 'dark';
+
+export type Currency =
+  | 'ETB'
+  | 'USD'
+  | 'EUR'
+  | 'GBP'
+  | 'BTC'
+  | 'ETH'
+  | 'USDT';
+
+export type DevicePlatform =
+  | 'web'
+  | 'ios'
+  | 'android'
+  | 'admin';
+
+export type KycDocumentType =
+  | 'national_id'
+  | 'passport'
+  | 'drivers_license'
+  | 'proof_of_address'
+  | 'selfie';
+
+export type KycDocumentStatus =
+  | 'pending'
+  | 'approved'
+  | 'rejected';
+
+export type KycStatus =
+  | 'unverified'
+  | 'pending'
+  | 'verified'
+  | 'rejected';
+
+export type PaymentMethodType =
+  | 'tele_birr'
+  | 'cbe'
+  | 'card'
+  | 'paypal'
+  | 'crypto'
+  | 'bank_transfer';
+
+// ============================================================
+// SUB DOCUMENT INTERFACES
+// ============================================================
+
+export interface IWallet {
+  balance: number;
+  bonusBalance: number;
+  lockedBalance: number;
+  currency: Currency;
+
+  totalDeposited: number;
+  totalWithdrawn: number;
+  totalWagered: number;
+  totalWon: number;
+  totalLost: number;
+  totalTaxPaid: number;
+  totalBonusReceived: number;
+  totalCashbackReceived: number;
+}
+
+export interface IStatistics {
+  totalBets: number;
+  totalWins: number;
+  totalLosses: number;
+  winningPercentage: number;
+  currentWinStreak: number;
+  longestWinStreak: number;
+  biggestWin: number;
+  biggestLoss: number;
+  averageOdds: number;
+}
+
+export interface IVip {
+  level: number;
+  name: string;
+  loyaltyPoints: number;
+  cashbackPercentage: number;
+  personalManager: boolean;
+  higherLimits: boolean;
+  exclusivePromotions: boolean;
+  fasterWithdrawals: boolean;
+}
+
+export interface ITaxProfile {
+  taxExempt: boolean;
+  taxId?: string;
+  taxRegistrationNumber?: string;
+  isTaxRegistered: boolean;
+  totalTaxPaid: number;
+  totalWinningsTaxed: number;
+  lastTaxCalculation?: Date;
+}
+
+export interface IKycDocument {
+  type: KycDocumentType;
+  documentUrl?: string;
+  documentNumber?: string;
+  status: KycDocumentStatus;
+  submittedAt: Date;
+  reviewedAt?: Date;
+  reviewedBy?: string;
+  rejectionReason?: string;
+  verifiedAt?: Date;
+  verifiedBy?: string;
+}
+
+export interface ILastLoginLocation {
+  city?: string;
+  country?: string;
+  lat?: number;
+  lng?: number;
+}
+
+export interface IResponsibleGambling {
+  depositLimit: number;
+  lossLimit: number;
+  wagerLimit: number;
+  sessionTimeout: number;
+  realityCheckInterval: number;
+  selfExcluded: boolean;
+  selfExclusionEndDate?: Date;
+  coolingOffPeriodEnd?: Date;
+  lastRealityCheck?: Date;
+}
+
+export interface INotifications {
+  email: boolean;
+  push: boolean;
+  sms: boolean;
+  betSettlements: boolean;
+  promotions: boolean;
+  aiTips: boolean;
+  systemUpdates: boolean;
+  securityAlerts: boolean;
+}
+
+export interface IDevice {
+  deviceId: string;
+  deviceName?: string;
+  platform?: DevicePlatform;
+  browser?: string;
+  os?: string;
+  ipAddress?: string;
+  location?: string;
+  pushToken?: string;
+  biometricEnabled: boolean;
+  biometricPublicKey?: string;
+  lastUsed: Date;
+  isActive: boolean;
+}
+
+export interface IUserSession {
+  sessionId: string;
+  ipAddress?: string;
+  userAgent?: string;
+  deviceId?: string;
+  loginAt: Date;
+  lastActivity: Date;
+  expiresAt?: Date;
+}
+
+export interface ISavedPaymentMethod {
+  type: PaymentMethodType;
+  identifier?: string;
+  last4?: string;
+  brand?: string;
+  isDefault: boolean;
+  addedAt: Date;
+  metadata?: unknown;
+}
+
+export interface IBettingPreferences {
+  defaultStake: number;
+  autoCashoutMultiplier: number;
+  favoriteLeagues: string[];
+  favoriteTeams: string[];
+  excludedMarkets: string[];
+}
+
+export interface IAffiliate {
+  partnerId?: string;
+  commissionRate: number;
+  totalCommission: number;
+  paidCommission: number;
+}
+
+export interface IUserNote {
+  note?: string;
+  createdBy?: Types.ObjectId;
+  createdAt: Date;
+}
+
+// ============================================================
+// USER INTERFACE
+// ============================================================
 
 export interface IUser {
   username: string;
   email: string;
-  phone?: string;
-
   password: string;
-  role: UserRole;
-  status: UserStatus;
+  passwordHistory: string[];
 
-  firstName?: string;
-  lastName?: string;
-  avatar?: string;
+  phone: string;
+  fullName?: string;
+  dateOfBirth?: Date;
 
-  isEmailVerified: boolean;
-  isPhoneVerified: boolean;
+  country: string;
+  city?: string;
+  address?: string;
+  postalCode?: string;
+
+  language: Language;
+  theme: Theme;
+  currency: Currency;
+  timezone: string;
+
+  wallet: IWallet;
+  statistics: IStatistics;
+  vip: IVip;
+  taxProfile: ITaxProfile;
+
+  isActive: boolean;
+  isAdmin: boolean;
+  isVerified: boolean;
+  isBlocked: boolean;
+  isSuspended: boolean;
+
+  suspensionReason?: string;
+  suspensionEndDate?: Date;
+
+  kycDocuments: IKycDocument[];
+  kycStatus: KycStatus;
+  kycLevel: number;
 
   twoFactorEnabled: boolean;
   twoFactorSecret?: string;
-  backupCodes: string[];
+  twoFactorBackupCodes?: string[];
 
-  loginAttempts: number;
-  lockUntil?: Date;
+  emailVerified: boolean;
+  phoneVerified: boolean;
 
-  lastLoginAt?: Date;
-  lastLoginIp?: string;
-
-  refreshTokens: Array<{
-    tokenHash: string;
-    deviceId?: string;
-    platform?: Platform;
-    ip?: string;
-    userAgent?: string;
-    createdAt: Date;
-    expiresAt: Date;
-    revokedAt?: Date;
-  }>;
-
-  passwordChangedAt?: Date;
-  passwordHistory: string[];
-
-  passwordResetTokenHash?: string;
-  passwordResetExpires?: Date;
-
-  emailVerificationTokenHash?: string;
+  emailVerificationToken?: string;
   emailVerificationExpires?: Date;
 
-  referralCode?: string;
-  referredBy?: mongoose.Types.ObjectId;
-  referralBonusPaid: boolean;
+  phoneVerificationCode?: string;
+  phoneVerificationExpires?: Date;
 
-  balance: number;
-  bonusBalance: number;
+  loginAttempts: number;
+  lockedUntil?: Date;
+
+  lastLoginIP?: string;
+  lastLoginLocation?: ILastLoginLocation;
+
+  resetPasswordToken?: string;
+  resetPasswordExpires?: Date;
+
+  referralCode?: string;
+  referredBy?: Types.ObjectId;
+  referralCount: number;
+  referralEarnings: number;
+  referralTier: number;
+
+  responsibleGambling: IResponsibleGambling;
+  notifications: INotifications;
+
+  devices: IDevice[];
+  sessions: IUserSession[];
+
+  savedPaymentMethods: ISavedPaymentMethod[];
+
+  bettingPreferences: IBettingPreferences;
+
+  affiliate: IAffiliate;
+
+  notes: IUserNote[];
+
+  lastLogin?: Date;
+  lastActive: Date;
 
   createdAt: Date;
   updatedAt: Date;
 }
 
+// ============================================================
+// INSTANCE METHODS
+// ============================================================
+
 export interface IUserMethods {
   comparePassword(candidatePassword: string): Promise<boolean>;
 
-  setPassword(newPassword: string): Promise<void>;
+  generateReferralCode(): string;
 
-  generatePasswordResetToken(): string;
+  generateTwoFactorSecret(): {
+    ascii?: string;
+    hex?: string;
+    base32: string;
+    otpauth_url?: string;
+  };
+
+  verifyTwoFactorToken(token: string): boolean;
+
+  generateBackupCodes(): string[];
+
+  verifyBackupCode(code: string): Promise<boolean>;
 
   generateEmailVerificationToken(): string;
 
-  revokeAllSessions(): Promise<void>;
+  updateVipLevel(): void;
 
-  revokeSession(tokenHash: string): Promise<void>;
+  canPlaceBet(amount: number): boolean;
 
-  addRefreshToken(
-    tokenHash: string,
-    options?: {
-      deviceId?: string;
-      platform?: Platform;
-      ip?: string;
-      userAgent?: string;
-      expiresAt?: Date;
-    }
-  ): Promise<void>;
+  getDepositLimit(): number;
 
-  hasActiveSession(tokenHash: string): boolean;
-
-  generateReferralCode(): string;
-
-  generateBackupCodes(count?: number): string[];
+  toJSON(): Record<string, unknown>;
 }
 
-export type UserDocument = HydratedDocument<IUser, IUserMethods>;
+// ============================================================
+// DOCUMENT TYPES
+// ============================================================
 
-type UserModel = Model<IUser, {}, IUserMethods>;
+export type UserDocument = HydratedDocument<
+  IUser,
+  IUserMethods
+>;
 
-const refreshTokenSchema = new Schema(
+// ============================================================
+// MODEL STATIC METHODS
+// ============================================================
+
+export interface IUserModel
+  extends Model<IUser, {}, IUserMethods> {
+  findByEmailOrUsername(
+    identifier: string
+  ): Promise<UserDocument | null>;
+
+  getTopWagered(
+    limit?: number
+  ): Promise<UserDocument[]>;
+
+  getOnlineUsers(): Promise<number>;
+}
+
+// ============================================================
+// SCHEMA
+// ============================================================
+
+const userSchema = new Schema<
+  IUser,
+  IUserModel,
+  IUserMethods
+>(
   {
-    tokenHash: {
-      type: String,
-      required: true,
-      index: true,
-    },
+    // ========================================================
+    // BASIC INFORMATION
+    // ========================================================
 
-    deviceId: {
-      type: String,
-      trim: true,
-    },
-
-    platform: {
-      type: String,
-      enum: ["web", "android", "ios", "mobile"],
-    },
-
-    ip: {
-      type: String,
-      trim: true,
-    },
-
-    userAgent: {
-      type: String,
-      trim: true,
-      maxlength: 1000,
-    },
-
-    createdAt: {
-      type: Date,
-      default: Date.now,
-    },
-
-    expiresAt: {
-      type: Date,
-      required: true,
-      index: true,
-    },
-
-    revokedAt: {
-      type: Date,
-    },
-  },
-  {
-    _id: true,
-  }
-);
-
-const userSchema = new Schema<IUser, UserModel, IUserMethods>(
-  {
     username: {
       type: String,
-      required: true,
+      required: [true, 'Username is required'],
       unique: true,
       trim: true,
-      minlength: 3,
-      maxlength: 50,
       lowercase: true,
+      minlength: [3, 'Username must be at least 3 characters'],
+      maxlength: [20, 'Username cannot exceed 20 characters'],
+      match: [
+        /^[a-zA-Z0-9_]+$/,
+        'Username can only contain letters, numbers and underscore',
+      ],
       index: true,
     },
 
     email: {
       type: String,
-      required: true,
+      required: [true, 'Email is required'],
       unique: true,
       trim: true,
       lowercase: true,
-      maxlength: 255,
-      index: true,
-    },
-
-    phone: {
-      type: String,
-      trim: true,
-      sparse: true,
+      match: [
+        /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+        'Please provide a valid email',
+      ],
       index: true,
     },
 
     password: {
       type: String,
-      required: true,
-      minlength: 8,
+      required: [true, 'Password is required'],
+      minlength: [8, 'Password must be at least 8 characters'],
       select: false,
     },
 
-    role: {
+    passwordHistory: {
+      type: [String],
+      default: [],
+      select: false,
+    },
+
+    phone: {
       type: String,
-      enum: ["user", "admin", "superadmin", "agent", "manager"],
-      default: "user",
+      required: [true, 'Phone number is required'],
+      unique: true,
+      trim: true,
+      match: [
+        /^\+?[0-9]{10,15}$/,
+        'Please provide a valid phone number',
+      ],
       index: true,
     },
 
-    status: {
+    fullName: {
       type: String,
-      enum: ["active", "inactive", "suspended", "pending"],
-      default: "active",
+      trim: true,
+      maxlength: [
+        100,
+        'Full name cannot exceed 100 characters',
+      ],
+    },
+
+    dateOfBirth: {
+      type: Date,
+    },
+
+    country: {
+      type: String,
+      default: 'Ethiopia',
+      trim: true,
+    },
+
+    city: {
+      type: String,
+      trim: true,
+    },
+
+    address: {
+      type: String,
+      trim: true,
+    },
+
+    postalCode: {
+      type: String,
+      trim: true,
+    },
+
+    // ========================================================
+    // PREFERENCES
+    // ========================================================
+
+    language: {
+      type: String,
+      enum: [
+        'en',
+        'am',
+        'ar',
+        'fr',
+        'es',
+        'de',
+        'it',
+        'pt',
+        'ru',
+        'zh',
+      ],
+      default: 'en',
+    },
+
+    theme: {
+      type: String,
+      enum: ['light', 'dark'],
+      default: 'dark',
+    },
+
+    currency: {
+      type: String,
+      enum: [
+        'ETB',
+        'USD',
+        'EUR',
+        'GBP',
+        'BTC',
+        'ETH',
+        'USDT',
+      ],
+      default: 'ETB',
+    },
+
+    timezone: {
+      type: String,
+      default: 'Africa/Addis_Ababa',
+    },
+
+    // ========================================================
+    // WALLET
+    // ========================================================
+
+    wallet: {
+      balance: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+
+      bonusBalance: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+
+      lockedBalance: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+
+      currency: {
+        type: String,
+        enum: [
+          'ETB',
+          'USD',
+          'EUR',
+          'GBP',
+          'BTC',
+          'ETH',
+          'USDT',
+        ],
+        default: 'ETB',
+      },
+
+      totalDeposited: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+
+      totalWithdrawn: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+
+      totalWagered: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+
+      totalWon: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+
+      totalLost: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+
+      totalTaxPaid: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+
+      totalBonusReceived: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+
+      totalCashbackReceived: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+    },
+
+    // ========================================================
+    // STATISTICS
+    // ========================================================
+
+    statistics: {
+      totalBets: {
+        type: Number,
+        default: 0,
+      },
+
+      totalWins: {
+        type: Number,
+        default: 0,
+      },
+
+      totalLosses: {
+        type: Number,
+        default: 0,
+      },
+
+      winningPercentage: {
+        type: Number,
+        default: 0,
+      },
+
+      currentWinStreak: {
+        type: Number,
+        default: 0,
+      },
+
+      longestWinStreak: {
+        type: Number,
+        default: 0,
+      },
+
+      biggestWin: {
+        type: Number,
+        default: 0,
+      },
+
+      biggestLoss: {
+        type: Number,
+        default: 0,
+      },
+
+      averageOdds: {
+        type: Number,
+        default: 0,
+      },
+    },
+
+    // ========================================================
+    // VIP
+    // ========================================================
+
+    vip: {
+      level: {
+        type: Number,
+        default: 0,
+        min: 0,
+        max: 8,
+      },
+
+      name: {
+        type: String,
+        default: 'Bronze',
+      },
+
+      loyaltyPoints: {
+        type: Number,
+        default: 0,
+      },
+
+      cashbackPercentage: {
+        type: Number,
+        default: 0,
+      },
+
+      personalManager: {
+        type: Boolean,
+        default: false,
+      },
+
+      higherLimits: {
+        type: Boolean,
+        default: false,
+      },
+
+      exclusivePromotions: {
+        type: Boolean,
+        default: false,
+      },
+
+      fasterWithdrawals: {
+        type: Boolean,
+        default: false,
+      },
+    },
+
+    // ========================================================
+    // TAX
+    // ========================================================
+
+    taxProfile: {
+      taxExempt: {
+        type: Boolean,
+        default: false,
+      },
+
+      taxId: {
+        type: String,
+        sparse: true,
+      },
+
+      taxRegistrationNumber: {
+        type: String,
+        sparse: true,
+      },
+
+      isTaxRegistered: {
+        type: Boolean,
+        default: false,
+      },
+
+      totalTaxPaid: {
+        type: Number,
+        default: 0,
+      },
+
+      totalWinningsTaxed: {
+        type: Number,
+        default: 0,
+      },
+
+      lastTaxCalculation: {
+        type: Date,
+      },
+    },
+
+    // ========================================================
+    // ACCOUNT STATUS
+    // ========================================================
+
+    isActive: {
+      type: Boolean,
+      default: true,
       index: true,
     },
 
-    firstName: {
-      type: String,
-      trim: true,
-      maxlength: 100,
-    },
-
-    lastName: {
-      type: String,
-      trim: true,
-      maxlength: 100,
-    },
-
-    avatar: {
-      type: String,
-      trim: true,
-    },
-
-    isEmailVerified: {
+    isAdmin: {
       type: Boolean,
       default: false,
       index: true,
     },
 
-    isPhoneVerified: {
+    isVerified: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+
+    isBlocked: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+
+    isSuspended: {
       type: Boolean,
       default: false,
     },
+
+    suspensionReason: {
+      type: String,
+    },
+
+    suspensionEndDate: {
+      type: Date,
+    },
+
+    // ========================================================
+    // KYC
+    // ========================================================
+
+    kycDocuments: [
+      {
+        type: {
+          type: String,
+          enum: [
+            'national_id',
+            'passport',
+            'drivers_license',
+            'proof_of_address',
+            'selfie',
+          ],
+        },
+
+        documentUrl: String,
+
+        documentNumber: String,
+
+        status: {
+          type: String,
+          enum: [
+            'pending',
+            'approved',
+            'rejected',
+          ],
+          default: 'pending',
+        },
+
+        submittedAt: {
+          type: Date,
+          default: Date.now,
+        },
+
+        reviewedAt: Date,
+        reviewedBy: String,
+        rejectionReason: String,
+        verifiedAt: Date,
+        verifiedBy: String,
+      },
+    ],
+
+    kycStatus: {
+      type: String,
+      enum: [
+        'unverified',
+        'pending',
+        'verified',
+        'rejected',
+      ],
+      default: 'unverified',
+    },
+
+    kycLevel: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 3,
+    },
+
+    // ========================================================
+    // TWO FACTOR AUTHENTICATION
+    // ========================================================
 
     twoFactorEnabled: {
       type: Boolean,
@@ -248,403 +867,894 @@ const userSchema = new Schema<IUser, UserModel, IUserMethods>(
       select: false,
     },
 
-    backupCodes: {
+    twoFactorBackupCodes: {
       type: [String],
-      default: [],
+      default: undefined,
       select: false,
     },
 
-    loginAttempts: {
-      type: Number,
-      default: 0,
-      min: 0,
+    emailVerified: {
+      type: Boolean,
+      default: false,
     },
 
-    lockUntil: {
-      type: Date,
+    phoneVerified: {
+      type: Boolean,
+      default: false,
     },
 
-    lastLoginAt: {
-      type: Date,
-    },
-
-    lastLoginIp: {
+    emailVerificationToken: {
       type: String,
-    },
-
-    refreshTokens: {
-      type: [refreshTokenSchema],
-      default: [],
-      select: false,
-    },
-
-    passwordChangedAt: {
-      type: Date,
-    },
-
-    passwordHistory: {
-      type: [String],
-      default: [],
-      select: false,
-    },
-
-    passwordResetTokenHash: {
-      type: String,
-      select: false,
-      index: true,
-    },
-
-    passwordResetExpires: {
-      type: Date,
-      select: false,
-    },
-
-    emailVerificationTokenHash: {
-      type: String,
-      select: false,
-      index: true,
     },
 
     emailVerificationExpires: {
       type: Date,
-      select: false,
     },
+
+    phoneVerificationCode: {
+      type: String,
+    },
+
+    phoneVerificationExpires: {
+      type: Date,
+    },
+
+    // ========================================================
+    // LOGIN SECURITY
+    // ========================================================
+
+    loginAttempts: {
+      type: Number,
+      default: 0,
+    },
+
+    lockedUntil: {
+      type: Date,
+    },
+
+    lastLoginIP: {
+      type: String,
+    },
+
+    lastLoginLocation: {
+      city: String,
+      country: String,
+      lat: Number,
+      lng: Number,
+    },
+
+    // ========================================================
+    // PASSWORD RESET
+    // ========================================================
+
+    resetPasswordToken: {
+      type: String,
+    },
+
+    resetPasswordExpires: {
+      type: Date,
+    },
+
+    // ========================================================
+    // REFERRALS
+    // ========================================================
 
     referralCode: {
       type: String,
       unique: true,
       sparse: true,
-      uppercase: true,
-      trim: true,
       index: true,
     },
 
     referredBy: {
       type: Schema.Types.ObjectId,
-      ref: "User",
+      ref: 'User',
     },
 
-    referralBonusPaid: {
-      type: Boolean,
-      default: false,
-    },
-
-    balance: {
+    referralCount: {
       type: Number,
       default: 0,
-      min: 0,
     },
 
-    bonusBalance: {
+    referralEarnings: {
       type: Number,
       default: 0,
-      min: 0,
+    },
+
+    referralTier: {
+      type: Number,
+      default: 1,
+    },
+
+    // ========================================================
+    // RESPONSIBLE GAMBLING
+    // ========================================================
+
+    responsibleGambling: {
+      depositLimit: {
+        type: Number,
+        default: 10000,
+      },
+
+      lossLimit: {
+        type: Number,
+        default: 5000,
+      },
+
+      wagerLimit: {
+        type: Number,
+        default: 50000,
+      },
+
+      sessionTimeout: {
+        type: Number,
+        default: 120,
+      },
+
+      realityCheckInterval: {
+        type: Number,
+        default: 60,
+      },
+
+      selfExcluded: {
+        type: Boolean,
+        default: false,
+      },
+
+      selfExclusionEndDate: Date,
+
+      coolingOffPeriodEnd: Date,
+
+      lastRealityCheck: Date,
+    },
+
+    // ========================================================
+    // NOTIFICATIONS
+    // ========================================================
+
+    notifications: {
+      email: {
+        type: Boolean,
+        default: true,
+      },
+
+      push: {
+        type: Boolean,
+        default: true,
+      },
+
+      sms: {
+        type: Boolean,
+        default: false,
+      },
+
+      betSettlements: {
+        type: Boolean,
+        default: true,
+      },
+
+      promotions: {
+        type: Boolean,
+        default: true,
+      },
+
+      aiTips: {
+        type: Boolean,
+        default: true,
+      },
+
+      systemUpdates: {
+        type: Boolean,
+        default: true,
+      },
+
+      securityAlerts: {
+        type: Boolean,
+        default: true,
+      },
+    },
+
+    // ========================================================
+    // DEVICES
+    // ========================================================
+
+    devices: [
+      {
+        deviceId: {
+          type: String,
+          required: true,
+        },
+
+        deviceName: String,
+
+        platform: {
+          type: String,
+          enum: [
+            'web',
+            'ios',
+            'android',
+            'admin',
+          ],
+        },
+
+        browser: String,
+        os: String,
+        ipAddress: String,
+        location: String,
+        pushToken: String,
+
+        biometricEnabled: {
+          type: Boolean,
+          default: false,
+        },
+
+        biometricPublicKey: String,
+
+        lastUsed: {
+          type: Date,
+          default: Date.now,
+        },
+
+        isActive: {
+          type: Boolean,
+          default: true,
+        },
+      },
+    ],
+
+    // ========================================================
+    // SESSIONS
+    // ========================================================
+
+    sessions: [
+      {
+        sessionId: {
+          type: String,
+          required: true,
+        },
+
+        ipAddress: String,
+        userAgent: String,
+        deviceId: String,
+
+        loginAt: {
+          type: Date,
+          default: Date.now,
+        },
+
+        lastActivity: {
+          type: Date,
+          default: Date.now,
+        },
+
+        expiresAt: Date,
+      },
+    ],
+
+    // ========================================================
+    // PAYMENT METHODS
+    // ========================================================
+
+    savedPaymentMethods: [
+      {
+        type: {
+          type: String,
+          enum: [
+            'tele_birr',
+            'cbe',
+            'card',
+            'paypal',
+            'crypto',
+            'bank_transfer',
+          ],
+        },
+
+        identifier: String,
+        last4: String,
+        brand: String,
+
+        isDefault: {
+          type: Boolean,
+          default: false,
+        },
+
+        addedAt: {
+          type: Date,
+          default: Date.now,
+        },
+
+        metadata: {
+          type: Schema.Types.Mixed,
+        },
+      },
+    ],
+
+    // ========================================================
+    // BETTING PREFERENCES
+    // ========================================================
+
+    bettingPreferences: {
+      defaultStake: {
+        type: Number,
+        default: 10,
+      },
+
+      autoCashoutMultiplier: {
+        type: Number,
+        default: 0,
+      },
+
+      favoriteLeagues: {
+        type: [String],
+        default: [],
+      },
+
+      favoriteTeams: {
+        type: [String],
+        default: [],
+      },
+
+      excludedMarkets: {
+        type: [String],
+        default: [],
+      },
+    },
+
+    // ========================================================
+    // AFFILIATE
+    // ========================================================
+
+    affiliate: {
+      partnerId: String,
+
+      commissionRate: {
+        type: Number,
+        default: 0,
+      },
+
+      totalCommission: {
+        type: Number,
+        default: 0,
+      },
+
+      paidCommission: {
+        type: Number,
+        default: 0,
+      },
+    },
+
+    // ========================================================
+    // NOTES
+    // ========================================================
+
+    notes: [
+      {
+        note: String,
+
+        createdBy: {
+          type: Schema.Types.ObjectId,
+          ref: 'User',
+        },
+
+        createdAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
+
+    // ========================================================
+    // TIMESTAMPS
+    // ========================================================
+
+    lastLogin: Date,
+
+    lastActive: {
+      type: Date,
+      default: Date.now,
     },
   },
   {
     timestamps: true,
-    versionKey: false,
-    collection: "users",
+
+    toJSON: {
+      virtuals: true,
+    },
+
+    toObject: {
+      virtuals: true,
+    },
   }
 );
 
-/*
-|--------------------------------------------------------------------------
-| Password hashing
-|--------------------------------------------------------------------------
-*/
+// ============================================================
+// INDEXES
+// ============================================================
+
+userSchema.index({ createdAt: -1 });
+userSchema.index({ lastActive: -1 });
+userSchema.index({ 'wallet.balance': -1 });
+userSchema.index({ 'wallet.totalWagered': -1 });
+userSchema.index({ 'vip.level': -1 });
+userSchema.index({ 'vip.loyaltyPoints': -1 });
+userSchema.index({ referredBy: 1 });
+userSchema.index({ 'devices.deviceId': 1 });
+userSchema.index({ 'sessions.sessionId': 1 });
+userSchema.index({ kycStatus: 1 });
+
+// ============================================================
+// PASSWORD HASHING
+// ============================================================
 
 userSchema.pre(
-  "save",
-  async function (
-    next: CallbackWithoutResultAndOptionalError
-  ): Promise<void> {
-    if (!this.isModified("password")) {
-      next();
-      return;
-    }
-
-    const currentPassword = this.password;
-
-    if (!currentPassword) {
-      next(new Error("Password is required"));
-      return;
-    }
-
-    const hashedPassword = await bcrypt.hash(currentPassword, 12);
-
-    if (!this.isNew && this.passwordHistory) {
-      const previousPassword = this.password;
-
-      if (previousPassword && previousPassword !== hashedPassword) {
-        this.passwordHistory = [
-          previousPassword,
-          ...this.passwordHistory,
-        ].slice(0, 5);
+  'save',
+  async function (next) {
+    try {
+      if (!this.isModified('password')) {
+        this.updatedAt = new Date();
+        return next();
       }
+
+      if (
+        !this.isNew &&
+        this.password &&
+        Array.isArray(this.passwordHistory)
+      ) {
+        this.passwordHistory.unshift(this.password);
+        this.passwordHistory =
+          this.passwordHistory.slice(0, 5);
+      }
+
+      this.password = await bcrypt.hash(
+        this.password,
+        12
+      );
+
+      this.updatedAt = new Date();
+
+      next();
+    } catch (error) {
+      next(error as Error);
+    }
+  }
+);
+
+// ============================================================
+// REFERRAL CODE
+// ============================================================
+
+userSchema.pre(
+  'save',
+  function (next) {
+    if (!this.referralCode && this.isNew) {
+      this.referralCode =
+        `SHB${crypto
+          .randomBytes(4)
+          .toString('hex')
+          .toUpperCase()}`;
     }
 
-    this.password = hashedPassword;
-    this.passwordChangedAt = new Date();
+    this.updatedAt = new Date();
 
     next();
   }
 );
 
-/*
-|--------------------------------------------------------------------------
-| Compare password
-|--------------------------------------------------------------------------
-*/
+// ============================================================
+// COMPARE PASSWORD
+// ============================================================
 
-userSchema.methods.comparePassword = async function (
-  candidatePassword: string
-): Promise<boolean> {
-  if (!candidatePassword || !this.password) {
-    return false;
-  }
+userSchema.methods.comparePassword =
+  async function (
+    this: UserDocument,
+    candidatePassword: string
+  ): Promise<boolean> {
+    if (!this.password) {
+      return false;
+    }
 
-  return bcrypt.compare(candidatePassword, this.password);
-};
+    return bcrypt.compare(
+      candidatePassword,
+      this.password
+    );
+  };
 
-/*
-|--------------------------------------------------------------------------
-| Set password
-|--------------------------------------------------------------------------
-*/
+// ============================================================
+// REFERRAL CODE
+// ============================================================
 
-userSchema.methods.setPassword = async function (
-  newPassword: string
-): Promise<void> {
-  if (!newPassword || newPassword.length < 8) {
-    throw new Error("Password must be at least 8 characters long");
-  }
+userSchema.methods.generateReferralCode =
+  function (
+    this: UserDocument
+  ): string {
+    return (
+      `SHB${crypto
+        .randomBytes(4)
+        .toString('hex')
+        .toUpperCase()}`
+    );
+  };
 
-  const isSame = await bcrypt.compare(newPassword, this.password);
+// ============================================================
+// 2FA SECRET
+// ============================================================
 
-  if (isSame) {
-    throw new Error("New password must be different from the old password");
-  }
+userSchema.methods.generateTwoFactorSecret =
+  function (
+    this: UserDocument
+  ) {
+    const secret = speakeasy.generateSecret({
+      length: 20,
+      name: `SHEBAODDS (${this.email})`,
+      issuer: 'SHEBAODDS',
+    });
 
-  const history = this.passwordHistory || [];
+    this.twoFactorSecret = secret.base32;
 
-  for (const oldPassword of history) {
-    const reused = await bcrypt.compare(newPassword, oldPassword);
+    return secret;
+  };
 
-    if (reused) {
-      throw new Error(
-        "You cannot reuse one of your previous passwords"
+// ============================================================
+// VERIFY TOTP
+// ============================================================
+
+userSchema.methods.verifyTwoFactorToken =
+  function (
+    this: UserDocument,
+    token: string
+  ): boolean {
+    if (
+      !this.twoFactorSecret ||
+      !/^\d{6}$/.test(token)
+    ) {
+      return false;
+    }
+
+    return Boolean(
+      speakeasy.totp.verify({
+        secret: this.twoFactorSecret,
+        encoding: 'base32',
+        token,
+        window: 2,
+      })
+    );
+  };
+
+// ============================================================
+// BACKUP CODES
+// ============================================================
+
+userSchema.methods.generateBackupCodes =
+  function (
+    this: UserDocument
+  ): string[] {
+    const codes = Array.from(
+      { length: 10 },
+      () =>
+        crypto
+          .randomBytes(5)
+          .toString('hex')
+          .toUpperCase()
+    );
+
+    this.twoFactorBackupCodes =
+      codes.map((code) =>
+        bcrypt.hashSync(code, 12)
       );
+
+    return codes;
+  };
+
+// ============================================================
+// VERIFY BACKUP CODE
+// ============================================================
+
+userSchema.methods.verifyBackupCode =
+  async function (
+    this: UserDocument,
+    code: string
+  ): Promise<boolean> {
+    if (
+      !this.twoFactorBackupCodes ||
+      this.twoFactorBackupCodes.length === 0
+    ) {
+      return false;
     }
-  }
 
-  this.passwordHistory = [
-    this.password,
-    ...history,
-  ].slice(0, 5);
+    const normalized =
+      String(code)
+        .trim()
+        .toUpperCase();
 
-  this.password = newPassword;
-  this.passwordChangedAt = new Date();
+    for (
+      let index = 0;
+      index < this.twoFactorBackupCodes.length;
+      index++
+    ) {
+      const valid =
+        await bcrypt.compare(
+          normalized,
+          this.twoFactorBackupCodes[index]
+        );
 
-  await this.save();
-};
+      if (valid) {
+        this.twoFactorBackupCodes.splice(
+          index,
+          1
+        );
 
-/*
-|--------------------------------------------------------------------------
-| Password reset token
-|--------------------------------------------------------------------------
-*/
+        return true;
+      }
+    }
 
-userSchema.methods.generatePasswordResetToken = function (): string {
-  const token = crypto.randomBytes(32).toString("hex");
-
-  this.passwordResetTokenHash = crypto
-    .createHash("sha256")
-    .update(token)
-    .digest("hex");
-
-  this.passwordResetExpires = new Date(
-    Date.now() + 15 * 60 * 1000
-  );
-
-  return token;
-};
-
-/*
-|--------------------------------------------------------------------------
-| Email verification token
-|--------------------------------------------------------------------------
-*/
-
-userSchema.methods.generateEmailVerificationToken = function (): string {
-  const token = crypto.randomBytes(32).toString("hex");
-
-  this.emailVerificationTokenHash = crypto
-    .createHash("sha256")
-    .update(token)
-    .digest("hex");
-
-  this.emailVerificationExpires = new Date(
-    Date.now() + 24 * 60 * 60 * 1000
-  );
-
-  return token;
-};
-
-/*
-|--------------------------------------------------------------------------
-| Refresh sessions
-|--------------------------------------------------------------------------
-*/
-
-userSchema.methods.addRefreshToken = async function (
-  tokenHash: string,
-  options = {}
-): Promise<void> {
-  const expiresAt =
-    options.expiresAt ||
-    new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-
-  this.refreshTokens = this.refreshTokens || [];
-
-  this.refreshTokens = this.refreshTokens.filter(
-    (session) =>
-      !session.revokedAt &&
-      session.expiresAt.getTime() > Date.now()
-  );
-
-  this.refreshTokens.push({
-    tokenHash,
-    deviceId: options.deviceId,
-    platform: options.platform,
-    ip: options.ip,
-    userAgent: options.userAgent,
-    createdAt: new Date(),
-    expiresAt,
-  });
-
-  /*
-   * Prevent unbounded session growth.
-   */
-  if (this.refreshTokens.length > 10) {
-    this.refreshTokens = this.refreshTokens.slice(-10);
-  }
-
-  await this.save();
-};
-
-userSchema.methods.hasActiveSession = function (
-  tokenHash: string
-): boolean {
-  if (!this.refreshTokens) {
     return false;
-  }
+  };
 
-  return this.refreshTokens.some(
-    (session) =>
-      session.tokenHash === tokenHash &&
-      !session.revokedAt &&
-      session.expiresAt.getTime() > Date.now()
-  );
-};
+// ============================================================
+// EMAIL VERIFICATION TOKEN
+// ============================================================
 
-userSchema.methods.revokeSession = async function (
-  tokenHash: string
-): Promise<void> {
-  if (!this.refreshTokens) {
-    return;
-  }
+userSchema.methods.generateEmailVerificationToken =
+  function (
+    this: UserDocument
+  ): string {
+    const token =
+      crypto.randomBytes(32).toString('hex');
 
-  const session = this.refreshTokens.find(
-    (item) =>
-      item.tokenHash === tokenHash &&
-      !item.revokedAt
-  );
+    this.emailVerificationToken =
+      crypto
+        .createHash('sha256')
+        .update(token)
+        .digest('hex');
 
-  if (session) {
-    session.revokedAt = new Date();
-    await this.save();
-  }
-};
+    this.emailVerificationExpires =
+      new Date(
+        Date.now() +
+          24 * 60 * 60 * 1000
+      );
 
-userSchema.methods.revokeAllSessions = async function (): Promise<void> {
-  if (!this.refreshTokens) {
-    return;
-  }
+    return token;
+  };
 
-  const now = new Date();
+// ============================================================
+// VIP
+// ============================================================
 
-  for (const session of this.refreshTokens) {
-    if (!session.revokedAt) {
-      session.revokedAt = now;
+userSchema.methods.updateVipLevel =
+  function (
+    this: UserDocument
+  ): void {
+    const totalWagered =
+      this.wallet?.totalWagered ?? 0;
+
+    let level = 1;
+    let name = 'Bronze';
+    let cashback = 2;
+
+    if (totalWagered >= 1_000_000) {
+      level = 8;
+      name = 'Ambassador';
+      cashback = 25;
+    } else if (totalWagered >= 500_000) {
+      level = 7;
+      name = 'President';
+      cashback = 20;
+    } else if (totalWagered >= 250_000) {
+      level = 6;
+      name = 'Elite';
+      cashback = 15;
+    } else if (totalWagered >= 100_000) {
+      level = 5;
+      name = 'Diamond';
+      cashback = 10;
+    } else if (totalWagered >= 50_000) {
+      level = 4;
+      name = 'Platinum';
+      cashback = 7;
+    } else if (totalWagered >= 20_000) {
+      level = 3;
+      name = 'Gold';
+      cashback = 5;
+    } else if (totalWagered >= 5_000) {
+      level = 2;
+      name = 'Silver';
+      cashback = 3;
     }
-  }
 
-  await this.save();
-};
+    this.vip.level = level;
+    this.vip.name = name;
+    this.vip.cashbackPercentage = cashback;
 
-/*
-|--------------------------------------------------------------------------
-| Referral code
-|--------------------------------------------------------------------------
-*/
+    this.vip.personalManager = level >= 6;
+    this.vip.higherLimits = level >= 4;
+    this.vip.exclusivePromotions = level >= 3;
+    this.vip.fasterWithdrawals = level >= 5;
+  };
 
-userSchema.methods.generateReferralCode = function (): string {
-  const prefix = this.username
-    .replace(/[^a-zA-Z0-9]/g, "")
-    .slice(0, 5)
-    .toUpperCase();
+// ============================================================
+// CAN PLACE BET
+// ============================================================
 
-  const random = crypto
-    .randomBytes(4)
-    .toString("hex")
-    .toUpperCase();
+userSchema.methods.canPlaceBet =
+  function (
+    this: UserDocument,
+    amount: number
+  ): boolean {
+    if (
+      !Number.isFinite(amount) ||
+      amount <= 0
+    ) {
+      return false;
+    }
 
-  const code = `${prefix || "USER"}${random}`;
+    if (
+      !this.isActive ||
+      this.isBlocked ||
+      this.isSuspended
+    ) {
+      return false;
+    }
 
-  this.referralCode = code;
+    const now = new Date();
 
-  return code;
-};
+    if (
+      this.responsibleGambling?.selfExcluded &&
+      (
+        !this.responsibleGambling
+          .selfExclusionEndDate ||
+        this.responsibleGambling
+          .selfExclusionEndDate > now
+      )
+    ) {
+      return false;
+    }
 
-/*
-|--------------------------------------------------------------------------
-| 2FA backup codes
-|--------------------------------------------------------------------------
-*/
+    if (
+      this.responsibleGambling
+        ?.coolingOffPeriodEnd &&
+      this.responsibleGambling
+        .coolingOffPeriodEnd > now
+    ) {
+      return false;
+    }
 
-userSchema.methods.generateBackupCodes = function (
-  count = 10
-): string[] {
-  const codes: string[] = [];
+    return (
+      (this.wallet?.balance ?? 0) >=
+      amount
+    );
+  };
 
-  for (let i = 0; i < count; i++) {
-    const code = crypto
-      .randomBytes(5)
-      .toString("hex")
-      .toUpperCase();
+// ============================================================
+// DEPOSIT LIMIT
+// ============================================================
 
-    codes.push(code);
-  }
+userSchema.methods.getDepositLimit =
+  function (
+    this: UserDocument
+  ): number {
+    let limit =
+      this.responsibleGambling
+        ?.depositLimit ?? 0;
 
-  this.backupCodes = codes.map((code) =>
-    crypto
-      .createHash("sha256")
-      .update(code)
-      .digest("hex")
+    if (this.vip?.higherLimits) {
+      limit *= 2;
+    }
+
+    if ((this.vip?.level ?? 0) >= 7) {
+      limit *= 5;
+    }
+
+    return limit;
+  };
+
+// ============================================================
+// SAFE JSON
+// ============================================================
+
+userSchema.methods.toJSON =
+  function (
+    this: UserDocument
+  ): Record<string, unknown> {
+    const obj =
+      this.toObject() as Record<
+        string,
+        unknown
+      >;
+
+    delete obj.password;
+    delete obj.passwordHistory;
+    delete obj.twoFactorSecret;
+    delete obj.twoFactorBackupCodes;
+    delete obj.resetPasswordToken;
+    delete obj.emailVerificationToken;
+    delete obj.phoneVerificationCode;
+
+    return obj;
+  };
+
+// ============================================================
+// STATIC: FIND BY EMAIL OR USERNAME
+// ============================================================
+
+userSchema.statics.findByEmailOrUsername =
+  function (
+    this: IUserModel,
+    identifier: string
+  ): Promise<UserDocument | null> {
+    const normalized =
+      identifier
+        .trim()
+        .toLowerCase();
+
+    return this.findOne({
+      $or: [
+        { email: normalized },
+        { username: normalized },
+      ],
+    }).exec();
+  };
+
+// ============================================================
+// STATIC: TOP WAGERED
+// ============================================================
+
+userSchema.statics.getTopWagered =
+  function (
+    this: IUserModel,
+    limit = 100
+  ): Promise<UserDocument[]> {
+    const safeLimit =
+      Math.min(
+        Math.max(
+          Math.floor(limit),
+          1
+        ),
+        1000
+      );
+
+    return this.find({
+      isActive: true,
+    })
+      .sort({
+        'wallet.totalWagered': -1,
+      })
+      .limit(safeLimit)
+      .select(
+        'username fullName wallet.totalWagered vip.level'
+      )
+      .exec();
+  };
+
+// ============================================================
+// STATIC: ONLINE USERS
+// ============================================================
+
+userSchema.statics.getOnlineUsers =
+  function (
+    this: IUserModel
+  ): Promise<number> {
+    const fiveMinutesAgo =
+      new Date(
+        Date.now() -
+          5 * 60 * 1000
+      );
+
+    return this.countDocuments({
+      lastActive: {
+        $gte: fiveMinutesAgo,
+      },
+    }).exec();
+  };
+
+// ============================================================
+// MODEL
+// ============================================================
+
+export const User: IUserModel =
+  (mongoose.models.User as IUserModel | undefined) ??
+  mongoose.model<IUser, IUserModel>(
+    'User',
+    userSchema
   );
-
-  return codes;
-};
-
-/*
-|--------------------------------------------------------------------------
-| Export
-|--------------------------------------------------------------------------
-*/
-
-const User =
-  (mongoose.models.User as UserModel | undefined) ||
-  mongoose.model<IUser, UserModel>("User", userSchema);
 
 export default User;
