@@ -1,3 +1,24 @@
+// ==============================================================================
+// ⚠️ STABILIZATION NOTE — READ BEFORE EDITING
+// ==============================================================================
+// This file defines its OWN Mongoose models (UserProfileModel, MatchModel,
+// BetModel, TransactionModel, and their own IUserProfile/IMatch/IBet/
+// ITransaction interfaces) — a second, less complete implementation that
+// duplicates User.ts/Match.ts/Bet.ts/Transaction.ts and authRoutes.ts/
+// walletRoutes.ts elsewhere in this codebase. server.ts now mounts
+// authRouter/walletRouter/etc. BEFORE this file's router, so the overlapping
+// routes here (/auth/register, /auth/login, /wallet/deposit, /wallet/withdraw)
+// are effectively dead by design — left in place rather than deleted so
+// nothing here is silently lost, but they should not be relied on or built on
+// further. Routes with no path collision (/player/*, /jackpot/*, /vip/*,
+// /tax/*, /support/*, /sports/*) are NOT dead, but write to this file's
+// separate models, not the ones the rest of the app reads from — so, e.g., a
+// bet placed via /player/wager will not show up in betting history served by
+// bettingRoutes.ts. Before building further on this file, pick one model
+// layer as canonical (User.ts/Match.ts/Bet.ts/Transaction.ts is used by more
+// of the codebase) and either delete this file's duplicate schemas/routes or
+// migrate its unique routes onto the canonical models.
+// ==============================================================================
 import express, { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import mongoose, { Schema, Document } from 'mongoose';
@@ -335,7 +356,10 @@ const ensureMatchesSeeded = async () => {
         odds: { homeWin: 2.40, draw: 2.80, awayWin: 3.10, over25: 2.30, under25: 1.50, bttsYes: 2.00, bttsNo: 1.70 }
       }
     ];
-    await MatchModel.insertMany(sampleMatches);
+    // Cast: these are simplified seed literals, not full IMatch-shaped
+    // documents (this legacy seeder predates Match.ts's canonical IMatch).
+    // Not worth reshaping — see the file-level warning below.
+    await MatchModel.insertMany(sampleMatches as any[]);
   }
 };
 
