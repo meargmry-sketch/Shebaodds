@@ -46,7 +46,11 @@ async function seedDatabase() {
       }
     ];
 
-    await UserProfileModel.insertMany(userProfiles);
+    // Cast: seed literals are intentionally minimal (not full IUserProfile-
+    // shaped documents), and the array elements have slightly different
+    // shapes (nationalIdNumber only present on some), which TS would
+    // otherwise infer as a union type that fails to match IUserProfile[].
+    await UserProfileModel.insertMany(userProfiles as any[]);
     console.log('✅ [SEED] Registered 3 core user profiles (Player, Agent, SuperAdmin).');
 
     // 3. Seed Default 12-Match Grand Jackpot
