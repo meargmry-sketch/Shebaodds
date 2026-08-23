@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+import mongoose, { Model } from 'mongoose';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -16,7 +16,7 @@ const WagerSchema = new mongoose.Schema({
   status: String
 }, { timestamps: true });
 
-const WagerModel = mongoose.models.Wager || mongoose.model('Wager', WagerSchema);
+const WagerModel = (mongoose.models.Wager as Model<any>) || mongoose.model<any>('Wager', WagerSchema);
 
 async function executeTaxPayment() {
   console.log('🔄 [TAX REMIT] Initializing secure statutory remittance pipeline...');
