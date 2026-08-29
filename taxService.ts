@@ -1,389 +1,1176 @@
 // ============================================
 // SHEBAODDS - TAX SERVICE
-// 15% Ethiopian Withholding Tax Calculations
-// Supports: Sportsbook & 51+ Casino Games
+// Ethiopian Withholding Tax Calculations
+// Supports Sportsbook & Casino
 // ============================================
 
 import mongoose from 'mongoose';
-import PDFDocument from 'pdfkit';
+import PDFDocument = require('pdfkit');
 import ExcelJS from 'exceljs';
+
 import User from './User';
 import { TaxTransaction, TaxSummary, UserTaxProfile } from './Tax';
 import Bet from './Bet';
 import { sendEmail } from './authRoutes';
 
+// ============================================
+// TAX CONFIGURATION
+// ============================================
+
 export const TAX_CONFIG = {
   RATE: parseFloat(process.env.TAX_RATE || '0.15'),
-  TAX_FREE_LIMIT: parseFloat(process.env.TAX_FREE_LIMIT || '100'),
-  COLLECTION_METHOD: process.env.TAX_COLLECTION_METHOD || 'automatic',
-  AUTHORITY_NAME: process.env.TAX_AUTHORITY_NAME || 'Ministry of Revenues - Ethiopia',
-  AUTHORITY_ID: process.env.TAX_AUTHORITY_ID || 'TAX_SHEBAODDS_001',
-  REPORTING_EMAIL: process.env.TAX_REPORTING_EMAIL || 'tax@shebaodds.com',
-  PAYMENT_ACCOUNT: process.env.TAX_PAYMENT_ACCOUNT || '1000234567890',
-  PAYMENT_BANK: process.env.TAX_PAYMENT_BANK || 'Commercial Bank of Ethiopia',
-  PAYMENT_REFERENCE_PREFIX: process.env.TAX_PAYMENT_REFERENCE_PREFIX || 'SHEBAODDS_TAX',
-  REPORTING_FREQUENCY: process.env.TAX_REPORTING_FREQUENCY || 'monthly'
+
+  TAX_FREE_LIMIT: parseFloat(
+    process.env.TAX_FREE_LIMIT || '100'
+  ),
+
+  COLLECTION_METHOD:
+    process.env.TAX_COLLECTION_METHOD || 'automatic',
+
+  AUTHORITY_NAME:
+    process.env.TAX_AUTHORITY_NAME ||
+    'Ministry of Revenues - Ethiopia',
+
+  AUTHORITY_ID:
+    process.env.TAX_AUTHORITY_ID ||
+    'TAX_SHEBAODDS_001',
+
+  REPORTING_EMAIL:
+    process.env.TAX_REPORTING_EMAIL ||
+    'tax@shebaodds.com',
+
+  PAYMENT_ACCOUNT:
+    process.env.TAX_PAYMENT_ACCOUNT ||
+    '1000234567890',
+
+  PAYMENT_BANK:
+    process.env.TAX_PAYMENT_BANK ||
+    'Commercial Bank of Ethiopia',
+
+  PAYMENT_REFERENCE_PREFIX:
+    process.env.TAX_PAYMENT_REFERENCE_PREFIX ||
+    'SHEBAODDS_TAX',
+
+  REPORTING_FREQUENCY:
+    process.env.TAX_REPORTING_FREQUENCY ||
+    'monthly'
 };
 
-// Calculate tax on winning
-export function calculateTax(winningAmount: number, isExempt = false) {
-  if (isExempt || winningAmount <= TAX_CONFIG.TAX_FREE_LIMIT) {
+// ============================================
+// CALCULATE TAX
+// ============================================
+
+export function calculateTax(
+  winningAmount: number,
+  isExempt = false
+) {
+  if (!Number.isFinite(winningAmount) || winningAmount < 0) {
+    throw new Error('Invalid winning amount');
+  }
+
+  if (
+    isExempt ||
+    winningAmount <= TAX_CONFIG.TAX_FREE_LIMIT
+  ) {
     return {
       taxAmount: 0,
       netWinning: winningAmount,
       isExempt: true,
-      reason: isExempt ? 'User tax exempt' : 'Below tax-free limit'
+      taxRate: TAX_CONFIG.RATE,
+      reason: isExempt
+        ? 'User tax exempt'
+        : 'Below tax-free limit'
     };
   }
 
-  const taxAmount = winningAmount * TAX_CONFIG.RATE;
-  const netWinning = winningAmount - taxAmount;
+  const rawTax =
+    winningAmount * TAX_CONFIG.RATE;
+
+  const taxAmount =
+    Math.floor(rawTax * 100) / 100;
+
+  const netWinning =
+    Math.floor(
+      (winningAmount - taxAmount) * 100
+    ) / 100;
 
   return {
-    taxAmount: Math.floor(taxAmount * 100) / 100,
-    netWinning: Math.floor(netWinning * 100) / 100,
+    taxAmount,
+    netWinning,
     isExempt: false,
     taxRate: TAX_CONFIG.RATE,
     reason: 'Withholding tax on gambling winnings'
   };
 }
 
-// Generate unique tax reference
+// ============================================
+// GENERATE TAX REFERENCE
+// ============================================
+
 export function generateTaxReference(): string {
   const timestamp = Date.now();
-  const random = Math.random().toString(36).substring(2, 10).toUpperCase();
+
+  const random = Math.random()
+    .toString(36)
+    .substring(2, 10)
+    .toUpperCase();
+
   return `${TAX_CONFIG.PAYMENT_REFERENCE_PREFIX}_${timestamp}_${random}`;
 }
 
-// Get current tax period (YYYY-MM)
+// ============================================
+// CURRENT TAX PERIOD
+// ============================================
+
 export function getCurrentTaxPeriod(): string {
   const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+  return `${now.getFullYear()}-${String(
+    now.getMonth() + 1
+  ).padStart(2, '0')}`;
 }
 
-// Process tax for a winning bet (Sportsbook or Casino)
-export async function processTaxForWinning(betId: any, userId: any, winningAmount: number, matchId?: any) {
+// ============================================
+// PROCESS TAX FOR WINNING
+// ============================================
+
+export async function processTaxForWinning(
+  betId: mongoose.Types.ObjectId | string,
+  userId: mongoose.Types.ObjectId | string,
+  winningAmount: number,
+  matchId?: mongoose.Types.ObjectId | string
+) {
   try {
-    // Check if user is tax exempt
-    const userTaxProfile = await UserTaxProfile.findOne({ userId });
-    const isExempt = userTaxProfile?.taxExempt || false;
+    if (!winningAmount || winningAmount < 0) {
+      throw new Error('Invalid winning amount');
+    }
 
-    const taxCalculation = calculateTax(winningAmount, isExempt);
-    const taxPeriod = getCurrentTaxPeriod();
+    // ------------------------------------------
+    // Get user tax profile
+    // ------------------------------------------
 
-    const taxTransaction = new TaxTransaction({
-      userId,
-      betId,
-      matchId,
-      grossWinning: winningAmount,
-      taxAmount: taxCalculation.taxAmount,
-      netWinning: taxCalculation.netWinning,
-      taxRate: TAX_CONFIG.RATE,
-      taxPeriod,
-      taxReference: generateTaxReference(),
-      isExempt: taxCalculation.isExempt,
-      exemptionReason: taxCalculation.reason,
-      status: taxCalculation.isExempt ? 'exempt' : 'deducted',
-      deductedAt: taxCalculation.isExempt ? null : new Date()
-    });
+    const userTaxProfile =
+      await UserTaxProfile.findOne({ userId });
+
+    const isExempt =
+      userTaxProfile?.taxExempt === true;
+
+    // ------------------------------------------
+    // Calculate tax
+    // ------------------------------------------
+
+    const taxCalculation =
+      calculateTax(
+        winningAmount,
+        isExempt
+      );
+
+    const taxPeriod =
+      getCurrentTaxPeriod();
+
+    // ------------------------------------------
+    // Create tax transaction
+    // ------------------------------------------
+
+    const taxTransaction =
+      new TaxTransaction({
+        userId,
+        betId,
+        matchId,
+
+        grossWinning:
+          winningAmount,
+
+        taxAmount:
+          taxCalculation.taxAmount,
+
+        netWinning:
+          taxCalculation.netWinning,
+
+        taxRate:
+          TAX_CONFIG.RATE,
+
+        taxPeriod,
+
+        taxReference:
+          generateTaxReference(),
+
+        isExempt:
+          taxCalculation.isExempt,
+
+        exemptionReason:
+          taxCalculation.reason,
+
+        status:
+          taxCalculation.isExempt
+            ? 'exempt'
+            : 'deducted',
+
+        deductedAt:
+          taxCalculation.isExempt
+            ? null
+            : new Date()
+      });
 
     await taxTransaction.save();
 
-    // Update User Tax Profile
+    // ------------------------------------------
+    // Update user tax profile
+    // ------------------------------------------
+
     await UserTaxProfile.findOneAndUpdate(
       { userId },
       {
-        $inc: { 
-          totalTaxPaid: taxCalculation.taxAmount, 
-          totalWinningsTaxed: winningAmount 
+        $inc: {
+          totalTaxPaid:
+            taxCalculation.taxAmount,
+
+          totalWinningsTaxed:
+            winningAmount
         },
-        $set: { 
-          lastTaxCalculation: new Date(),
-          updatedAt: new Date()
+
+        $set: {
+          lastTaxCalculation:
+            new Date(),
+
+          updatedAt:
+            new Date()
         }
       },
-      { upsert: true, new: true }
+      {
+        upsert: true,
+        new: true
+      }
     );
 
-    // Update User wallet totalTaxPaid
-    await User.findByIdAndUpdate(userId, {
-      $inc: { 
-        'wallet.totalTaxPaid': taxCalculation.taxAmount,
-        'taxProfile.totalTaxPaid': taxCalculation.taxAmount,
-        'taxProfile.totalWinningsTaxed': winningAmount
-      }
-    });
+    // ------------------------------------------
+    // Update user wallet
+    // ------------------------------------------
 
-    // Update Tax Summary
+    await User.findByIdAndUpdate(
+      userId,
+      {
+        $inc: {
+          'wallet.totalTaxPaid':
+            taxCalculation.taxAmount,
+
+          'taxProfile.totalTaxPaid':
+            taxCalculation.taxAmount,
+
+          'taxProfile.totalWinningsTaxed':
+            winningAmount
+        }
+      }
+    );
+
+    // ------------------------------------------
+    // Update monthly tax summary
+    // ------------------------------------------
+
     await TaxSummary.findOneAndUpdate(
       { taxPeriod },
       {
-        $inc: { 
-          totalWinnings: winningAmount, 
-          totalTaxCollected: taxCalculation.taxAmount, 
-          totalBets: 1 
-        },
-        $addToSet: { userTaxDetails: { userId, username: null } }
+        $inc: {
+          totalWinnings:
+            winningAmount,
+
+          totalTaxCollected:
+            taxCalculation.taxAmount,
+
+          totalBets: 1
+        }
       },
-      { upsert: true }
+      {
+        upsert: true,
+        new: true
+      }
     );
 
-    // Update bet with tax info (works for both sports and casino bets)
-    await Bet.findByIdAndUpdate(betId, {
-      taxAmount: taxCalculation.taxAmount,
-      netWin: taxCalculation.netWinning,
-      taxTransactionId: taxTransaction._id,
-      isTaxExempt: taxCalculation.isExempt,
-      taxExemptReason: taxCalculation.reason
-    });
+    // ------------------------------------------
+    // Update bet
+    // ------------------------------------------
+
+    await Bet.findByIdAndUpdate(
+      betId,
+      {
+        taxAmount:
+          taxCalculation.taxAmount,
+
+        netWin:
+          taxCalculation.netWinning,
+
+        taxTransactionId:
+          taxTransaction._id,
+
+        isTaxExempt:
+          taxCalculation.isExempt,
+
+        taxExemptReason:
+          taxCalculation.reason
+      }
+    );
 
     return taxTransaction;
 
   } catch (error) {
-    console.error('Tax processing error:', error);
+    console.error(
+      'Tax processing error:',
+      error
+    );
+
     return null;
   }
 }
 
-// Generate monthly tax report (PDF & Excel)
-export async function generateMonthlyTaxReport(taxPeriod: string) {
+// ============================================
+// GENERATE MONTHLY TAX REPORT
+// PDF + EXCEL
+// ============================================
+
+export async function generateMonthlyTaxReport(
+  taxPeriod: string
+) {
   try {
-    let summary = await TaxSummary.findOne({ taxPeriod });
+    // ------------------------------------------
+    // Get or create summary
+    // ------------------------------------------
+
+    let summary =
+      await TaxSummary.findOne({
+        taxPeriod
+      });
+
     if (!summary) {
-      // Create a default / blank summary if none exists so generation doesn't crash
       summary = new TaxSummary({
         taxPeriod,
+
         totalWinnings: 0,
+
         totalTaxCollected: 0,
+
         totalBets: 0,
+
         totalUsers: 0,
+
         userTaxDetails: [],
+
         reported: false
       });
+
       await summary.save();
     }
 
-    // Get all transactions for this period with user details
-    const transactions = await TaxTransaction.find({ taxPeriod })
-      .populate('userId', 'username email phone fullName')
-      .populate('betId', 'matchId marketType stake odds isCasinoBet casinoGameId')
-      .populate('matchId', 'homeTeam awayTeam league');
+    // ------------------------------------------
+    // Get transactions
+    // ------------------------------------------
 
-    // Update user count and usernames in summary
-    const uniqueUsers = [...new Set(transactions.map(tx => tx.userId?._id?.toString()))];
-    summary.totalUsers = uniqueUsers.length;
+    const transactions =
+      await TaxTransaction.find({
+        taxPeriod
+      })
+        .populate(
+          'userId',
+          'username email phone fullName'
+        )
+        .populate(
+          'betId',
+          'matchId marketType stake odds isCasinoBet casinoGameId'
+        )
+        .populate(
+          'matchId',
+          'homeTeam awayTeam league'
+        );
 
-    // Update user details in summary
-    const userMap = new Map();
+    // ------------------------------------------
+    // Calculate unique users
+    // ------------------------------------------
 
-    for (const tx of transactions) {
-      if (tx.userId && !userMap.has(tx.userId._id.toString())) {
-        userMap.set(tx.userId._id.toString(), {
+    const uniqueUsers =
+      new Set(
+        transactions
+          .map((tx: any) =>
+            tx.userId?._id?.toString()
+          )
+          .filter(Boolean)
+      );
+
+    summary.totalUsers =
+      uniqueUsers.size;
+
+    // ------------------------------------------
+    // Build user tax details
+    // ------------------------------------------
+
+    const userMap = new Map<string, any>();
+
+    for (const tx of transactions as any[]) {
+      if (!tx.userId) {
+        continue;
+      }
+
+      const userId =
+        tx.userId._id.toString();
+
+      if (!userMap.has(userId)) {
+        userMap.set(userId, {
           userId: tx.userId._id,
-          username: (tx.userId as any).username,
+
+          username:
+            tx.userId.username ||
+            'Unknown',
+
           totalWinnings: 0,
+
           totalTax: 0
         });
       }
-      if (tx.userId) {
-        const userDetail = userMap.get(tx.userId._id.toString());
-        userDetail.totalWinnings += tx.grossWinning;
-        userDetail.totalTax += tx.taxAmount;
-      }
+
+      const userDetail =
+        userMap.get(userId);
+
+      userDetail.totalWinnings +=
+        Number(tx.grossWinning || 0);
+
+      userDetail.totalTax +=
+        Number(tx.taxAmount || 0);
     }
 
-    summary.userTaxDetails = Array.from(userMap.values());
+    summary.userTaxDetails =
+      Array.from(userMap.values());
+
     await summary.save();
 
-    // Generate PDF inside a promise to handle stream safely
-    const pdfBuffer: Buffer = await new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ margin: 50, size: 'A4' });
-      const buffers: Buffer[] = [];
-      doc.on('data', (chunk: Buffer) => buffers.push(chunk));
-      doc.on('end', () => resolve(Buffer.concat(buffers)));
-      doc.on('error', (err: any) => reject(err));
+    // ==========================================
+    // PDF GENERATION
+    // ==========================================
 
-      // Header with SHEBAODDS branding
-      doc.fontSize(24).font('Helvetica-Bold').fillColor('#FFD700').text('SHEBAODDS', { align: 'center' });
-      doc.fontSize(12).font('Helvetica').fillColor('#0A0A0A').text('Smart Bets. Real Wins.', { align: 'center' });
-      doc.moveDown();
+    const pdfBuffer: Buffer =
+      await new Promise<Buffer>(
+        (resolve, reject) => {
 
-      doc.fontSize(18).fillColor('#000000').text('MONTHLY TAX REPORT', { align: 'center' });
-      doc.fontSize(12).text(`Period: ${taxPeriod}`, { align: 'center' });
-      doc.moveDown();
+          const doc =
+            new PDFDocument({
+              margin: 50,
+              size: 'A4'
+            });
 
-      // Summary Section
-      doc.fontSize(14).font('Helvetica-Bold').text('Summary', { underline: true });
-      doc.fontSize(10).font('Helvetica')
-        .text(`Total Winnings: ${summary.totalWinnings.toLocaleString()} ETB`)
-        .text(`Total Tax Collected: ${summary.totalTaxCollected.toLocaleString()} ETB`)
-        .text(`Total Bets: ${summary.totalBets.toLocaleString()}`)
-        .text(`Total Users: ${summary.totalUsers.toLocaleString()}`);
-      doc.moveDown();
+          const chunks: Buffer[] = [];
 
-      // Tax Rate Information
-      doc.fontSize(14).font('Helvetica-Bold').text('Tax Rate Information', { underline: true });
-      doc.fontSize(10).font('Helvetica')
-        .text(`Tax Rate: ${TAX_CONFIG.RATE * 100}% (Withholding Tax)`)
-        .text(`Tax-Free Limit: ${TAX_CONFIG.TAX_FREE_LIMIT} ETB per winning`)
-        .text(`Collection Method: ${TAX_CONFIG.COLLECTION_METHOD}`);
-      doc.moveDown();
+          doc.on(
+            'data',
+            (chunk: Buffer) => {
+              chunks.push(chunk);
+            }
+          );
 
-      // Authority Information
-      doc.fontSize(14).font('Helvetica-Bold').text('Tax Authority', { underline: true });
-      doc.fontSize(10).font('Helvetica')
-        .text(`Name: ${TAX_CONFIG.AUTHORITY_NAME}`)
-        .text(`ID: ${TAX_CONFIG.AUTHORITY_ID}`)
-        .text(`Reporting Email: ${TAX_CONFIG.REPORTING_EMAIL}`);
-      doc.moveDown();
+          doc.on(
+            'end',
+            () => {
+              resolve(
+                Buffer.concat(chunks)
+              );
+            }
+          );
 
-      // Payment Information
-      doc.fontSize(14).font('Helvetica-Bold').text('Payment Information', { underline: true });
-      doc.fontSize(10).font('Helvetica')
-        .text(`Bank: ${TAX_CONFIG.PAYMENT_BANK}`)
-        .text(`Account Number: ${TAX_CONFIG.PAYMENT_ACCOUNT}`)
-        .text(`Reference Prefix: ${TAX_CONFIG.PAYMENT_REFERENCE_PREFIX}`);
-      doc.moveDown();
+          doc.on(
+            'error',
+            (error: Error) => {
+              reject(error);
+            }
+          );
 
-      // User Tax Details Table
-      doc.fontSize(12).font('Helvetica-Bold').text('User Tax Details');
+          // --------------------------------------
+          // Header
+          // --------------------------------------
 
-      // Create table
-      const tableTop = doc.y + 10;
-      doc.fontSize(8).font('Helvetica-Bold');
-      doc.text('Username', 50, tableTop);
-      doc.text('Total Winnings (ETB)', 200, tableTop);
-      doc.text('Tax Paid (ETB)', 350, tableTop);
-      doc.text('Net Winnings (ETB)', 450, tableTop);
+          doc
+            .fontSize(24)
+            .font('Helvetica-Bold')
+            .fillColor('#FFD700')
+            .text(
+              'SHEBAODDS',
+              {
+                align: 'center'
+              }
+            );
 
-      doc.fontSize(8).font('Helvetica');
-      let rowY = tableTop + 15;
+          doc
+            .fontSize(12)
+            .font('Helvetica')
+            .fillColor('#000000')
+            .text(
+              'Smart Bets. Real Wins.',
+              {
+                align: 'center'
+              }
+            );
 
-      for (const userDetail of summary.userTaxDetails) {
-        if (rowY > 700) {
-          doc.addPage();
-          rowY = 50;
+          doc.moveDown();
+
+          // --------------------------------------
+          // Title
+          // --------------------------------------
+
+          doc
+            .fontSize(18)
+            .font('Helvetica-Bold')
+            .fillColor('#000000')
+            .text(
+              'MONTHLY TAX REPORT',
+              {
+                align: 'center'
+              }
+            );
+
+          doc
+            .fontSize(12)
+            .font('Helvetica')
+            .text(
+              `Period: ${taxPeriod}`,
+              {
+                align: 'center'
+              }
+            );
+
+          doc.moveDown();
+
+          // --------------------------------------
+          // Summary
+          // --------------------------------------
+
+          doc
+            .fontSize(14)
+            .font('Helvetica-Bold')
+            .text(
+              'Summary',
+              {
+                underline: true
+              }
+            );
+
+          doc
+            .fontSize(10)
+            .font('Helvetica')
+            .text(
+              `Total Winnings: ${Number(
+                summary.totalWinnings || 0
+              ).toLocaleString()} ETB`
+            )
+            .text(
+              `Total Tax Collected: ${Number(
+                summary.totalTaxCollected || 0
+              ).toLocaleString()} ETB`
+            )
+            .text(
+              `Total Bets: ${Number(
+                summary.totalBets || 0
+              ).toLocaleString()}`
+            )
+            .text(
+              `Total Users: ${Number(
+                summary.totalUsers || 0
+              ).toLocaleString()}`
+            );
+
+          doc.moveDown();
+
+          // --------------------------------------
+          // Tax information
+          // --------------------------------------
+
+          doc
+            .fontSize(14)
+            .font('Helvetica-Bold')
+            .text(
+              'Tax Rate Information',
+              {
+                underline: true
+              }
+            );
+
+          doc
+            .fontSize(10)
+            .font('Helvetica')
+            .text(
+              `Tax Rate: ${
+                TAX_CONFIG.RATE * 100
+              }%`
+            )
+            .text(
+              `Tax-Free Limit: ${
+                TAX_CONFIG.TAX_FREE_LIMIT
+              } ETB`
+            )
+            .text(
+              `Collection Method: ${
+                TAX_CONFIG.COLLECTION_METHOD
+              }`
+            );
+
+          doc.moveDown();
+
+          // --------------------------------------
+          // Authority
+          // --------------------------------------
+
+          doc
+            .fontSize(14)
+            .font('Helvetica-Bold')
+            .text(
+              'Tax Authority',
+              {
+                underline: true
+              }
+            );
+
+          doc
+            .fontSize(10)
+            .font('Helvetica')
+            .text(
+              `Name: ${
+                TAX_CONFIG.AUTHORITY_NAME
+              }`
+            )
+            .text(
+              `ID: ${
+                TAX_CONFIG.AUTHORITY_ID
+              }`
+            )
+            .text(
+              `Reporting Email: ${
+                TAX_CONFIG.REPORTING_EMAIL
+              }`
+            );
+
+          doc.moveDown();
+
+          // --------------------------------------
+          // Payment information
+          // --------------------------------------
+
+          doc
+            .fontSize(14)
+            .font('Helvetica-Bold')
+            .text(
+              'Payment Information',
+              {
+                underline: true
+              }
+            );
+
+          doc
+            .fontSize(10)
+            .font('Helvetica')
+            .text(
+              `Bank: ${
+                TAX_CONFIG.PAYMENT_BANK
+              }`
+            )
+            .text(
+              `Account Number: ${
+                TAX_CONFIG.PAYMENT_ACCOUNT
+              }`
+            )
+            .text(
+              `Reference Prefix: ${
+                TAX_CONFIG.PAYMENT_REFERENCE_PREFIX
+              }`
+            );
+
+          doc.moveDown();
+
+          // --------------------------------------
+          // User details
+          // --------------------------------------
+
+          doc
+            .fontSize(12)
+            .font('Helvetica-Bold')
+            .text(
+              'User Tax Details'
+            );
+
+          const tableTop =
+            doc.y + 10;
+
+          doc
+            .fontSize(8)
+            .font('Helvetica-Bold');
+
+          doc.text(
+            'Username',
+            50,
+            tableTop
+          );
+
+          doc.text(
+            'Total Winnings',
+            200,
+            tableTop
+          );
+
+          doc.text(
+            'Tax Paid',
+            350,
+            tableTop
+          );
+
+          doc.text(
+            'Net Winnings',
+            450,
+            tableTop
+          );
+
+          doc
+            .fontSize(8)
+            .font('Helvetica');
+
+          let rowY =
+            tableTop + 15;
+
+          for (
+            const userDetail
+            of summary.userTaxDetails
+          ) {
+
+            if (rowY > 700) {
+              doc.addPage();
+              rowY = 50;
+            }
+
+            const winnings =
+              Number(
+                userDetail.totalWinnings || 0
+              );
+
+            const tax =
+              Number(
+                userDetail.totalTax || 0
+              );
+
+            const net =
+              winnings - tax;
+
+            doc.text(
+              String(
+                userDetail.username ||
+                'Unknown'
+              ),
+              50,
+              rowY
+            );
+
+            doc.text(
+              winnings.toLocaleString(),
+              200,
+              rowY
+            );
+
+            doc.text(
+              tax.toLocaleString(),
+              350,
+              rowY
+            );
+
+            doc.text(
+              net.toLocaleString(),
+              450,
+              rowY
+            );
+
+            rowY += 15;
+          }
+
+          // --------------------------------------
+          // Footer
+          // --------------------------------------
+
+          doc.moveDown();
+
+          doc
+            .fontSize(8)
+            .font('Helvetica')
+            .text(
+              'This is an official tax report generated by SHEBAODDS.',
+              {
+                align: 'center'
+              }
+            )
+            .text(
+              `Generated: ${new Date().toLocaleString()}`,
+              {
+                align: 'center'
+              }
+            )
+            .text(
+              'SHEBAODDS - Smart Bets. Real Wins.',
+              {
+                align: 'center'
+              }
+            );
+
+          doc.end();
         }
-        doc.text(userDetail.username || 'Unknown', 50, rowY);
-        doc.text(userDetail.totalWinnings.toLocaleString(), 200, rowY);
-        doc.text(userDetail.totalTax.toLocaleString(), 350, rowY);
-        doc.text((userDetail.totalWinnings - userDetail.totalTax).toLocaleString(), 450, rowY);
-        rowY += 15;
+      );
+
+    // ==========================================
+    // EXCEL GENERATION
+    // ==========================================
+
+    const workbook =
+      new ExcelJS.Workbook();
+
+    workbook.creator =
+      'SHEBAODDS';
+
+    workbook.created =
+      new Date();
+
+    // ------------------------------------------
+    // Summary Sheet
+    // ------------------------------------------
+
+    const summarySheet =
+      workbook.addWorksheet(
+        'Tax Summary'
+      );
+
+    summarySheet.columns = [
+      {
+        header: 'Metric',
+        key: 'metric',
+        width: 30
+      },
+      {
+        header: 'Value',
+        key: 'value',
+        width: 25
       }
+    ];
 
-      doc.moveDown();
-
-      // Footer
-      doc.fontSize(8).font('Helvetica')
-        .text('This is an official tax report generated by SHEBAODDS.', { align: 'center' })
-        .text(`Generated: ${new Date().toLocaleString()}`, { align: 'center' })
-        .text('SHEBAODDS - Smart Bets. Real Wins.', { align: 'center' });
-
-      doc.end();
+    summarySheet.addRow({
+      metric: 'Period',
+      value: taxPeriod
     });
 
-    // Generate Excel
-    const workbook = new ExcelJS.Workbook();
-    workbook.creator = 'SHEBAODDS';
-    workbook.created = new Date();
+    summarySheet.addRow({
+      metric: 'Total Winnings (ETB)',
+      value: summary.totalWinnings
+    });
 
-    // Summary Sheet
-    const summarySheet = workbook.addWorksheet('Tax Summary');
-    summarySheet.columns = [
-      { header: 'Metric', key: 'metric', width: 30 },
-      { header: 'Value', key: 'value', width: 20 }
-    ];
+    summarySheet.addRow({
+      metric: 'Total Tax Collected (ETB)',
+      value:
+        summary.totalTaxCollected
+    });
 
-    summarySheet.addRow({ metric: 'Period', value: taxPeriod });
-    summarySheet.addRow({ metric: 'Total Winnings (ETB)', value: summary.totalWinnings });
-    summarySheet.addRow({ metric: 'Total Tax Collected (ETB)', value: summary.totalTaxCollected });
-    summarySheet.addRow({ metric: 'Total Bets', value: summary.totalBets });
-    summarySheet.addRow({ metric: 'Total Users', value: summary.totalUsers });
-    summarySheet.addRow({ metric: 'Tax Rate', value: `${TAX_CONFIG.RATE * 100}%` });
-    summarySheet.addRow({ metric: 'Tax-Free Limit (ETB)', value: TAX_CONFIG.TAX_FREE_LIMIT });
+    summarySheet.addRow({
+      metric: 'Total Bets',
+      value: summary.totalBets
+    });
 
+    summarySheet.addRow({
+      metric: 'Total Users',
+      value: summary.totalUsers
+    });
+
+    summarySheet.addRow({
+      metric: 'Tax Rate',
+      value:
+        `${TAX_CONFIG.RATE * 100}%`
+    });
+
+    summarySheet.addRow({
+      metric: 'Tax-Free Limit (ETB)',
+      value:
+        TAX_CONFIG.TAX_FREE_LIMIT
+    });
+
+    // ------------------------------------------
     // Transactions Sheet
-    const transactionsSheet = workbook.addWorksheet('Tax Transactions');
+    // ------------------------------------------
+
+    const transactionsSheet =
+      workbook.addWorksheet(
+        'Tax Transactions'
+      );
+
     transactionsSheet.columns = [
-      { header: 'Tax Reference', key: 'reference', width: 30 },
-      { header: 'User', key: 'username', width: 20 },
-      { header: 'Email', key: 'email', width: 30 },
-      { header: 'Gross Winning', key: 'gross', width: 15 },
-      { header: 'Tax Amount', key: 'tax', width: 15 },
-      { header: 'Net Winning', key: 'net', width: 15 },
-      { header: 'Match/Casino', key: 'match', width: 30 },
-      { header: 'Date', key: 'date', width: 20 }
+      {
+        header: 'Tax Reference',
+        key: 'reference',
+        width: 35
+      },
+      {
+        header: 'User',
+        key: 'username',
+        width: 20
+      },
+      {
+        header: 'Email',
+        key: 'email',
+        width: 30
+      },
+      {
+        header: 'Gross Winning',
+        key: 'gross',
+        width: 18
+      },
+      {
+        header: 'Tax Amount',
+        key: 'tax',
+        width: 18
+      },
+      {
+        header: 'Net Winning',
+        key: 'net',
+        width: 18
+      },
+      {
+        header: 'Match/Casino',
+        key: 'match',
+        width: 35
+      },
+      {
+        header: 'Date',
+        key: 'date',
+        width: 20
+      }
     ];
 
-    for (const tx of transactions) {
-      const bet = tx.betId as any;
-      const matchLabel = bet?.isCasinoBet 
-        ? `Casino: ${bet?.casinoGameId || 'Unknown'}`
-        : tx.matchId ? `${(tx.matchId as any).homeTeam} vs ${(tx.matchId as any).awayTeam}` : 'N/A';
+    for (
+      const tx of transactions as any[]
+    ) {
+
+      const bet =
+        tx.betId;
+
+      let matchLabel =
+        'N/A';
+
+      if (bet?.isCasinoBet) {
+
+        matchLabel =
+          `Casino: ${
+            bet.casinoGameId ||
+            'Unknown'
+          }`;
+
+      } else if (tx.matchId) {
+
+        matchLabel =
+          `${tx.matchId.homeTeam || 'Unknown'} vs ${
+            tx.matchId.awayTeam || 'Unknown'
+          }`;
+
+      }
 
       transactionsSheet.addRow({
-        reference: tx.taxReference,
-        username: (tx.userId as any)?.username || 'Unknown',
-        email: (tx.userId as any)?.email || 'Unknown',
-        gross: tx.grossWinning,
-        tax: tx.taxAmount,
-        net: tx.netWinning,
-        match: matchLabel,
-        date: tx.calculatedAt ? tx.calculatedAt.toLocaleDateString() : new Date().toLocaleDateString()
+        reference:
+          tx.taxReference,
+
+        username:
+          tx.userId?.username ||
+          'Unknown',
+
+        email:
+          tx.userId?.email ||
+          'Unknown',
+
+        gross:
+          Number(
+            tx.grossWinning || 0
+          ),
+
+        tax:
+          Number(
+            tx.taxAmount || 0
+          ),
+
+        net:
+          Number(
+            tx.netWinning || 0
+          ),
+
+        match:
+          matchLabel,
+
+        date:
+          tx.calculatedAt
+            ? new Date(
+                tx.calculatedAt
+              ).toLocaleDateString()
+            : new Date().toLocaleDateString()
       });
     }
 
+    // ------------------------------------------
     // User Details Sheet
-    const userSheet = workbook.addWorksheet('User Details');
+    // ------------------------------------------
+
+    const userSheet =
+      workbook.addWorksheet(
+        'User Details'
+      );
+
     userSheet.columns = [
-      { header: 'Username', key: 'username', width: 20 },
-      { header: 'Total Winnings (ETB)', key: 'winnings', width: 20 },
-      { header: 'Tax Paid (ETB)', key: 'tax', width: 15 },
-      { header: 'Net Winnings (ETB)', key: 'net', width: 15 }
+      {
+        header: 'Username',
+        key: 'username',
+        width: 20
+      },
+      {
+        header: 'Total Winnings (ETB)',
+        key: 'winnings',
+        width: 22
+      },
+      {
+        header: 'Tax Paid (ETB)',
+        key: 'tax',
+        width: 18
+      },
+      {
+        header: 'Net Winnings (ETB)',
+        key: 'net',
+        width: 20
+      }
     ];
 
-    for (const userDetail of summary.userTaxDetails) {
+    for (
+      const userDetail
+      of summary.userTaxDetails
+    ) {
+
+      const winnings =
+        Number(
+          userDetail.totalWinnings || 0
+        );
+
+      const tax =
+        Number(
+          userDetail.totalTax || 0
+        );
+
       userSheet.addRow({
-        username: userDetail.username || 'Unknown',
-        winnings: userDetail.totalWinnings,
-        tax: userDetail.totalTax,
-        net: userDetail.totalWinnings - userDetail.totalTax
+        username:
+          userDetail.username ||
+          'Unknown',
+
+        winnings,
+
+        tax,
+
+        net:
+          winnings - tax
       });
     }
 
-    const excelBuffer = (await workbook.xlsx.writeBuffer()) as unknown as Buffer;
+    // ==========================================
+    // CREATE EXCEL BUFFER
+    // ==========================================
 
-    return { pdf: pdfBuffer, excel: excelBuffer, summary };
+    const excelBuffer =
+      await workbook.xlsx.writeBuffer();
+
+    // ==========================================
+    // RETURN REPORT
+    // ==========================================
+
+    return {
+      pdf: pdfBuffer,
+
+      excel:
+        Buffer.from(
+          excelBuffer
+        ),
+
+      summary
+    };
 
   } catch (error) {
-    console.error('Generate tax report error:', error);
+
+    console.error(
+      'Generate tax report error:',
+      error
+    );
+
     throw error;
   }
 }
 
-// Submit tax report to authority
-export async function submitTaxReport(taxPeriod: string) {
+// ============================================
+// SUBMIT TAX REPORT
+// ============================================
+
+export async function submitTaxReport(
+  taxPeriod: string
+) {
   try {
-    const { pdf, excel, summary } = await generateMonthlyTaxReport(taxPeriod);
+
+    const {
+      pdf,
+      excel,
+      summary
+    } =
+      await generateMonthlyTaxReport(
+        taxPeriod
+      );
 
     await sendEmail({
-      to: TAX_CONFIG.REPORTING_EMAIL,
-      subject: `Tax Report - ${taxPeriod} - SHEBAODDS`,
-      template: 'tax_report',
+      to:
+        TAX_CONFIG.REPORTING_EMAIL,
+
+      subject:
+        `Tax Report - ${taxPeriod} - SHEBAODDS`,
+
+      template:
+        'tax_report',
+
       data: {
-        period: taxPeriod,
-        totalWinnings: summary.totalWinnings,
-        totalTaxCollected: summary.totalTaxCollected,
-        totalBets: summary.totalBets,
-        totalUsers: summary.totalUsers,
-        taxRate: TAX_CONFIG.RATE * 100,
-        taxFreeLimit: TAX_CONFIG.TAX_FREE_LIMIT,
-        authorityName: TAX_CONFIG.AUTHORITY_NAME,
-        reportDate: new Date().toLocaleDateString()
+        period:
+          taxPeriod,
+
+        totalWinnings:
+          summary.totalWinnings,
+
+        totalTaxCollected:
+          summary.totalTaxCollected,
+
+        totalBets:
+          summary.totalBets,
+
+        totalUsers:
+          summary.totalUsers,
+
+        taxRate:
+          TAX_CONFIG.RATE * 100,
+
+        taxFreeLimit:
+          TAX_CONFIG.TAX_FREE_LIMIT,
+
+        authorityName:
+          TAX_CONFIG.AUTHORITY_NAME,
+
+        reportDate:
+          new Date().toLocaleDateString()
       },
+
       attachments: [
-        { filename: `tax_report_${taxPeriod}.pdf`, content: pdf },
-        { filename: `tax_report_${taxPeriod}.xlsx`, content: excel }
+        {
+          filename:
+            `tax_report_${taxPeriod}.pdf`,
+
+          content:
+            pdf
+        },
+
+        {
+          filename:
+            `tax_report_${taxPeriod}.xlsx`,
+
+          content:
+            excel
+        }
       ]
     });
 
@@ -391,70 +1178,148 @@ export async function submitTaxReport(taxPeriod: string) {
       { taxPeriod },
       {
         reported: true,
-        reportedAt: new Date(),
-        reportReference: `REP_${taxPeriod}_${Date.now()}`
+
+        reportedAt:
+          new Date(),
+
+        reportReference:
+          `REP_${taxPeriod}_${Date.now()}`
       }
     );
 
-    return { success: true, message: 'Tax report submitted successfully' };
+    return {
+      success: true,
+
+      message:
+        'Tax report submitted successfully'
+    };
 
   } catch (error: any) {
-    console.error('Submit tax report error:', error);
-    return { success: false, error: error.message };
+
+    console.error(
+      'Submit tax report error:',
+      error
+    );
+
+    return {
+      success: false,
+
+      error:
+        error?.message ||
+        'Failed to submit tax report'
+    };
   }
 }
 
-// Register user for tax (with Tax ID)
-export async function registerUserForTax(userId: any, taxId: string, taxRegistrationNumber: string) {
-  try {
-    const userTaxProfile = await UserTaxProfile.findOneAndUpdate(
-      { userId },
-      {
-        taxId,
-        taxRegistrationNumber,
-        isTaxRegistered: true,
-        updatedAt: new Date()
-      },
-      { upsert: true, new: true }
-    );
+// ============================================
+// REGISTER USER FOR TAX
+// ============================================
 
-    await User.findByIdAndUpdate(userId, {
-      'taxProfile.taxId': taxId,
-      'taxProfile.taxRegistrationNumber': taxRegistrationNumber,
-      'taxProfile.isTaxRegistered': true
-    });
+export async function registerUserForTax(
+  userId: mongoose.Types.ObjectId | string,
+  taxId: string,
+  taxRegistrationNumber: string
+) {
+  try {
+
+    const userTaxProfile =
+      await UserTaxProfile.findOneAndUpdate(
+        { userId },
+        {
+          taxId,
+
+          taxRegistrationNumber,
+
+          isTaxRegistered: true,
+
+          updatedAt:
+            new Date()
+        },
+        {
+          upsert: true,
+
+          new: true
+        }
+      );
+
+    await User.findByIdAndUpdate(
+      userId,
+      {
+        'taxProfile.taxId':
+          taxId,
+
+        'taxProfile.taxRegistrationNumber':
+          taxRegistrationNumber,
+
+        'taxProfile.isTaxRegistered':
+          true
+      }
+    );
 
     return userTaxProfile;
 
   } catch (error) {
-    console.error('Tax registration error:', error);
+
+    console.error(
+      'Tax registration error:',
+      error
+    );
+
     throw error;
   }
 }
 
-// Exempt user from tax
-export async function exemptUserFromTax(userId: any, exemptionType: string, exemptionCertificate: string) {
-  try {
-    const userTaxProfile = await UserTaxProfile.findOneAndUpdate(
-      { userId },
-      {
-        taxExempt: true,
-        exemptionType,
-        exemptionCertificate,
-        updatedAt: new Date()
-      },
-      { upsert: true, new: true }
-    );
+// ============================================
+// EXEMPT USER FROM TAX
+// ============================================
 
-    await User.findByIdAndUpdate(userId, {
-      'taxProfile.taxExempt': true,
-      'taxProfile.exemptionType': exemptionType
-    });
+export async function exemptUserFromTax(
+  userId: mongoose.Types.ObjectId | string,
+  exemptionType: string,
+  exemptionCertificate: string
+) {
+  try {
+
+    const userTaxProfile =
+      await UserTaxProfile.findOneAndUpdate(
+        { userId },
+        {
+          taxExempt: true,
+
+          exemptionType,
+
+          exemptionCertificate,
+
+          updatedAt:
+            new Date()
+        },
+        {
+          upsert: true,
+
+          new: true
+        }
+      );
+
+    await User.findByIdAndUpdate(
+      userId,
+      {
+        'taxProfile.taxExempt':
+          true,
+
+        'taxProfile.exemptionType':
+          exemptionType
+      }
+    );
 
     return userTaxProfile;
 
   } catch (error) {
-    console.error('Tax exemption error:', error);
+
+    console.error(
+      'Tax exemption error:',
+      error
+    );
+
     throw error;
   }
 }
