@@ -1,1121 +1,2879 @@
 // ============================================
 // SHEBAODDS - AUTH ROUTES
-// Complete Authentication API
+// Mongoose 8 + TypeScript
 // ============================================
 
-import express, { Request, Response, NextFunction } from 'express';
+import express, {
+  NextFunction,
+  Request,
+  Response,
+  Router,
+} from 'express';
+
+import jwt, {
+  JwtPayload,
+  SignOptions,
+} from 'jsonwebtoken';
+
 import crypto from 'crypto';
-import jwt from 'jsonwebtoken';
-import { User, UserDocument } from './models/User';
 
-const router = express.Router();
+import User, {
+  UserDocument,
+} from './User';
 
-// ============================================
+import {
+  PasswordHistory,
+  validatePasswordStrength,
+} from './passwordValidator';
+
+// speakeasy has incomplete typings.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const speakeasy = require('speakeasy');
+
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const QRCode = require('qrcode');
+
+// ============================================================
+// ROUTER
+// ============================================================
+
+const router: Router =
+  express.Router();
+
+// ============================================================
 // CONFIGURATION
-// ============================================
+// ============================================================
 
-const JWT_SECRET = process.env.JWT_SECRET;
+const ACCESS_TOKEN_EXPIRES_IN =
+  (process.env.JWT_ACCESS_EXPIRES_IN ||
+    '24h') as SignOptions['expiresIn'];
 
-if (!JWT_SECRET) {
-  console.error('❌ JWT_SECRET is not configured');
-}
+const REFRESH_TOKEN_EXPIRES_IN =
+  (process.env.JWT_REFRESH_EXPIRES_IN ||
+    '7d') as SignOptions['expiresIn'];
 
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
+const SESSION_TTL_MS =
+  7 * 24 * 60 * 60 * 1000;
+
 const MAX_LOGIN_ATTEMPTS = 5;
-const LOCK_TIME = 15 * 60 * 1000;
 
-// ============================================
+const LOGIN_LOCK_MS =
+  30 * 60 * 1000;
+
+// ============================================================
 // TYPES
-// ============================================
+// ============================================================
 
-interface AuthenticatedRequest extends Request {
+export interface AuthRequest
+  extends Request {
   user?: UserDocument;
+
+  auth?: {
+    userId: string;
+    sessionId?: string;
+    role?: 'Player' | 'SuperAdmin';
+  };
 }
 
-// ============================================
-// HELPERS
-// ============================================
+interface TokenPayload
+  extends JwtPayload {
+  userId: string;
+  email?: string;
+  role?: 'Player' | 'SuperAdmin';
+  sessionId?: string;
+  type?: 'refresh';
+}
 
-function signToken(user: UserDocument): string {
-  if (!JWT_SECRET) {
-    throw new Error('JWT_SECRET is not configured');
+// ============================================================
+// JWT SECRETS
+// ============================================================
+
+function requiredSecret(
+  name:
+    | 'JWT_SECRET'
+    | 'JWT_REFRESH_SECRET'
+): string {
+  const value =
+    process.env[name];
+
+  if (
+    !value ||
+    value.length < 32
+  ) {
+    throw new Error(
+      `${name} must be configured and contain at least 32 characters`
+    );
+  }
+
+  return value;
+}
+
+function getAccessSecret(): string {
+  return requiredSecret(
+    'JWT_SECRET'
+  );
+}
+
+function getRefreshSecret(): string {
+  return requiredSecret(
+    'JWT_REFRESH_SECRET'
+  );
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
+
+function hashToken(
+  token: string
+): string {
+  return crypto
+    .createHash('sha256')
+    .update(token)
+    .digest('hex');
+}
+
+function normalizeEmail(
+  value: unknown
+): string {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase();
+}
+
+function normalizeUsername(
+  value: unknown
+): string {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase();
+}
+
+function isValidEmail(
+  value: string
+): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+    value
+  );
+}
+
+function isValidPhone(
+  value: string
+): boolean {
+  return /^\+?[0-9]{10,15}$/.test(
+    value
+  );
+}
+
+function validationError(
+  message: string,
+  path?: string
+) {
+  return {
+    msg: message,
+    path,
+    value: undefined,
+  };
+}
+
+// ============================================================
+// REGISTRATION VALIDATION
+// ============================================================
+
+function validateRegistration(
+  body: Record<string, unknown>
+) {
+  const errors: Array<
+    Record<string, unknown>
+  > = [];
+
+  const username =
+    normalizeUsername(
+      body.username
+    );
+
+  const email =
+    normalizeEmail(
+      body.email
+    );
+
+  const password =
+    String(
+      body.password ?? ''
+    );
+
+  const phone =
+    String(
+      body.phone ?? ''
+    ).trim();
+
+  if (
+    !/^[a-zA-Z0-9_]{3,20}$/.test(
+      username
+    )
+  ) {
+    errors.push(
+      validationError(
+        'Username must be 3-20 characters and contain only letters, numbers and underscore',
+        'username'
+      )
+    );
+  }
+
+  if (!isValidEmail(email)) {
+    errors.push(
+      validationError(
+        'Email must be a valid email',
+        'email'
+      )
+    );
+  }
+
+  if (!isValidPhone(phone)) {
+    errors.push(
+      validationError(
+        'Phone must be a valid phone number',
+        'phone'
+      )
+    );
+  }
+
+  if (!password) {
+    errors.push(
+      validationError(
+        'Password is required',
+        'password'
+      )
+    );
+  }
+
+  if (
+    body.fullName !==
+      undefined &&
+    body.fullName !== null &&
+    String(body.fullName)
+      .length > 100
+  ) {
+    errors.push(
+      validationError(
+        'Full name cannot exceed 100 characters',
+        'fullName'
+      )
+    );
+  }
+
+  if (
+    body.dateOfBirth !==
+      undefined &&
+    body.dateOfBirth !== null &&
+    Number.isNaN(
+      Date.parse(
+        String(
+          body.dateOfBirth
+        )
+      )
+    )
+  ) {
+    errors.push(
+      validationError(
+        'Date of birth must be a valid date',
+        'dateOfBirth'
+      )
+    );
+  }
+
+  if (
+    body.referralCode !==
+      undefined &&
+    body.referralCode !== null &&
+    typeof body.referralCode !==
+      'string'
+  ) {
+    errors.push(
+      validationError(
+        'Referral code must be a string',
+        'referralCode'
+      )
+    );
+  }
+
+  return {
+    errors,
+    username,
+    email,
+    password,
+    phone,
+  };
+}
+
+// ============================================================
+// LOGIN VALIDATION
+// ============================================================
+
+function validateLogin(
+  body: Record<string, unknown>
+) {
+  const errors: Array<
+    Record<string, unknown>
+  > = [];
+
+  const email =
+    normalizeEmail(
+      body.email
+    );
+
+  const password =
+    String(
+      body.password ?? ''
+    );
+
+  if (!isValidEmail(email)) {
+    errors.push(
+      validationError(
+        'Email must be a valid email',
+        'email'
+      )
+    );
+  }
+
+  if (!password) {
+    errors.push(
+      validationError(
+        'Password is required',
+        'password'
+      )
+    );
+  }
+
+  return {
+    errors,
+    email,
+    password,
+  };
+}
+
+// ============================================================
+// TOKEN GENERATION
+// ============================================================
+
+export function generateToken(
+  user: UserDocument,
+  sessionId?: string
+): string {
+  const payload: Record<
+    string,
+    unknown
+  > = {
+    userId:
+      user._id.toString(),
+
+    email: user.email,
+
+    role: user.isAdmin
+      ? 'SuperAdmin'
+      : 'Player',
+  };
+
+  if (sessionId) {
+    payload.sessionId =
+      sessionId;
   }
 
   return jwt.sign(
+    payload,
+    getAccessSecret(),
     {
-      sub: user._id.toString(),
-      username: user.username,
-      email: user.email,
-      isAdmin: user.isAdmin
-    },
-    JWT_SECRET,
-    {
-      expiresIn: JWT_EXPIRES_IN as jwt.SignOptions['expiresIn']
+      expiresIn:
+        ACCESS_TOKEN_EXPIRES_IN,
     }
   );
 }
 
-function sanitizeUser(user: UserDocument) {
-  const obj = user.toObject();
+export function generateRefreshToken(
+  user: UserDocument,
+  sessionId: string
+): string {
+  return jwt.sign(
+    {
+      userId:
+        user._id.toString(),
 
-  delete obj.password;
-  delete obj.passwordHistory;
-  delete obj.twoFactorSecret;
-  delete obj.twoFactorBackupCodes;
-  delete obj.resetPasswordToken;
-  delete obj.emailVerificationToken;
-  delete obj.phoneVerificationCode;
+      sessionId,
 
-  return obj;
+      type: 'refresh',
+    },
+    getRefreshSecret(),
+    {
+      expiresIn:
+        REFRESH_TOKEN_EXPIRES_IN,
+    }
+  );
 }
 
-function generateSessionId(): string {
-  return crypto.randomBytes(32).toString('hex');
+// ============================================================
+// BEARER TOKEN
+// ============================================================
+
+function getBearerToken(
+  req: Request
+): string | null {
+  const header =
+    req.get('authorization');
+
+  if (!header) {
+    return null;
+  }
+
+  const parts =
+    header.split(' ');
+
+  if (
+    parts.length !== 2 ||
+    parts[0].toLowerCase() !==
+      'bearer'
+  ) {
+    return null;
+  }
+
+  return parts[1].trim();
 }
 
-function generateVerificationToken(): string {
-  return crypto.randomBytes(32).toString('hex');
-}
+// ============================================================
+// AUTHENTICATION MIDDLEWARE
+// ============================================================
 
-function normalizeUsername(username: string): string {
-  return username.trim().toLowerCase();
-}
-
-function normalizeEmail(email: string): string {
-  return email.trim().toLowerCase();
-}
-
-// ============================================
-// AUTH MIDDLEWARE
-// ============================================
-
-async function authenticate(
-  req: AuthenticatedRequest,
+export async function authenticate(
+  req: AuthRequest,
   res: Response,
   next: NextFunction
-) {
+): Promise<void> {
   try {
-    const authHeader = req.headers.authorization;
+    const token =
+      getBearerToken(req);
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({
+    if (!token) {
+      res.status(401).json({
         success: false,
-        error: 'Unauthorized',
-        message: 'Authentication token is required'
+        error:
+          'Access Token Missing',
+        message:
+          'Authentication bearer token is required.',
       });
+
+      return;
     }
 
-    const token = authHeader.substring(7);
+    const decoded =
+      jwt.verify(
+        token,
+        getAccessSecret()
+      ) as TokenPayload;
 
-    if (!JWT_SECRET) {
-      return res.status(500).json({
+    if (!decoded.userId) {
+      res.status(401).json({
         success: false,
-        error: 'Server Configuration Error',
-        message: 'Authentication service is not configured'
+        message:
+          'Invalid access token',
       });
+
+      return;
     }
 
-    const decoded = jwt.verify(token, JWT_SECRET) as {
-      sub: string;
-    };
+    const user =
+      await User.findById(
+        decoded.userId
+      );
 
-    const user = await User.findById(decoded.sub).select(
-      '+password +twoFactorSecret +twoFactorBackupCodes'
-    );
-
-    if (!user) {
-      return res.status(401).json({
+    if (
+      !user ||
+      !user.isActive ||
+      user.isBlocked
+    ) {
+      res.status(401).json({
         success: false,
-        error: 'Unauthorized',
-        message: 'User no longer exists'
+        message:
+          'User is not authorized',
       });
+
+      return;
     }
 
-    if (!user.isActive || user.isBlocked) {
-      return res.status(403).json({
+    const now =
+      new Date();
+
+    if (
+      user.isSuspended &&
+      (
+        !user.suspensionEndDate ||
+        user.suspensionEndDate >
+          now
+      )
+    ) {
+      res.status(403).json({
         success: false,
-        error: 'Account Disabled',
-        message: 'Your account is disabled or blocked'
+        message:
+          'Account is suspended',
       });
+
+      return;
+    }
+
+    if (decoded.sessionId) {
+      const session =
+        user.sessions.find(
+          (item) =>
+            item.sessionId ===
+              decoded.sessionId &&
+            (
+              !item.expiresAt ||
+              item.expiresAt > now
+            )
+        );
+
+      if (!session) {
+        res.status(401).json({
+          success: false,
+          message:
+            'Session has expired or been revoked',
+        });
+
+        return;
+      }
+
+      session.lastActivity =
+        now;
+
+      user.lastActive =
+        now;
+
+      await user.save();
     }
 
     req.user = user;
 
+    req.auth = {
+      userId:
+        user._id.toString(),
+
+      sessionId:
+        decoded.sessionId,
+
+      role:
+        decoded.role,
+    };
+
     next();
-  } catch (error: any) {
-    if (error?.name === 'TokenExpiredError') {
-      return res.status(401).json({
+  } catch (error) {
+    if (
+      error instanceof
+      jwt.TokenExpiredError
+    ) {
+      res.status(401).json({
         success: false,
-        error: 'Token Expired',
-        message: 'Your session has expired. Please login again.'
+        message:
+          'Access token expired',
       });
+
+      return;
     }
 
-    return res.status(401).json({
+    res.status(401).json({
       success: false,
-      error: 'Invalid Token',
-      message: 'Authentication token is invalid'
+      message:
+        'Invalid access token',
     });
   }
 }
 
-// ============================================
-// GET AUTH ROUTE INFORMATION
-// ============================================
+// ============================================================
+// COMPATIBILITY HELPERS
+// ============================================================
 
-router.get('/', (_req: Request, res: Response) => {
-  res.status(200).json({
-    success: true,
-    service: 'SHEBAODDS Authentication',
-    version: 'v2',
-    routes: {
-      register: 'POST /register',
-      login: 'POST /login',
-      me: 'GET /me',
-      logout: 'POST /logout',
-      verifyEmail: 'POST /verify-email',
-      forgotPassword: 'POST /forgot-password',
-      resetPassword: 'POST /reset-password',
-      changePassword: 'POST /change-password'
+export async function sendEmail({
+  to,
+  subject,
+  template,
+  data,
+  attachments,
+}: {
+  to: string;
+  subject: string;
+  template: string;
+  data: unknown;
+  attachments?: unknown[];
+}) {
+  console.log(
+    '[NotificationService] Email',
+    {
+      to,
+      subject,
+      template,
     }
-  });
-});
+  );
 
-// ============================================
+  return {
+    success: true,
+    to,
+    subject,
+    template,
+    data,
+    attachmentsCount:
+      attachments?.length ?? 0,
+  };
+}
+
+export async function sendSMS({
+  to,
+  message,
+}: {
+  to: string;
+  message: string;
+}) {
+  console.log(
+    '[NotificationService] SMS',
+    {
+      to,
+      message,
+    }
+  );
+
+  return {
+    success: true,
+  };
+}
+
+export async function logSecurityEvent({
+  userId,
+  eventType,
+  ipAddress,
+  userAgent,
+  metadata,
+}: {
+  userId?: unknown;
+  eventType: string;
+  ipAddress?: string;
+  userAgent?: string;
+  metadata?: unknown;
+}) {
+  console.log(
+    '[SecurityService]',
+    {
+      userId,
+      eventType,
+      ipAddress,
+      userAgent,
+      metadata,
+    }
+  );
+
+  return {
+    success: true,
+  };
+}
+
+export function rateLimiter(
+  _req: Request,
+  _res: Response,
+  next: NextFunction
+) {
+  next();
+}
+
+// ============================================================
+// PUBLIC USER
+// ============================================================
+
+function publicUser(
+  user: UserDocument
+) {
+  return user.toJSON();
+}
+
+// ============================================================
+// AGE
+// ============================================================
+
+function calculateAge(
+  dateOfBirth: Date
+): number {
+  const today =
+    new Date();
+
+  let age =
+    today.getFullYear() -
+    dateOfBirth.getFullYear();
+
+  const month =
+    today.getMonth() -
+    dateOfBirth.getMonth();
+
+  if (
+    month < 0 ||
+    (
+      month === 0 &&
+      today.getDate() <
+        dateOfBirth.getDate()
+    )
+  ) {
+    age--;
+  }
+
+  return age;
+}
+
+// ============================================================
+// SESSION
+// ============================================================
+
+function createSession(
+  user: UserDocument,
+  req: Request,
+  deviceId?: string,
+  deviceName?: string
+): string {
+  const now =
+    new Date();
+
+  const sessionId =
+    crypto
+      .randomBytes(32)
+      .toString('hex');
+
+  // ----------------------------------------------------------
+  // DEVICE
+  // ----------------------------------------------------------
+
+  if (deviceId) {
+    const existing =
+      user.devices.find(
+        (device) =>
+          device.deviceId ===
+          deviceId
+      );
+
+    if (existing) {
+      existing.lastUsed =
+        now;
+
+      if (deviceName) {
+        existing.deviceName =
+          deviceName;
+      }
+
+      existing.ipAddress =
+        req.ip;
+
+      existing.isActive =
+        true;
+    } else {
+      const ua =
+        req.get(
+          'user-agent'
+        ) || '';
+
+      let platform:
+        | 'web'
+        | 'ios'
+        | 'android'
+        | 'admin' = 'web';
+
+      if (
+        /android/i.test(ua)
+      ) {
+        platform =
+          'android';
+      } else if (
+        /iphone|ipad|ipod/i.test(
+          ua
+        )
+      ) {
+        platform =
+          'ios';
+      } else if (
+        user.isAdmin
+      ) {
+        platform =
+          'admin';
+      }
+
+      user.devices.push({
+        deviceId,
+        deviceName:
+          deviceName ||
+          'Unknown Device',
+        platform,
+        ipAddress:
+          req.ip,
+        lastUsed: now,
+        biometricEnabled:
+          false,
+        isActive: true,
+      });
+    }
+  }
+
+  // ----------------------------------------------------------
+  // CLEAN OLD SESSIONS
+  // ----------------------------------------------------------
+
+  user.sessions =
+    user.sessions.filter(
+      (session) =>
+        !session.expiresAt ||
+        session.expiresAt >
+          now
+    );
+
+  // ----------------------------------------------------------
+  // CREATE SESSION
+  // ----------------------------------------------------------
+
+  user.sessions.push({
+    sessionId,
+
+    ipAddress:
+      req.ip,
+
+    userAgent:
+      req.get(
+        'user-agent'
+      ) || undefined,
+
+    deviceId,
+
+    loginAt: now,
+
+    lastActivity: now,
+
+    expiresAt:
+      new Date(
+        now.getTime() +
+          SESSION_TTL_MS
+      ),
+  });
+
+  // ----------------------------------------------------------
+  // LIMIT SESSIONS
+  // ----------------------------------------------------------
+
+  if (
+    user.sessions.length >
+    10
+  ) {
+    user.sessions.sort(
+      (a, b) =>
+        b.lastActivity.getTime() -
+        a.lastActivity.getTime()
+    );
+
+    user.sessions =
+      user.sessions.slice(
+        0,
+        10
+      );
+  }
+
+  return sessionId;
+}
+
+// ============================================================
+// ISSUE TOKENS
+// ============================================================
+
+function issueTokens(
+  user: UserDocument,
+  sessionId: string
+) {
+  return {
+    token:
+      generateToken(
+        user,
+        sessionId
+      ),
+
+    refreshToken:
+      generateRefreshToken(
+        user,
+        sessionId
+      ),
+  };
+}
+
+// ============================================================
 // REGISTER
-// POST /api/v2/auth/register
-// ============================================
+// ============================================================
 
 router.post(
   '/register',
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (
+    req: Request,
+    res: Response
+  ) => {
     try {
+      const body =
+        (
+          req.body ||
+          {}
+        ) as Record<
+          string,
+          unknown
+        >;
+
       const {
+        errors,
         username,
         email,
         password,
         phone,
-        fullName,
-        dateOfBirth,
-        country,
-        city,
-        address,
-        postalCode,
-        referralCode
-      } = req.body;
+      } =
+        validateRegistration(
+          body
+        );
 
-      // ----------------------------------------
-      // VALIDATION
-      // ----------------------------------------
-
-      if (!username || !email || !password || !phone) {
-        return res.status(400).json({
+      if (
+        errors.length > 0
+      ) {
+        res.status(400).json({
           success: false,
-          error: 'Validation Error',
+          errors,
+        });
+
+        return;
+      }
+
+      const fullName =
+        body.fullName;
+
+      const dateOfBirth =
+        body.dateOfBirth;
+
+      const referralCode =
+        body.referralCode;
+
+      // ------------------------------------------------------
+      // PASSWORD
+      // ------------------------------------------------------
+
+      const passwordValidation =
+        validatePasswordStrength(
+          password,
+          {
+            username,
+            email,
+            fullName:
+              fullName
+                ? String(
+                    fullName
+                  )
+                : undefined,
+            phone,
+          }
+        );
+
+      if (
+        !passwordValidation
+          .isValid
+      ) {
+        res.status(400).json({
+          success: false,
           message:
-            'Username, email, password and phone are required'
+            'Password does not meet security requirements',
+          errors:
+            passwordValidation.errors,
+          strength:
+            passwordValidation.strength,
         });
+
+        return;
       }
 
-      const cleanUsername = normalizeUsername(username);
-      const cleanEmail = normalizeEmail(email);
-      const cleanPhone = String(phone).trim();
+      // ------------------------------------------------------
+      // EXISTING USER
+      // ------------------------------------------------------
 
-      if (cleanUsername.length < 3 || cleanUsername.length > 20) {
-        return res.status(400).json({
-          success: false,
-          error: 'Validation Error',
-          message: 'Username must be between 3 and 20 characters'
-        });
-      }
-
-      if (password.length < 8) {
-        return res.status(400).json({
-          success: false,
-          error: 'Validation Error',
-          message: 'Password must be at least 8 characters'
-        });
-      }
-
-      if (!/^[a-zA-Z0-9_]+$/.test(cleanUsername)) {
-        return res.status(400).json({
-          success: false,
-          error: 'Validation Error',
-          message:
-            'Username can only contain letters, numbers and underscore'
-        });
-      }
-
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-        return res.status(400).json({
-          success: false,
-          error: 'Validation Error',
-          message: 'Please provide a valid email address'
-        });
-      }
-
-      if (!/^\+?[0-9]{10,15}$/.test(cleanPhone)) {
-        return res.status(400).json({
-          success: false,
-          error: 'Validation Error',
-          message: 'Please provide a valid phone number'
-        });
-      }
-
-      // ----------------------------------------
-      // DUPLICATE CHECK
-      // ----------------------------------------
-
-      const existingUser = await User.findOne({
-        $or: [
-          { username: cleanUsername },
-          { email: cleanEmail },
-          { phone: cleanPhone }
-        ]
-      });
+      const existingUser =
+        await User.findOne({
+          $or: [
+            { email },
+            { username },
+            { phone },
+          ],
+        })
+          .select(
+            '_id email username phone'
+          )
+          .exec();
 
       if (existingUser) {
-        let field = 'account information';
-
-        if (existingUser.username === cleanUsername) {
-          field = 'username';
-        } else if (existingUser.email === cleanEmail) {
-          field = 'email';
-        } else if (existingUser.phone === cleanPhone) {
-          field = 'phone number';
-        }
-
-        return res.status(409).json({
+        res.status(409).json({
           success: false,
-          error: 'Already Exists',
-          message: `An account with this ${field} already exists`
+          message:
+            'An account already exists with this email, username, or phone number',
         });
+
+        return;
       }
 
-      // ----------------------------------------
-      // REFERRAL
-      // ----------------------------------------
+      // ------------------------------------------------------
+      // DATE OF BIRTH
+      // ------------------------------------------------------
 
-      let referredBy = undefined;
+      let parsedDateOfBirth:
+        | Date
+        | undefined;
 
-      if (referralCode) {
-        const referrer = await User.findOne({
-          referralCode: String(referralCode).trim().toUpperCase()
-        });
+      if (dateOfBirth) {
+        parsedDateOfBirth =
+          new Date(
+            String(
+              dateOfBirth
+            )
+          );
 
-        if (!referrer) {
-          return res.status(400).json({
+        if (
+          Number.isNaN(
+            parsedDateOfBirth.getTime()
+          )
+        ) {
+          res.status(400).json({
             success: false,
-            error: 'Invalid Referral',
-            message: 'Referral code is invalid'
+            message:
+              'Invalid date of birth',
           });
+
+          return;
         }
 
-        referredBy = referrer._id;
+        if (
+          calculateAge(
+            parsedDateOfBirth
+          ) < 18
+        ) {
+          res.status(400).json({
+            success: false,
+            message:
+              'You must be at least 18 years old',
+          });
+
+          return;
+        }
       }
 
-      // ----------------------------------------
-      // EMAIL VERIFICATION
-      // ----------------------------------------
+      // ------------------------------------------------------
+      // REFERRAL
+      // ------------------------------------------------------
 
-      const verificationToken = generateVerificationToken();
+      let referredByUser:
+        | UserDocument
+        | null = null;
 
-      // ----------------------------------------
+      if (
+        referralCode
+      ) {
+        referredByUser =
+          await User.findOne({
+            referralCode:
+              String(
+                referralCode
+              )
+                .trim()
+                .toUpperCase(),
+          })
+            .select(
+              '_id email username'
+            )
+            .exec();
+      }
+
+      // ------------------------------------------------------
+      // WELCOME BONUS
+      // ------------------------------------------------------
+
+      const parsedWelcomeBonus =
+        Number(
+          process.env
+            .WELCOME_BONUS_AMOUNT ??
+            100
+        );
+
+      const welcomeBonus =
+        Number.isFinite(
+          parsedWelcomeBonus
+        )
+          ? Math.max(
+              0,
+              parsedWelcomeBonus
+            )
+          : 100;
+
+      // ------------------------------------------------------
       // CREATE USER
-      // ----------------------------------------
+      // ------------------------------------------------------
 
-      const user = new User({
-        username: cleanUsername,
-        email: cleanEmail,
-        password,
-        phone: cleanPhone,
+      const user =
+        new User({
+          username,
+          email,
+          password,
+          phone,
 
-        fullName,
-        dateOfBirth,
-        country: country || 'Ethiopia',
-        city,
-        address,
-        postalCode,
+          fullName:
+            fullName
+              ? String(
+                  fullName
+                ).trim()
+              : undefined,
 
-        referredBy,
+          dateOfBirth:
+            parsedDateOfBirth,
 
-        emailVerificationToken: verificationToken,
-        emailVerificationExpires: new Date(
-          Date.now() + 24 * 60 * 60 * 1000
-        ),
+          referredBy:
+            referredByUser?._id,
 
-        emailVerified: false,
-        phoneVerified: false,
+          wallet: {
+            balance:
+              welcomeBonus,
 
-        isActive: true,
-        isAdmin: false,
-        isVerified: false,
-        isBlocked: false,
-        isSuspended: false
-      });
+            bonusBalance:
+              welcomeBonus,
+
+            totalBonusReceived:
+              welcomeBonus,
+
+            currency: 'ETB',
+          },
+        });
+
+      // ------------------------------------------------------
+      // SESSION
+      // ------------------------------------------------------
+
+      const sessionId =
+        createSession(
+          user,
+          req
+        );
+
+      user.lastLogin =
+        new Date();
+
+      user.lastActive =
+        new Date();
+
+      user.lastLoginIP =
+        req.ip;
 
       await user.save();
 
-      // ----------------------------------------
-      // UPDATE REFERRER
-      // ----------------------------------------
+      // ------------------------------------------------------
+      // REFERRAL BONUS
+      // ------------------------------------------------------
 
-      if (referredBy) {
-        await User.findByIdAndUpdate(referredBy, {
-          $inc: {
-            referralCount: 1
-          }
-        });
+      if (
+        referredByUser
+      ) {
+        const parsedReferralBonus =
+          Number(
+            process.env
+              .REFERRAL_BONUS_AMOUNT ??
+              50
+          );
+
+        const referralBonus =
+          Number.isFinite(
+            parsedReferralBonus
+          )
+            ? Math.max(
+                0,
+                parsedReferralBonus
+              )
+            : 50;
+
+        if (
+          referralBonus > 0
+        ) {
+          await User.updateOne(
+            {
+              _id:
+                referredByUser._id,
+            },
+            {
+              $inc: {
+                'wallet.balance':
+                  referralBonus,
+
+                'wallet.bonusBalance':
+                  referralBonus,
+
+                'wallet.totalBonusReceived':
+                  referralBonus,
+
+                referralCount: 1,
+
+                referralEarnings:
+                  referralBonus,
+              },
+            }
+          ).exec();
+        }
       }
 
-      // ----------------------------------------
-      // TOKEN
-      // ----------------------------------------
+      // ------------------------------------------------------
+      // TOKENS
+      // ------------------------------------------------------
 
-      const token = signToken(user);
+      const tokens =
+        issueTokens(
+          user,
+          sessionId
+        );
 
-      // ----------------------------------------
-      // RESPONSE
-      // ----------------------------------------
+      // ------------------------------------------------------
+      // NOTIFICATIONS
+      // ------------------------------------------------------
 
-      return res.status(201).json({
+      await Promise.allSettled([
+        sendEmail({
+          to: user.email,
+          subject:
+            'Welcome to SHEBAODDS!',
+          template:
+            'welcome',
+          data: {
+            username:
+              user.username,
+            bonusAmount:
+              welcomeBonus,
+            tagline:
+              'Smart Bets. Real Wins.',
+          },
+        }),
+
+        sendSMS({
+          to: user.phone,
+          message:
+            `Welcome to SHEBAODDS! You've received ${welcomeBonus} ETB bonus.`,
+        }),
+
+        logSecurityEvent({
+          userId:
+            user._id,
+          eventType:
+            'user_registered',
+          ipAddress:
+            req.ip,
+          userAgent:
+            req.get(
+              'user-agent'
+            ),
+        }),
+      ]);
+
+      res.status(201).json({
         success: true,
-        message: 'Account created successfully',
-        token,
-        user: sanitizeUser(user)
+        message:
+          'Registration successful! Welcome to SHEBAODDS.',
+        ...tokens,
+        user:
+          publicUser(user),
       });
-    } catch (error: any) {
-      console.error('❌ Registration error:', error);
+    } catch (error: unknown) {
+      const err =
+        error as {
+          code?: number;
+          message?: string;
+        };
 
-      if (error?.code === 11000) {
-        return res.status(409).json({
+      if (
+        err.code === 11000
+      ) {
+        res.status(409).json({
           success: false,
-          error: 'Duplicate Account',
-          message: 'Username, email or phone number already exists'
+          message:
+            'Email, username, phone, or referral code is already in use',
         });
+
+        return;
       }
 
-      next(error);
+      console.error(
+        'Registration error:',
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          'Registration failed',
+      });
     }
   }
 );
 
-// ============================================
+// ============================================================
 // LOGIN
-// POST /api/v2/auth/login
-// ============================================
+// ============================================================
 
 router.post(
   '/login',
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (
+    req: Request,
+    res: Response
+  ) => {
     try {
-      const { identifier, email, username, password } = req.body;
+      const body =
+        (
+          req.body ||
+          {}
+        ) as Record<
+          string,
+          unknown
+        >;
 
-      const loginIdentifier =
-        identifier || email || username;
+      const {
+        errors,
+        email,
+        password,
+      } =
+        validateLogin(
+          body
+        );
 
-      if (!loginIdentifier || !password) {
-        return res.status(400).json({
+      if (
+        errors.length > 0
+      ) {
+        res.status(400).json({
           success: false,
-          error: 'Validation Error',
-          message: 'Username/email and password are required'
+          errors,
         });
+
+        return;
       }
 
-      const normalizedIdentifier =
-        String(loginIdentifier).trim().toLowerCase();
+      const twoFactorCode =
+        body.twoFactorCode;
 
-      const user = await User.findByEmailOrUsername(
-        normalizedIdentifier
-      );
+      const deviceId =
+        body.deviceId;
 
-      if (!user) {
-        return res.status(401).json({
+      const deviceName =
+        body.deviceName;
+
+      // IMPORTANT:
+      // Password is select:false in User schema.
+      const user =
+        await User.findOne({
+          email,
+        })
+          .select(
+            '+password +passwordHistory +twoFactorSecret +twoFactorBackupCodes'
+          )
+          .exec();
+
+      // ------------------------------------------------------
+      // INVALID CREDENTIALS
+      // ------------------------------------------------------
+
+      if (
+        !user ||
+        !(await user.comparePassword(
+          password
+        ))
+      ) {
+        if (user) {
+          user.loginAttempts =
+            (
+              user.loginAttempts ||
+              0
+            ) + 1;
+
+          if (
+            user.loginAttempts >=
+            MAX_LOGIN_ATTEMPTS
+          ) {
+            user.lockedUntil =
+              new Date(
+                Date.now() +
+                  LOGIN_LOCK_MS
+              );
+          }
+
+          await user.save();
+        }
+
+        res.status(401).json({
           success: false,
-          error: 'Invalid Credentials',
-          message: 'Username/email or password is incorrect'
+          message:
+            'Invalid email or password',
         });
+
+        return;
       }
 
-      // ----------------------------------------
-      // ACCOUNT STATUS
-      // ----------------------------------------
+      // ------------------------------------------------------
+      // ACCOUNT LOCK
+      // ------------------------------------------------------
 
-      if (user.isBlocked) {
-        return res.status(403).json({
-          success: false,
-          error: 'Account Blocked',
-          message: 'Your account has been blocked'
-        });
-      }
-
-      if (!user.isActive) {
-        return res.status(403).json({
-          success: false,
-          error: 'Account Disabled',
-          message: 'Your account is disabled'
-        });
-      }
+      const now =
+        new Date();
 
       if (
         user.lockedUntil &&
-        user.lockedUntil > new Date()
+        user.lockedUntil > now
       ) {
-        const remaining = Math.ceil(
-          (user.lockedUntil.getTime() - Date.now()) / 60000
-        );
+        const remainingMinutes =
+          Math.ceil(
+            (
+              user.lockedUntil.getTime() -
+              now.getTime()
+            ) /
+              60000
+          );
 
-        return res.status(423).json({
+        res.status(423).json({
           success: false,
-          error: 'Account Locked',
-          message: `Too many failed attempts. Try again in ${remaining} minutes.`
+          message:
+            `Account locked. Please try again in ${remainingMinutes} minutes.`,
         });
+
+        return;
       }
 
-      // ----------------------------------------
-      // PASSWORD
-      // ----------------------------------------
+      // ------------------------------------------------------
+      // ACCOUNT STATUS
+      // ------------------------------------------------------
 
-      const passwordCorrect =
-        await user.comparePassword(password);
+      if (
+        !user.isActive ||
+        user.isBlocked
+      ) {
+        res.status(403).json({
+          success: false,
+          message:
+            'Account is not active',
+        });
 
-      if (!passwordCorrect) {
-        user.loginAttempts += 1;
+        return;
+      }
 
-        if (user.loginAttempts >= MAX_LOGIN_ATTEMPTS) {
-          user.lockedUntil = new Date(
-            Date.now() + LOCK_TIME
-          );
-          user.loginAttempts = 0;
+      if (
+        user.isSuspended &&
+        (
+          !user.suspensionEndDate ||
+          user.suspensionEndDate >
+            now
+        )
+      ) {
+        res.status(403).json({
+          success: false,
+          message:
+            'Account is suspended',
+        });
+
+        return;
+      }
+
+      // ------------------------------------------------------
+      // SELF EXCLUSION
+      // ------------------------------------------------------
+
+      if (
+        user.responsibleGambling
+          ?.selfExcluded &&
+        (
+          !user.responsibleGambling
+            .selfExclusionEndDate ||
+          user.responsibleGambling
+            .selfExclusionEndDate >
+            now
+        )
+      ) {
+        res.status(403).json({
+          success: false,
+          message:
+            'Self-exclusion is currently active',
+        });
+
+        return;
+      }
+
+      // ------------------------------------------------------
+      // 2FA
+      // ------------------------------------------------------
+
+      if (
+        user.twoFactorEnabled
+      ) {
+        if (
+          !twoFactorCode
+        ) {
+          res.status(401).json({
+            success: false,
+            requiresTwoFactor:
+              true,
+            message:
+              '2FA code required',
+          });
+
+          return;
         }
 
-        await user.save();
+        const code =
+          String(
+            twoFactorCode
+          );
 
-        return res.status(401).json({
-          success: false,
-          error: 'Invalid Credentials',
-          message: 'Username/email or password is incorrect'
-        });
+        const validTotp =
+          user.verifyTwoFactorToken(
+            code
+          );
+
+        let validBackup =
+          false;
+
+        if (!validTotp) {
+          validBackup =
+            await user.verifyBackupCode(
+              code
+            );
+        }
+
+        if (
+          !validTotp &&
+          !validBackup
+        ) {
+          res.status(401).json({
+            success: false,
+            message:
+              'Invalid 2FA code',
+          });
+
+          return;
+        }
       }
 
-      // ----------------------------------------
-      // RESET LOGIN SECURITY
-      // ----------------------------------------
+      // ------------------------------------------------------
+      // UPDATE LOGIN STATE
+      // ------------------------------------------------------
 
-      user.loginAttempts = 0;
-      user.lockedUntil = undefined;
+      user.loginAttempts =
+        0;
 
-      user.lastLogin = new Date();
-      user.lastActive = new Date();
+      user.lockedUntil =
+        undefined;
 
-      // ----------------------------------------
-      // SESSION
-      // ----------------------------------------
+      user.lastLogin =
+        now;
 
-      const sessionId = generateSessionId();
+      user.lastActive =
+        now;
 
-      user.sessions.push({
-        sessionId,
-        ipAddress:
-          req.ip ||
-          req.headers['x-forwarded-for']?.toString(),
-        userAgent: req.headers['user-agent'],
-        loginAt: new Date(),
-        lastActivity: new Date(),
-        expiresAt: new Date(
-          Date.now() + 7 * 24 * 60 * 60 * 1000
-        )
-      });
+      user.lastLoginIP =
+        req.ip;
 
-      // Keep sessions manageable
-      if (user.sessions.length > 10) {
-        user.sessions = user.sessions.slice(-10);
-      }
+      const sessionId =
+        createSession(
+          user,
+          req,
+          deviceId
+            ? String(deviceId)
+            : undefined,
+          deviceName
+            ? String(deviceName)
+            : undefined
+        );
 
       await user.save();
 
-      // ----------------------------------------
-      // JWT
-      // ----------------------------------------
+      // ------------------------------------------------------
+      // TOKENS
+      // ------------------------------------------------------
 
-      const token = signToken(user);
+      const tokens =
+        issueTokens(
+          user,
+          sessionId
+        );
 
-      // ----------------------------------------
-      // RESPONSE
-      // ----------------------------------------
+      await logSecurityEvent({
+        userId:
+          user._id,
+        eventType:
+          'user_login',
+        ipAddress:
+          req.ip,
+        userAgent:
+          req.get(
+            'user-agent'
+          ),
+        metadata: {
+          deviceId,
+          deviceName,
+          sessionId,
+        },
+      });
 
-      return res.status(200).json({
+      res.json({
         success: true,
-        message: 'Login successful',
-        token,
-        sessionId,
-        user: sanitizeUser(user)
+        message:
+          `Welcome back to SHEBAODDS, ${user.username}!`,
+        ...tokens,
+        user:
+          publicUser(user),
       });
     } catch (error) {
-      console.error('❌ Login error:', error);
-      next(error);
+      console.error(
+        'Login error:',
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          'Login failed',
+      });
     }
   }
 );
 
-// ============================================
-// GET CURRENT USER
-// GET /api/v2/auth/me
-// ============================================
+// ============================================================
+// REFRESH TOKEN
+// ============================================================
 
-router.get(
-  '/me',
-  authenticate,
+router.post(
+  '/refresh-token',
   async (
-    req: AuthenticatedRequest,
-    res: Response,
-    next: NextFunction
+    req: Request,
+    res: Response
   ) => {
     try {
-      if (!req.user) {
-        return res.status(401).json({
+      const refreshToken =
+        String(
+          req.body?.refreshToken ??
+            ''
+        );
+
+      if (!refreshToken) {
+        res.status(401).json({
           success: false,
-          error: 'Unauthorized',
-          message: 'User not authenticated'
+          message:
+            'Refresh token required',
         });
+
+        return;
       }
 
-      req.user.lastActive = new Date();
+      const decoded =
+        jwt.verify(
+          refreshToken,
+          getRefreshSecret()
+        ) as TokenPayload;
 
-      await req.user.save();
+      if (
+        !decoded.userId ||
+        !decoded.sessionId ||
+        decoded.type !==
+          'refresh'
+      ) {
+        res.status(401).json({
+          success: false,
+          message:
+            'Invalid refresh token',
+        });
 
-      return res.status(200).json({
+        return;
+      }
+
+      const user =
+        await User.findById(
+          decoded.userId
+        ).exec();
+
+      if (
+        !user ||
+        !user.isActive ||
+        user.isBlocked
+      ) {
+        res.status(401).json({
+          success: false,
+          message:
+            'Invalid refresh token',
+        });
+
+        return;
+      }
+
+      const now =
+        new Date();
+
+      const session =
+        user.sessions.find(
+          (item) =>
+            item.sessionId ===
+              decoded.sessionId &&
+            (
+              !item.expiresAt ||
+              item.expiresAt > now
+            )
+        );
+
+      if (!session) {
+        res.status(401).json({
+          success: false,
+          message:
+            'Session expired or revoked',
+        });
+
+        return;
+      }
+
+      session.lastActivity =
+        now;
+
+      session.expiresAt =
+        new Date(
+          now.getTime() +
+            SESSION_TTL_MS
+        );
+
+      user.lastActive =
+        now;
+
+      await user.save();
+
+      const tokens =
+        issueTokens(
+          user,
+          session.sessionId
+        );
+
+      res.json({
         success: true,
-        user: sanitizeUser(req.user)
+        ...tokens,
       });
-    } catch (error) {
-      next(error);
+    } catch {
+      res.status(401).json({
+        success: false,
+        message:
+          'Invalid refresh token',
+      });
     }
   }
 );
 
-// ============================================
+// ============================================================
 // LOGOUT
-// POST /api/v2/auth/logout
-// ============================================
+// ============================================================
 
 router.post(
   '/logout',
   authenticate,
   async (
-    req: AuthenticatedRequest,
-    res: Response,
-    next: NextFunction
+    req: AuthRequest,
+    res: Response
   ) => {
     try {
       if (!req.user) {
-        return res.status(401).json({
+        res.status(401).json({
           success: false,
-          error: 'Unauthorized',
-          message: 'User not authenticated'
+          message:
+            'Unauthorized',
         });
+
+        return;
       }
 
-      const { sessionId } = req.body;
+      const sessionId =
+        String(
+          req.body?.sessionId ??
+            req.auth?.sessionId ??
+            ''
+        );
 
       if (sessionId) {
         req.user.sessions =
           req.user.sessions.filter(
-            session => session.sessionId !== sessionId
+            (session) =>
+              session.sessionId !==
+              sessionId
           );
-      } else {
-        // If no session ID is supplied, remove expired
-        // sessions only.
-        const now = new Date();
 
-        req.user.sessions =
-          req.user.sessions.filter(
-            session =>
-              !session.expiresAt ||
-              session.expiresAt > now
-          );
+        await req.user.save();
       }
 
-      await req.user.save();
-
-      return res.status(200).json({
-        success: true,
-        message: 'Logout successful'
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
-
-// ============================================
-// VERIFY EMAIL
-// POST /api/v2/auth/verify-email
-// ============================================
-
-router.post(
-  '/verify-email',
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { token } = req.body;
-
-      if (!token) {
-        return res.status(400).json({
-          success: false,
-          error: 'Validation Error',
-          message: 'Verification token is required'
-        });
-      }
-
-      const user = await User.findOne({
-        emailVerificationToken: token,
-        emailVerificationExpires: {
-          $gt: new Date()
-        }
+      await logSecurityEvent({
+        userId:
+          req.user._id,
+        eventType:
+          'user_logout',
+        ipAddress:
+          req.ip,
       });
 
-      if (!user) {
-        return res.status(400).json({
-          success: false,
-          error: 'Invalid Token',
-          message:
-            'Verification token is invalid or expired'
-        });
-      }
-
-      user.emailVerified = true;
-      user.isVerified = true;
-      user.emailVerificationToken = undefined;
-      user.emailVerificationExpires = undefined;
-
-      await user.save();
-
-      return res.status(200).json({
-        success: true,
-        message: 'Email verified successfully'
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
-
-// ============================================
-// FORGOT PASSWORD
-// POST /api/v2/auth/forgot-password
-// ============================================
-
-router.post(
-  '/forgot-password',
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { email } = req.body;
-
-      if (!email) {
-        return res.status(400).json({
-          success: false,
-          error: 'Validation Error',
-          message: 'Email is required'
-        });
-      }
-
-      const user = await User.findOne({
-        email: normalizeEmail(email)
-      });
-
-      /*
-       * Always return the same response whether the
-       * account exists or not.
-       */
-      if (!user) {
-        return res.status(200).json({
-          success: true,
-          message:
-            'If an account exists with this email, password reset instructions have been sent.'
-        });
-      }
-
-      const resetToken = crypto
-        .randomBytes(32)
-        .toString('hex');
-
-      user.resetPasswordToken = resetToken;
-      user.resetPasswordExpires = new Date(
-        Date.now() + 60 * 60 * 1000
-      );
-
-      await user.save();
-
-      /*
-       * IMPORTANT:
-       * In production, send resetToken through your
-       * email service instead of returning it.
-       *
-       * It is included here only when development mode
-       * is enabled so you can test the API.
-       */
-
-      const response: any = {
+      res.json({
         success: true,
         message:
-          'If an account exists with this email, password reset instructions have been sent.'
-      };
-
-      if (process.env.NODE_ENV !== 'production') {
-        response.developmentResetToken = resetToken;
-      }
-
-      return res.status(200).json(response);
-    } catch (error) {
-      next(error);
+          'Logged out successfully',
+      });
+    } catch {
+      res.status(500).json({
+        success: false,
+        message:
+          'Logout failed',
+      });
     }
   }
 );
 
-// ============================================
-// RESET PASSWORD
-// POST /api/v2/auth/reset-password
-// ============================================
+// ============================================================
+// GET CURRENT USER
+// ============================================================
 
-router.post(
-  '/reset-password',
-  async (req: Request, res: Response, next: NextFunction) => {
+router.get(
+  '/me',
+  authenticate,
+  async (
+    req: AuthRequest,
+    res: Response
+  ) => {
+    res.json({
+      success: true,
+      user: req.user
+        ? publicUser(
+            req.user
+          )
+        : null,
+    });
+  }
+);
+
+// ============================================================
+// UPDATE PROFILE
+// ============================================================
+
+router.put(
+  '/profile',
+  authenticate,
+  async (
+    req: AuthRequest,
+    res: Response
+  ) => {
     try {
+      if (!req.user) {
+        res.status(401).json({
+          success: false,
+          message:
+            'Unauthorized',
+        });
+
+        return;
+      }
+
+      const user =
+        req.user;
+
       const {
-        token,
-        password
-      } = req.body;
+        fullName,
+        phone,
+        address,
+        city,
+        country,
+        language,
+        timezone,
+        currency,
+      } =
+        req.body || {};
 
-      if (!token || !password) {
-        return res.status(400).json({
-          success: false,
-          error: 'Validation Error',
-          message:
-            'Reset token and new password are required'
-        });
+      if (
+        fullName !==
+        undefined
+      ) {
+        user.fullName =
+          String(
+            fullName
+          ).trim();
       }
 
-      if (password.length < 8) {
-        return res.status(400).json({
-          success: false,
-          error: 'Validation Error',
-          message:
-            'Password must be at least 8 characters'
-        });
-      }
+      if (
+        phone !==
+        undefined
+      ) {
+        const normalizedPhone =
+          String(
+            phone
+          ).trim();
 
-      const user = await User.findOne({
-        resetPasswordToken: token,
-        resetPasswordExpires: {
-          $gt: new Date()
+        if (
+          !isValidPhone(
+            normalizedPhone
+          )
+        ) {
+          res.status(400).json({
+            success: false,
+            message:
+              'Invalid phone number',
+          });
+
+          return;
         }
-      }).select('+password +passwordHistory');
 
-      if (!user) {
-        return res.status(400).json({
-          success: false,
-          error: 'Invalid Token',
-          message:
-            'Password reset token is invalid or expired'
-        });
-      }
+        const existing =
+          await User.findOne({
+            phone:
+              normalizedPhone,
 
-      // ----------------------------------------
-      // PREVENT REUSE OF RECENT PASSWORDS
-      // ----------------------------------------
+            _id: {
+              $ne: user._id,
+            },
+          })
+            .select('_id')
+            .exec();
 
-      if (user.passwordHistory) {
-        for (const oldPassword of user.passwordHistory) {
-          const reused =
-            await require('bcryptjs').compare(
-              password,
-              oldPassword
-            );
+        if (existing) {
+          res.status(409).json({
+            success: false,
+            message:
+              'Phone number already in use',
+          });
 
-          if (reused) {
-            return res.status(400).json({
-              success: false,
-              error: 'Password Reuse',
-              message:
-                'You cannot reuse one of your recent passwords'
-            });
-          }
+          return;
         }
+
+        user.phone =
+          normalizedPhone;
       }
 
-      user.password = password;
-      user.resetPasswordToken = undefined;
-      user.resetPasswordExpires = undefined;
+      if (
+        address !==
+        undefined
+      ) {
+        user.address =
+          String(
+            address
+          );
+      }
 
-      user.loginAttempts = 0;
-      user.lockedUntil = undefined;
+      if (
+        city !==
+        undefined
+      ) {
+        user.city =
+          String(
+            city
+          );
+      }
+
+      if (
+        country !==
+        undefined
+      ) {
+        user.country =
+          String(
+            country
+          );
+      }
+
+      if (
+        language !==
+        undefined
+      ) {
+        user.language =
+          String(
+            language
+          ) as typeof user.language;
+      }
+
+      if (
+        timezone !==
+        undefined
+      ) {
+        user.timezone =
+          String(
+            timezone
+          );
+      }
+
+      if (
+        currency !==
+        undefined
+      ) {
+        user.currency =
+          String(
+            currency
+          ) as typeof user.currency;
+      }
+
+      user.lastActive =
+        new Date();
 
       await user.save();
 
-      return res.status(200).json({
+      res.json({
         success: true,
         message:
-          'Password reset successfully. Please login again.'
+          'Profile updated successfully',
+        user:
+          publicUser(user),
       });
     } catch (error) {
-      next(error);
+      const err =
+        error as {
+          code?: number;
+        };
+
+      if (
+        err.code === 11000
+      ) {
+        res.status(409).json({
+          success: false,
+          message:
+            'Phone number already in use',
+        });
+
+        return;
+      }
+
+      res.status(500).json({
+        success: false,
+        message:
+          'Failed to update profile',
+      });
     }
   }
 );
 
-// ============================================
+// ============================================================
 // CHANGE PASSWORD
-// POST /api/v2/auth/change-password
-// ============================================
+// ============================================================
 
-router.post(
+router.put(
   '/change-password',
   authenticate,
   async (
-    req: AuthenticatedRequest,
-    res: Response,
-    next: NextFunction
+    req: AuthRequest,
+    res: Response
   ) => {
     try {
-      const {
-        currentPassword,
-        newPassword
-      } = req.body;
-
       if (!req.user) {
-        return res.status(401).json({
+        res.status(401).json({
           success: false,
-          error: 'Unauthorized',
-          message: 'User not authenticated'
-        });
-      }
-
-      if (!currentPassword || !newPassword) {
-        return res.status(400).json({
-          success: false,
-          error: 'Validation Error',
           message:
-            'Current password and new password are required'
+            'Unauthorized',
         });
+
+        return;
       }
 
-      if (newPassword.length < 8) {
-        return res.status(400).json({
-          success: false,
-          error: 'Validation Error',
-          message:
-            'New password must be at least 8 characters'
-        });
-      }
-
-      const currentPasswordCorrect =
-        await req.user.comparePassword(
-          currentPassword
+      const currentPassword =
+        String(
+          req.body
+            ?.currentPassword ??
+            ''
         );
 
-      if (!currentPasswordCorrect) {
-        return res.status(401).json({
+      const newPassword =
+        String(
+          req.body
+            ?.newPassword ??
+            ''
+        );
+
+      if (
+        !currentPassword ||
+        !newPassword
+      ) {
+        res.status(400).json({
           success: false,
-          error: 'Invalid Password',
-          message: 'Current password is incorrect'
+          message:
+            'Current and new passwords are required',
         });
+
+        return;
       }
 
-      req.user.password = newPassword;
+      const user =
+        await User.findById(
+          req.user._id
+        )
+          .select(
+            '+password +passwordHistory'
+          )
+          .exec();
 
-      await req.user.save();
+      if (
+        !user ||
+        !(await user.comparePassword(
+          currentPassword
+        ))
+      ) {
+        res.status(401).json({
+          success: false,
+          message:
+            'Current password is incorrect',
+        });
 
-      return res.status(200).json({
-        success: true,
-        message: 'Password changed successfully'
+        return;
+      }
+
+      const passwordValidation =
+        validatePasswordStrength(
+          newPassword,
+          user
+        );
+
+      if (
+        !passwordValidation
+          .isValid
+      ) {
+        res.status(400).json({
+          success: false,
+          message:
+            'Password does not meet security requirements',
+          errors:
+            passwordValidation.errors,
+          strength:
+            passwordValidation.strength,
+        });
+
+        return;
+      }
+
+      const history =
+        new PasswordHistory(
+          user._id.toString(),
+          user.passwordHistory ||
+            []
+        );
+
+      const reused =
+        await history.isPasswordReused(
+          newPassword
+        );
+
+      const samePassword =
+        await user.comparePassword(
+          newPassword
+        );
+
+      if (
+        reused ||
+        samePassword
+      ) {
+        res.status(400).json({
+          success: false,
+          message:
+            'You cannot reuse one of your recent passwords',
+        });
+
+        return;
+      }
+
+      user.password =
+        newPassword;
+
+      // Revoke every other session.
+      user.sessions =
+        req.auth?.sessionId
+          ? user.sessions.filter(
+              (session) =>
+                session.sessionId ===
+                req.auth?.sessionId
+            )
+          : [];
+
+      await user.save();
+
+      await sendEmail({
+        to: user.email,
+        subject:
+          'Password Changed',
+        template:
+          'password_changed',
+        data: {
+          username:
+            user.username,
+        },
       });
-    } catch (error) {
-      next(error);
+
+      res.json({
+        success: true,
+        message:
+          'Password changed successfully',
+      });
+    } catch {
+      res.status(500).json({
+        success: false,
+        message:
+          'Failed to change password',
+      });
     }
   }
 );
 
-// ============================================
+// ============================================================
+// FORGOT PASSWORD
+// ============================================================
+
+router.post(
+  '/forgot-password',
+  async (
+    req: Request,
+    res: Response
+  ) => {
+    const generic = {
+      success: true,
+      message:
+        'If your email is registered, you will receive a reset link',
+    };
+
+    try {
+      const email =
+        normalizeEmail(
+          req.body?.email
+        );
+
+      if (
+        !isValidEmail(email)
+      ) {
+        res.json(
+          generic
+        );
+
+        return;
+      }
+
+      const user =
+        await User.findOne({
+          email,
+        }).exec();
+
+      if (!user) {
+        res.json(
+          generic
+        );
+
+        return;
+      }
+
+      const rawToken =
+        crypto
+          .randomBytes(32)
+          .toString('hex');
+
+      user.resetPasswordToken =
+        hashToken(
+          rawToken
+        );
+
+      user.resetPasswordExpires =
+        new Date(
+          Date.now() +
+            60 * 60 * 1000
+        );
+
+      await user.save();
+
+      const baseUrl =
+        process.env.BASE_URL ||
+        'http://localhost:3000';
+
+      const resetUrl =
+        `${baseUrl.replace(
+          /\/$/,
+          ''
+        )}/reset-password?token=${encodeURIComponent(
+          rawToken
+        )}`;
+
+      await sendEmail({
+        to: user.email,
+        subject:
+          'Reset Your SHEBAODDS Password',
+        template:
+          'reset_password',
+        data: {
+          username:
+            user.username,
+          resetUrl,
+          tagline:
+            'Smart Bets. Real Wins.',
+        },
+      });
+
+      res.json(
+        generic
+      );
+    } catch {
+      res.json(
+        generic
+      );
+    }
+  }
+);
+
+// ============================================================
+// RESET PASSWORD
+// ============================================================
+
+router.post(
+  '/reset-password',
+  async (
+    req: Request,
+    res: Response
+  ) => {
+    try {
+      const token =
+        String(
+          req.body?.token ??
+            ''
+        );
+
+      const newPassword =
+        String(
+          req.body
+            ?.newPassword ??
+            ''
+        );
+
+      if (
+        !token ||
+        !newPassword
+      ) {
+        res.status(400).json({
+          success: false,
+          message:
+            'Token and new password are required',
+        });
+
+        return;
+      }
+
+      const user =
+        await User.findOne({
+          resetPasswordToken:
+            hashToken(
+              token
+            ),
+
+          resetPasswordExpires:
+            {
+              $gt: new Date(),
+            },
+        })
+          .select(
+            '+password +passwordHistory'
+          )
+          .exec();
+
+      if (!user) {
+        res.status(400).json({
+          success: false,
+          message:
+            'Invalid or expired reset token',
+        });
+
+        return;
+      }
+
+      const passwordValidation =
+        validatePasswordStrength(
+          newPassword,
+          user
+        );
+
+      if (
+        !passwordValidation
+          .isValid
+      ) {
+        res.status(400).json({
+          success: false,
+          message:
+            'Password does not meet security requirements',
+          errors:
+            passwordValidation.errors,
+          strength:
+            passwordValidation.strength,
+        });
+
+        return;
+      }
+
+      const history =
+        new PasswordHistory(
+          user._id.toString(),
+          user.passwordHistory ||
+            []
+        );
+
+      const reused =
+        await history.isPasswordReused(
+          newPassword
+        );
+
+      const samePassword =
+        await user.comparePassword(
+          newPassword
+        );
+
+      if (
+        reused ||
+        samePassword
+      ) {
+        res.status(400).json({
+          success: false,
+          message:
+            'You cannot reuse one of your recent passwords',
+        });
+
+        return;
+      }
+
+      user.password =
+        newPassword;
+
+      user.resetPasswordToken =
+        undefined;
+
+      user.resetPasswordExpires =
+        undefined;
+
+      user.loginAttempts =
+        0;
+
+      user.lockedUntil =
+        undefined;
+
+      // Reset all sessions.
+      user.sessions =
+        [];
+
+      await user.save();
+
+      res.json({
+        success: true,
+        message:
+          'Password reset successfully',
+      });
+    } catch {
+      res.status(500).json({
+        success: false,
+        message:
+          'Failed to reset password',
+      });
+    }
+  }
+);
+
+// ============================================================
 // 2FA SETUP
-// POST /api/v2/auth/2fa/setup
-// ============================================
+// ============================================================
 
 router.post(
   '/2fa/setup',
   authenticate,
   async (
-    req: AuthenticatedRequest,
-    res: Response,
-    next: NextFunction
+    req: AuthRequest,
+    res: Response
   ) => {
     try {
       if (!req.user) {
-        return res.status(401).json({
+        res.status(401).json({
           success: false,
-          error: 'Unauthorized',
-          message: 'User not authenticated'
+          message:
+            'Unauthorized',
         });
+
+        return;
+      }
+
+      const user =
+        req.user;
+
+      if (
+        user.twoFactorEnabled
+      ) {
+        res.status(400).json({
+          success: false,
+          message:
+            '2FA is already enabled',
+        });
+
+        return;
       }
 
       const secret =
-        req.user.generateTwoFactorSecret();
-
-      await req.user.save();
-
-      return res.status(200).json({
-        success: true,
-        message:
-          'Two-factor authentication secret generated',
-        secret: secret.base32,
-        otpauthUrl: secret.otpauth_url
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
-
-// ============================================
-// 2FA ENABLE
-// POST /api/v2/auth/2fa/enable
-// ============================================
-
-router.post(
-  '/2fa/enable',
-  authenticate,
-  async (
-    req: AuthenticatedRequest,
-    res: Response,
-    next: NextFunction
-  ) => {
-    try {
-      const { token } = req.body;
-
-      if (!req.user) {
-        return res.status(401).json({
-          success: false,
-          error: 'Unauthorized',
-          message: 'User not authenticated'
-        });
-      }
-
-      if (!token) {
-        return res.status(400).json({
-          success: false,
-          error: 'Validation Error',
-          message: '2FA token is required'
-        });
-      }
-
-      const valid =
-        req.user.verifyTwoFactorToken(token);
-
-      if (!valid) {
-        return res.status(400).json({
-          success: false,
-          error: 'Invalid Token',
-          message: 'Invalid authenticator code'
-        });
-      }
-
-      req.user.twoFactorEnabled = true;
+        user.generateTwoFactorSecret();
 
       const backupCodes =
-        req.user.generateBackupCodes();
+        user.generateBackupCodes();
 
-      await req.user.save();
+      await user.save();
 
-      return res.status(200).json({
+      const otpauthUrl =
+        speakeasy.otpauthURL({
+          secret:
+            secret.base32,
+
+          label:
+            `SHEBAODDS (${user.email})`,
+
+          issuer:
+            'SHEBAODDS',
+        });
+
+      const qrCode =
+        await QRCode.toDataURL(
+          otpauthUrl
+        );
+
+      res.json({
         success: true,
-        message:
-          'Two-factor authentication enabled',
-        backupCodes
+        secret:
+          secret.base32,
+        qrCode,
+        backupCodes,
       });
     } catch (error) {
-      next(error);
+      console.error(
+        '2FA setup error:',
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          'Failed to setup 2FA',
+      });
     }
   }
 );
 
-// ============================================
+// ============================================================
+// 2FA VERIFY
+// ============================================================
+
+router.post(
+  '/2fa/verify',
+  authenticate,
+  async (
+    req: AuthRequest,
+    res: Response
+  ) => {
+    try {
+      if (!req.user) {
+        res.status(401).json({
+          success: false,
+          message:
+            'Unauthorized',
+        });
+
+        return;
+      }
+
+      const token =
+        String(
+          req.body?.token ??
+            ''
+        );
+
+      if (
+        !req.user.verifyTwoFactorToken(
+          token
+        )
+      ) {
+        res.status(400).json({
+          success: false,
+          message:
+            'Invalid 2FA code',
+        });
+
+        return;
+      }
+
+      req.user.twoFactorEnabled =
+        true;
+
+      await req.user.save();
+
+      res.json({
+        success: true,
+        message:
+          '2FA enabled successfully',
+      });
+    } catch {
+      res.status(500).json({
+        success: false,
+        message:
+          'Failed to verify 2FA',
+      });
+    }
+  }
+);
+
+// ============================================================
 // 2FA DISABLE
-// POST /api/v2/auth/2fa/disable
-// ============================================
+// ============================================================
 
 router.post(
   '/2fa/disable',
   authenticate,
   async (
-    req: AuthenticatedRequest,
-    res: Response,
-    next: NextFunction
+    req: AuthRequest,
+    res: Response
   ) => {
     try {
-      const { password } = req.body;
-
       if (!req.user) {
-        return res.status(401).json({
+        res.status(401).json({
           success: false,
-          error: 'Unauthorized',
-          message: 'User not authenticated'
+          message:
+            'Unauthorized',
         });
+
+        return;
       }
 
-      if (!password) {
-        return res.status(400).json({
-          success: false,
-          error: 'Validation Error',
-          message: 'Password is required'
-        });
+      const token =
+        String(
+          req.body?.token ??
+            ''
+        );
+
+      const validTotp =
+        req.user.verifyTwoFactorToken(
+          token
+        );
+
+      let validBackup =
+        false;
+
+      if (!validTotp) {
+        validBackup =
+          await req.user.verifyBackupCode(
+            token
+          );
       }
 
-      const valid =
-        await req.user.comparePassword(password);
-
-      if (!valid) {
-        return res.status(401).json({
+      if (
+        !validTotp &&
+        !validBackup
+      ) {
+        res.status(400).json({
           success: false,
-          error: 'Invalid Password',
-          message: 'Password is incorrect'
+          message:
+            'Invalid 2FA code',
         });
+
+        return;
       }
 
-      req.user.twoFactorEnabled = false;
-      req.user.twoFactorSecret = undefined;
-      req.user.twoFactorBackupCodes = [];
+      req.user.twoFactorEnabled =
+        false;
+
+      req.user.twoFactorSecret =
+        undefined;
+
+      req.user.twoFactorBackupCodes =
+        undefined;
 
       await req.user.save();
 
-      return res.status(200).json({
+      res.json({
         success: true,
         message:
-          'Two-factor authentication disabled'
+          '2FA disabled successfully',
       });
-    } catch (error) {
-      next(error);
+    } catch {
+      res.status(500).json({
+        success: false,
+        message:
+          'Failed to disable 2FA',
+      });
     }
   }
 );
 
-// ============================================
-// ADMIN STATUS
-// GET /api/v2/auth/status
-// ============================================
+// ============================================================
+// VERIFY EMAIL
+// ============================================================
 
 router.get(
-  '/status',
-  (_req: Request, res: Response) => {
-    res.status(200).json({
-      success: true,
-      service: 'SHEBAODDS Auth',
-      status: 'operational',
-      timestamp: new Date().toISOString()
-    });
+  '/verify-email/:token',
+  async (
+    req: Request,
+    res: Response
+  ) => {
+    try {
+      const token =
+        String(
+          req.params.token ??
+            ''
+        );
+
+      const tokenHash =
+        hashToken(
+          token
+        );
+
+      const user =
+        await User.findOneAndUpdate(
+          {
+            emailVerificationToken:
+              tokenHash,
+
+            emailVerificationExpires:
+              {
+                $gt: new Date(),
+              },
+
+            emailVerified:
+              false,
+          },
+
+          {
+            $set: {
+              emailVerified:
+                true,
+            },
+
+            $unset: {
+              emailVerificationToken:
+                1,
+
+              emailVerificationExpires:
+                1,
+            },
+
+            $inc: {
+              'wallet.balance':
+                50,
+
+              'wallet.bonusBalance':
+                50,
+
+              'wallet.totalBonusReceived':
+                50,
+            },
+          },
+
+          {
+            new: true,
+          }
+        ).exec();
+
+      if (!user) {
+        res.status(400).json({
+          success: false,
+          message:
+            'Invalid or expired verification token',
+        });
+
+        return;
+      }
+
+      res.json({
+        success: true,
+        message:
+          'Email verified successfully! You received 50 ETB bonus.',
+      });
+    } catch {
+      res.status(500).json({
+        success: false,
+        message:
+          'Failed to verify email',
+      });
+    }
   }
 );
 
-// ============================================
+// ============================================================
+// RESEND EMAIL VERIFICATION
+// ============================================================
+
+router.post(
+  '/resend-verification',
+  authenticate,
+  async (
+    req: AuthRequest,
+    res: Response
+  ) => {
+    try {
+      if (!req.user) {
+        res.status(401).json({
+          success: false,
+          message:
+            'Unauthorized',
+        });
+
+        return;
+      }
+
+      if (
+        req.user.emailVerified
+      ) {
+        res.status(400).json({
+          success: false,
+          message:
+            'Email already verified',
+        });
+
+        return;
+      }
+
+      const token =
+        req.user.generateEmailVerificationToken();
+
+      await req.user.save();
+
+      const baseUrl =
+        process.env.BASE_URL ||
+        'http://localhost:3000';
+
+      const verificationUrl =
+        `${baseUrl.replace(
+          /\/$/,
+          ''
+        )}/verify-email/${encodeURIComponent(
+          token
+        )}`;
+
+      await sendEmail({
+        to:
+          req.user.email,
+
+        subject:
+          'Verify Your SHEBAODDS Email',
+
+        template:
+          'verify_email',
+
+        data: {
+          username:
+            req.user.username,
+
+          verificationUrl,
+
+          tagline:
+            'Smart Bets. Real Wins.',
+        },
+      });
+
+      res.json({
+        success: true,
+        message:
+          'Verification email sent',
+      });
+    } catch {
+      res.status(500).json({
+        success: false,
+        message:
+          'Failed to send verification email',
+      });
+    }
+  }
+);
+
+// ============================================================
 // EXPORT
-// ============================================
+// ============================================================
 
 export default router;
